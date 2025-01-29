@@ -1,13 +1,16 @@
 #%%
-from flex.inst import *
-from flex.exp import script_to_db
+from flex.inst import MCLockin
+# from flex.exp import script_to_db
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Initialize Instruments
-ppms = PPMS("tcp://localhost:29270")
+# ppms = PPMS("tcp://localhost:29270")
 lockin = MCLockin("tcp://localhost:29170")
+
+#%%Some test run
+
 
 #%% experiment
 # Define Parameters

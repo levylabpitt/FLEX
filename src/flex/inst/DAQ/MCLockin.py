@@ -21,6 +21,13 @@ class MCLockin(Instrument):
     def __init__(self, address=_DEFAULT_ADDRESS):
         super().__init__(address, log_file= logpath + '\instrument.log')
     
+    def _get_AO(self) -> dict:
+        """
+        This function will get the current parameter configuration of the output channels.
+        """
+        response = self._send_command('getAOconfig')
+        return response
+
     def get_ao(self, channel):
         cmd = 'getAO'
         params = {'channel': channel}
@@ -31,11 +38,18 @@ class MCLockin(Instrument):
         cmd = 'setAO_Amplitude'
         param = {'AO Channel': channel, 'Amplitude (V)': value}
         self._send_command(cmd, param)
+        a = self._get_AO_param('Amplitude (V)',channel)
+        if a != value:
+            raise Exception('Value could not be changed')
+        
 
     def set_dc(self, channel: int, value: float) -> None:
         cmd = 'setAO_DC'
         param = {'AO Channel': channel, 'DC (V)': value}
         self._send_command(cmd, param)
+        a = self._get_AO_param(channel, 'DC (V)')
+        if a != value:
+            raise Exception('Value could not be changed')
 
     def set_freq(self, channel: int, value: float) -> None:
         cmd = 'setAO_Frequency'
@@ -71,6 +85,27 @@ class MCLockin(Instrument):
         results = response['result']['Results (Dictionary)']
         results_dict = {item['key']: item['value'] for item in results}
         return results_dict.get(key)
+    
+    
+    def _get_AO_param(self, channel: int, param: str) -> None:
+        """
+        Get the parameter value of the speicified channel.
+        channel (int): The AO channel number to get the function for.
+        param (str): 
+        """
+        response = self._get_AO()
+        data = response
+        if param == 'Amplitude (V)':
+           param1 = 'Amplitude'
+        if param == 'DC (V)':
+           param1 = 'Offset'
+        if param == 'Frequency (Hz)':
+           param1 = 'Frequency' 
+        if param == 'Phase (deg)':
+           param1 = 'Phase'  
+        parameter_channel_no = next(item[param1] for item in data['result'] if item['Channel']==channel)
+        return parameter_channel_no
+    
     
     def set_state(self, value: str) -> None:
         cmd = 'setState'

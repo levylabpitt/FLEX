@@ -145,22 +145,40 @@ class KH7008(Instrument):
         """
 
         allowed_values = self.get_allowed_values()
-        for ch_config in channel_config:
-            if ch_config["channel"] not in allowed_values["channel"]:
-                raise ValueError(f"Invalid channel: {ch_config['channel']}. Allowed values for channel: {allowed_values['channel']}")
-            if ch_config["gain"] not in allowed_values["gain"]:
-                raise ValueError(f"Invalid gain: {ch_config['gain']}. Allowed values for gain: {allowed_values['gain']}")
-            if ch_config["input"] not in allowed_values["input"]:
-                raise ValueError(f"Invalid input: {ch_config['input']}. Allowed values for input: {allowed_values['input']}")
-            if ch_config["couple"] not in allowed_values["couple"]:
-                raise ValueError(f"Invalid couple: {ch_config['couple']}. Allowed values for couple: {allowed_values['couple']}")
-            if ch_config["filter"] not in allowed_values["filter"]:
-                raise ValueError(f"Invalid filter: {ch_config['filter']}. Allowed values for filter: {allowed_values['filter']}")
+        
+        if channel_config["channel"] not in allowed_values["channel"]:
+            raise ValueError(f"Invalid channel: {channel_config['channel']}. Allowed values for channel: {allowed_values['channel']}")
+        if channel_config["gain"] not in allowed_values["gain"]:
+            raise ValueError(f"Invalid gain: {channel_config['gain']}. Allowed values for gain: {allowed_values['gain']}")
+        if channel_config["input"] not in allowed_values["input"]:
+            raise ValueError(f"Invalid input: {channel_config['input']}. Allowed values for input: {allowed_values['input']}")
+        if channel_config["couple"] not in allowed_values["couple"]:
+            raise ValueError(f"Invalid couple: {channel_config['couple']}. Allowed values for couple: {allowed_values['couple']}")
+        if channel_config["filter"] not in allowed_values["filter"]:
+            raise ValueError(f"Invalid filter: {channel_config['filter']}. Allowed values for filter: {allowed_values['filter']}")
 
         cmd = 'setChannel'
         params = {'params': channel_config}
         response = self._send_command(cmd, params)
         return response.get('result')
+    
+    def set_a_channel(self, channel: int, gain: int, input: str, shunt: int, couple: str, filter: str):
+    
+        params = {
+            "channel": channel,
+            "gain": gain,
+            "input": input,
+            "shunt": shunt,
+            "couple": couple,
+            "filter": filter,
+        }
+        cmd = 'setChannel'
+        response = self._send_command(cmd, {"params": params})
+        if "error" in response:
+            raise RuntimeError(f"Failed to set channel {channel}: {response['error']}")
+    
+        print(f"Channel {channel} set response:", response)  # Debugging print
+        return response.get("result")
     
     def get_channel(self, channel):
         """
@@ -192,18 +210,15 @@ class KH7008(Instrument):
 if __name__ == "__main__":
     # Test the KH7008 class
     kh = KH7008("tcp://localhost:29160",)
-    channels_config = [
-        {
-            'channel': 2,
-            'gain': 10,
-            'input': 'OFF',
-            'shunt': 5,
-            'couple': "DC",
-            'filter': "OFF"
-        }
-    ]
-    kh.set_all_channels(channels_config)
-    print(kh.get_allowed_values())
-    print(kh.get_allowed_values()["gain"])
-    print(kh.get_channel(channel = 2))
+    #channel_config = {
+    #    "channel": 1,
+    #    "gain": 100,
+    #    "input": 'DIFF',
+    #    "shunt": 50000,
+    #    "couple": "AC",
+    #    "filter": "ON",
+    #}
+    #kh.set_channel(channel_config)
+    kh.set_a_channel(channel=1, gain=1000, input='DIFF', shunt="10M", couple="AC", filter="ON")
+    print(kh.get_channel(channel = 1))
     kh.close()

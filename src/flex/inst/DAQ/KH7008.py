@@ -42,7 +42,7 @@ class KH7008(Instrument):
             "filter": ["OFF", "ON"]
         }
     
-    def set_all_channels(self, channels_config: list[dict]):
+    def setAllChannels(self, channels_config: list[dict]):
         """
         Apply configurations for multiple channels of the Krohn-Hite amplifier at once. 
         Users must define the configurations for the each channel in the required format, mentioned below:
@@ -67,7 +67,7 @@ class KH7008(Instrument):
         ...     {"channel": 1, "gain": 10, "input": "SE+", "shunt": 500, "couple": "AC", "filter": "ON"},
         ...     {"channel": 2, "gain": 100, "input": "DIFF", "shunt": 50, "couple": "DC", "filter": "OFF"}
         ... ]
-        >>> result = kh.set_all_channels(channels_config)
+        >>> result = kh.setAllChannels(channels_config)
         >>> print(result)
         """
 
@@ -89,7 +89,7 @@ class KH7008(Instrument):
         response = self._send_command(cmd, params)
         return response.get('result')
     
-    def get_all_channels(self):
+    def getAllChannels(self):
         """
         Retrieve and return the current settings for all channels of the Krohn-Hite amplifier.
         The response contains each channel's configuration, including: "gain", "input" mode, "shunt" resistance, "couple" mode, and "filter" status.
@@ -105,7 +105,7 @@ class KH7008(Instrument):
             `None`: The communication with the instrument fails.
 
         Example:
-        >>> print(kh.get_all_channels())
+        >>> print(kh.getAllChannels())
         [
             {"channel": 1, "gain": 10, "input": "SE+", "shunt": 500, "couple": "AC", "filter": "ON"},
             {"channel": 2, "gain": 100, "input": "DIFF", "shunt": 50, "couple": "DC", "filter": "OFF"},
@@ -180,7 +180,104 @@ class KH7008(Instrument):
         print(f"Channel {channel} set response:", response)  # Debugging print
         return response.get("result")
     
-    def getchannel(self, channel):
+
+
+    def setChannel(self, channel_config: dict = None, channel: int = None, gain: int = None, 
+                input: str = None, shunt: int = None, couple: str = None, filter: str = None):
+        """
+        Apply configurations for a single channel of the Krohn-Hite amplifier. 
+
+        Users can either:
+            - Provide all parameters individually.
+            - Pass a `channel_config` dictionary containing the configuration.
+
+        Args:
+            channel_config (dict, optional): A dictionary with channel settings. Must include:
+                - "channel" (int): Channel number (1-8).
+                - "gain" (int): Amplifier gain (1, 10, 100, 1000).
+                - "input" (str): Input configuration ("OFF", "SE+", "SE-", "DIFF").
+                - "shunt" (int): Shunt resistance (0, 50, 500, 5000, 50000, 10000000).
+                - "couple" (str): Input coupling ("AC", "DC").
+                - "filter" (str): Low-pass filter ("OFF", "ON").
+
+            OR (use individual parameters):
+                - channel (int): The channel number (1-8).
+                - gain (int): Amplifier gain (1, 10, 100, 1000).
+                - input (str): Input configuration ("OFF", "SE+", "SE-", "DIFF").
+                - shunt (int): Shunt resistance (0, 50, 500, 5000, 50000, 10000000).
+                - couple (str): Input coupling ("AC", "DC").
+                - filter (str): Low-pass filter ("OFF", "ON").
+
+        Raises:
+            ValueError: If any parameter is invalid.
+
+        Returns:
+            dict or None: The response from the instrument.
+
+        Examples:
+            1. Using a dictionary:
+                >>> channel_config = {
+                ...     "channel": 1, "gain": 10, "input": "SE+", "shunt": 500, "couple": "AC", "filter": "ON"
+                ... }
+                >>> result = kh.setChannel(channel_config)
+                >>> print(result)
+
+            2. Using individual parameters:
+                >>> result = kh.setChannel(channel=1, gain=10, input="SE+", shunt=500, couple="AC", filter="ON")
+        """
+
+        allowed_values = self.get_allowed_values()
+
+        # If using a dictionary, extract values
+        if channel_config:
+            channel = channel_config.get("channel")
+            gain = channel_config.get("gain")
+            input = channel_config.get("input")
+            shunt = channel_config.get("shunt")
+            couple = channel_config.get("couple")
+            filter = channel_config.get("filter")
+
+        # Validate required fields
+        if None in (channel, gain, input, shunt, couple, filter):
+            raise ValueError("Missing parameters! Either provide a channel_config dict OR all individual parameters.")
+
+        # Validate values
+        if channel not in allowed_values["channel"]:
+            raise ValueError(f"Invalid channel: {channel}. Allowed values: {allowed_values['channel']}")
+        if gain not in allowed_values["gain"]:
+            raise ValueError(f"Invalid gain: {gain}. Allowed values: {allowed_values['gain']}")
+        if input not in allowed_values["input"]:
+            raise ValueError(f"Invalid input: {input}. Allowed values: {allowed_values['input']}")
+        if shunt not in allowed_values["shunt"]:
+            raise ValueError(f"Invalid shunt: {shunt}. Allowed values: {allowed_values['shunt']}")
+        if couple not in allowed_values["couple"]:
+            raise ValueError(f"Invalid couple: {couple}. Allowed values: {allowed_values['couple']}")
+        if filter not in allowed_values["filter"]:
+            raise ValueError(f"Invalid filter: {filter}. Allowed values: {allowed_values['filter']}")
+
+        # Prepare command parameters
+        params = {
+            "channel": channel,
+            "gain": gain,
+            "input": input,
+            "shunt": shunt,
+            "couple": couple,
+            "filter": filter
+        }
+
+        # Send command
+        cmd = 'setChannel'
+        response = self._send_command(cmd, {"params": params})
+    
+        if "error" in response:
+            raise RuntimeError(f"Failed to set channel {channel}: {response['error']}")
+
+        return response.get("result")
+
+    
+
+
+    def getChannel(self, channel):
         """
         Retrieve and return the current settings for a single channel of the Krohn-Hite amplifier.
         The response contains the specific channel's configuration, including: "gain", "input" mode, "shunt" resistance, "couple" mode, and "filter" status.
@@ -199,7 +296,7 @@ class KH7008(Instrument):
             `None`: The communication with the instrument fails.
 
         Example (getting the configuration of channel 1):
-        >>> print(kh.get_channel(channel = 1))
+        >>> print(kh.getChannel(channel = 1))
         {"channel": 1, "gain": 10, "input": "SE+", "shunt": 500, "couple": "AC", "filter": "ON"}
         """
         cmd = 'getChannel'
@@ -210,6 +307,7 @@ class KH7008(Instrument):
 if __name__ == "__main__":
     # Test the KH7008 class
     kh = KH7008("tcp://localhost:29160",)
+    
     #channel_config = {
     #    "channel": 1,
     #    "gain": 100,
@@ -218,7 +316,9 @@ if __name__ == "__main__":
     #    "couple": "AC",
     #    "filter": "ON",
     #}
-    #kh.set_channel(channel_config)
-    kh.set_a_channel(channel=1, gain=1000, input='DIFF', shunt="10M", couple="AC", filter="ON")
-    print(kh.get_channel(channel = 1))
+    #kh.setChannel(channel_config)
+
+    #kh.setChannel(channel=1, gain=1000, input='DIFF', shunt="10M", couple="AC", filter="ON")
+
+    print(kh.getChannel(channel = 1))
     kh.close()

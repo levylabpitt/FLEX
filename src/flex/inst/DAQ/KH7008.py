@@ -180,7 +180,7 @@ class KH7008(Instrument):
         print(f"Channel {channel} set response:", response)  # Debugging print
         return response.get("result")
     
-    def get_channel(self, channel):
+    def getchannel(self, channel):
         """
         Retrieve and return the current settings for a single channel of the Krohn-Hite amplifier.
         The response contains the specific channel's configuration, including: "gain", "input" mode, "shunt" resistance, "couple" mode, and "filter" status.

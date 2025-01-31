@@ -308,17 +308,17 @@ if __name__ == "__main__":
     # Test the KH7008 class
     kh = KH7008("tcp://localhost:29160",)
     
-    #channel_config = {
+    # channel_config = {
     #    "channel": 1,
-    #    "gain": 100,
+    #    "gain": 1000,
     #    "input": 'DIFF',
     #    "shunt": 50000,
     #    "couple": "AC",
     #    "filter": "ON",
-    #}
-    #kh.setChannel(channel_config)
+    # }
+    # kh.setChannel(channel_config)
 
-    #kh.setChannel(channel=1, gain=1000, input='DIFF', shunt="10M", couple="AC", filter="ON")
-
+    kh.setChannel(channel=1, gain=10, input='DIFF', shunt=10000000, couple="AC", filter="ON")
+    time.sleep(0.5)
     print(kh.getChannel(channel = 1))
     kh.close()

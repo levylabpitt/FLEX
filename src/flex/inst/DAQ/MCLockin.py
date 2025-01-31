@@ -49,7 +49,7 @@ class MCLockin(Instrument):
         a = self._get_AO_param(channel, 'Amplitude')
         print(a, value)
         if a != value:
-            raise Exception('Value could not be changed. Maximum amplitude value might be limited.')
+            raise Exception('Value could not be changed. Maximum amplitude value is limited. Please uncheck the Limit Amplitudes Box in Mclockin.')
         
 
     def set_dc(self, channel: int, value: float) -> None:
@@ -77,7 +77,7 @@ class MCLockin(Instrument):
         time.sleep(0.1)
         a = self._get_AO_param(channel, 'Frequency')
         if a != value:
-            raise Exception('Value could not be changed. Frequency might be linked.')
+            raise Exception('Value could not be changed. Frequency is linked. Please uncheck the Link Frequencies Box.')
 
     def set_phase(self, channel: int, value: float) -> None:
         """
@@ -371,7 +371,7 @@ class MCLockin(Instrument):
         time.sleep(0.1)
         a = self.get_ref_param(REFch,'Frequency')
         if a != freq:
-          raise Exception('Value could not be changed. Frequency might be linked.')
+          raise Exception('Value could not be changed. Frequency is linked. Please uncheck the Link Frequencies box.')
         
 
     def set_REF_TC(self, REFch: float, TC: float) -> None:

@@ -10,8 +10,13 @@ import matplotlib.pyplot as plt
 lockin = MCLockin("tcp://localhost:29170")
 
 #%%Some test run
+'''sweep_config = [[1,0.08,0.15,"Ramp /"],[2,0.04,0.10,"Smooth Ramp _/"],[3,0.09,0.17,"Table",[1,3,5,7]],[4,0.05,0.20,"Smooth Ramp _/"]]
 
+x = lockin.sweep(sweep_config,5,6,2) 
+print(x[2]) '''
 
+ref_configs = [[1,14,1,0.4,3]]
+lockin.set_ref(ref_configs)
 #%% experiment
 # Define Parameters
 channel_source = 1

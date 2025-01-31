@@ -7,6 +7,8 @@ All instruments should inherit from this class and implement their own methods.
 
 Contact Pubudu Wijesinghe <pubudu.wijesinghe@levylab.org> for any queries.
 '''
+# TODO: Time delay in the send command function
+
 
 import time
 import json

@@ -116,70 +116,6 @@ class KH7008(Instrument):
         response = self._send_command(cmd)
         return response.get('result')
     
-    def set_channel(self, channel_config: dict):
-        """
-        Apply configurations for a single channel of the Krohn-Hite amplifier. 
-        Users must define the configurations for the specific channel in the required format, mentioned below:
-
-        Args: 
-            channel_config(dict): A dictionary specifying the setting for one channel. The dictionary must include:
-                - "channel" (int): The channel number (valid: 1-8).
-                - "gain" (int): Amplifier gain (valid: 1, 10, 100, 1000).
-                - "input" (str): Input configuration (valid: "OFF", "SE+", "SE-", "DIFF").
-                - "shunt" (int): Shunt resistance in ohms (valid: 0, 50, 500, 5000, 50000, 10000000).
-                - "couple" (str): Input coupling mode (valid: "AC", "DC").
-                - "filter" (str): Low-pass filter status (valid: "OFF", "ON").
-
-        Raises:
-            ValueError: If any parameter in the provided configuration is not within the allowed values.
-
-        Returns:
-             dict or None: The response from the instrument, typically indicating success or containing an error message if the command fails.
-
-        Example (configuring channel 1):
-        >>> channel_config = {
-        ...     "channel": 1, "gain": 10, "input": "SE+", "shunt": 500, "couple": "AC", "filter": "ON"}
-        ... }
-        >>> result = kh.set_channel(channel_config)
-        >>> print(result)
-        """
-
-        allowed_values = self.get_allowed_values()
-        
-        if channel_config["channel"] not in allowed_values["channel"]:
-            raise ValueError(f"Invalid channel: {channel_config['channel']}. Allowed values for channel: {allowed_values['channel']}")
-        if channel_config["gain"] not in allowed_values["gain"]:
-            raise ValueError(f"Invalid gain: {channel_config['gain']}. Allowed values for gain: {allowed_values['gain']}")
-        if channel_config["input"] not in allowed_values["input"]:
-            raise ValueError(f"Invalid input: {channel_config['input']}. Allowed values for input: {allowed_values['input']}")
-        if channel_config["couple"] not in allowed_values["couple"]:
-            raise ValueError(f"Invalid couple: {channel_config['couple']}. Allowed values for couple: {allowed_values['couple']}")
-        if channel_config["filter"] not in allowed_values["filter"]:
-            raise ValueError(f"Invalid filter: {channel_config['filter']}. Allowed values for filter: {allowed_values['filter']}")
-
-        cmd = 'setChannel'
-        params = {'params': channel_config}
-        response = self._send_command(cmd, params)
-        return response.get('result')
-    
-    def set_a_channel(self, channel: int, gain: int, input: str, shunt: int, couple: str, filter: str):
-    
-        params = {
-            "channel": channel,
-            "gain": gain,
-            "input": input,
-            "shunt": shunt,
-            "couple": couple,
-            "filter": filter,
-        }
-        cmd = 'setChannel'
-        response = self._send_command(cmd, {"params": params})
-        if "error" in response:
-            raise RuntimeError(f"Failed to set channel {channel}: {response['error']}")
-    
-        print(f"Channel {channel} set response:", response)  # Debugging print
-        return response.get("result")
-    
 
 
     def setChannel(self, channel_config: dict = None, channel: int = None, gain: int = None, 
@@ -344,17 +280,17 @@ if __name__ == "__main__":
     # Test the KH7008 class
     kh = KH7008("tcp://localhost:29160",)
     
-    channel_config = {
-       "channel": 1,
-       "gain": 20,
-       "input": 'DIFF',
-       "shunt": 20,
-       "couple": "AC",
-       "filter": "ON",
-    }
-    kh.setChannel(channel_config)
+    # channel_config = {
+    #    "channel": 1,
+    #    "gain": 10,
+    #    "input": 'SE+',
+    #    "shunt": 50,
+    #    "couple": "AC",
+    #    "filter": "ON",
+    # }
+    # kh.setChannel(channel_config)
 
     #kh.setChannel(channel=1, couple="DC", input= "SE-", gain= 100)
-    time.sleep(0.5)
+    # time.sleep(0.5)
     print(kh.getChannel(channel = 1))
     kh.close()

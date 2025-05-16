@@ -65,17 +65,15 @@ class Instrument:
             self.logger.error(f"Error while initializing: {e}")
             raise
 
-    def get_idn(self) -> dict[str, Optional[str]]:
+    def idn(self) -> dict[str, Optional[str]]:
         """
         JSON request of IDN should return this information from the IF.
         """
         self.logger.debug("Fetching IDN information.")
-        return {
-            "vendor": "Quantum Design PPMS",
-            "model": "Simulation",
-            "serial": None,
-            "firmware": None,
-        }
+        response = self._send_command("IDN")
+        if response and "result" in response:
+            return response["result"]
+        return None
 
     def help(self, command: str = None) -> Sequence[str]:
         self.logger.debug(f"Fetching help for method: {command}")

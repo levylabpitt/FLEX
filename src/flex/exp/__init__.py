@@ -1,3 +1,3 @@
-from .experiment import Experiment
+from .experiment import Experiment, Measurement
 
 __all__ = ['Experiment']

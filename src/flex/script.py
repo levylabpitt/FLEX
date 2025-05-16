@@ -1,50 +1,38 @@
-#%%  General imports
-import matplotlib.pyplot as plt
+# %% - FLEX Imports
+from flex.exp import Experiment
+from flex.inst import *
 import numpy as np
 
-# Instrument initialization
-from flex.inst import *
-from flex.db import db_dataviewer as dv
+#%% - Define Experiment and Instruments
+exp = Experiment(user="pubudu.wijesinghe", notes='Au Nanorod 2.0')
+lockin: MCLockin = exp.init(MCLockin, name="lockin", address='tcp://localhost:29170')
+ppms: PPMS = exp.init(PPMS, name="ppms")
+# kh = KH7008()
 
-lockin = MCLockin()
-ppms = PPMS()
-kh = KH7008()
+#%% - Define Measurement
+with exp.new_measurement("PV vs. Insertion") as meas:
+    sweep_config = {
+        "sweep_channel": 2,
+        "sweep_start": 0,
+        "sweep_stop": 0.1,
+        "duration": 50,
+        "measure_channel": 1,
+        "ref_channel": 1
+    }
+    lockin.sweep1d(sweep_config, plot_data=True)
+    lockin.setState('stop')
 
-# %% Experiment 1 - LI Signal vs. Gate
-lockin.setAO_Amplitude(1, 0.1)
-sweep_config = {
-    "sweep_channel" : 2,
-    "sweep_start" : 0,
-    "sweep_stop" : 0.1,
-    "duration" : 20,
-    "measure_channel" : 1,
-    "ref_channel" : 1
-}
-# lockin.sweep1d(sweep_config)
+#%% - Define Multi-instrument Measurement
+temp_list = np.arange(300, 400, 50)
+b_list = np.arange(-1, 1, 1)
+with exp.new_measurement("Multi-instrument") as meas:
+    for temp in temp_list:
+        ppms.setTemperatureAndWait(float(temp), rate=100)
+        for b in b_list:
+            ppms.setMagnetAndWait(float(b), rate=5)
+            t_range = lockin.sweep1d(sweep_config, plot_data=True)
+data = ppms.get_temp_from_db('2025-05-09 07:00:08.638105', '2025-05-09 07:30:00.543921')
+print(data)
 
-time_range= ('2025-04-03 18:14:20-0400',
-             '2025-04-03 18:14:44-0400')
-dv.plot_sweep1d(time_range, sweep_config)
-
-# %% Experiment 2 - LI Signal vs. Gate vs. Temp
-temps = np.linspace(250, 270, 2)
-temp_rate = 200
-lockin.setAO_Amplitude(1, 0.1)
-data = []
-for temp in temps:
-    ppms.setTemperatureAndWait(temp, temp_rate)
-    x,y = lockin.sweep1d(2, 0, 0.1, 20, 1)
-    data.append(y)
-data_array = np.array(data)
-
-plt.figure()
-plt.imshow(data_array, aspect='auto', origin='lower', 
-           extent=[x[0], x[-1], temps[0], temps[-1]])
-plt.colorbar(label='Lock-in Signal')
-plt.xlabel('Sweep Voltage (V)')
-plt.ylabel('Temperature (K)')
-plt.show()
-
-# %% Close instruments
-lockin.close()
-ppms.close()
+#%% - End Experiment
+exp.end()

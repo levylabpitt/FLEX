@@ -11,6 +11,8 @@ Contact an author for any queries.
 from flex.inst.base import Instrument
 import time
 import os
+from datetime import datetime, timedelta
+from flex.db import db_dataviewer as dv
 
 _DEFAULT_ADDRESS = 'tcp://localhost:29170'
 
@@ -104,7 +106,7 @@ class MCLockin(Instrument):
             pattern: The pattern of the sweep
         '''
         param = {"Sweep Time (s)":sweep_time,
-                 "Initial Wait (s)":1,
+                 "Initial Wait (s)":2,
                  "Return to Start":False,
                  "Channels":[{"Enable?":True,
                               "Channel":channel,
@@ -124,7 +126,7 @@ class MCLockin(Instrument):
         results_dict = {item['key']: item['value'] for item in results}
         return results_dict.get(key)
 
-    def sweep1d(self, sweep_config: dict) -> tuple:
+    def sweep1d(self, sweep_config: dict, plot_data=False, timeout=10) -> None:
         sweep_channel = sweep_config.get('sweep_channel')
         start = sweep_config.get('sweep_start')
         stop = sweep_config.get('sweep_stop')
@@ -137,18 +139,17 @@ class MCLockin(Instrument):
             self.setState('start')   
         # TODO: The state check should be happening with another function
         self.setSweep(sweep_channel, start, stop, duration)
-        time.sleep(1)
+        time.sleep(0.5)
         self.setState('start sweep')
         # *wait for the sweep time since it'll anyway take that long (saves processor resources)
         time.sleep(duration) 
-
+        start_time = time.time()
         while self.getState() == 'sweeping':
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"Sweep operation timed out after {timeout} seconds. Please check the Multichannel Lock-in Application.")
             time.sleep(0.5)
-        # should have some check here to see if the sweep is done and error handling
-        x = self.getSweepWaveforms()['AO_wfm'][sweep_channel - 1]['Y']
-        y = self.getSweepWaveforms()['X_wfm'][measure_channel - 1]['Y']
-        return x, y
 
+        
 if __name__ == "__main__":
     # Test the MCLockin class
     lockin = MCLockin("tcp://localhost:29170",)

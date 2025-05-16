@@ -68,13 +68,16 @@ class FLEXDB:
                     return cursor.fetchmany(size=size)
                 elif method == 'all':
                     return cursor.fetchall()
+                elif method == 'none':
+                    self.conn.commit()
+                    return None
                 else:
                     raise ValueError("Invalid method. Use 'one', 'many', or 'all'.")
         except psycopg2.Error as e:
             logging.error(f"Query execution failed: {e}")
             raise
-        finally:
-            self.close_connection()
+        # finally: # NOTE: disabled this to make the system compatible with the current exp management system
+        #     self.close_connection()
 
     def list_logged_users(self):
         """
@@ -138,7 +141,7 @@ os.makedirs(logpath, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
-    filename=logpath + '\db.log',
+    filename=logpath + '\\db.log',
     level=logging.DEBUG,
     format='%(asctime)s:%(levelname)s:%(message)s'
 )

@@ -1,113 +1,128 @@
-import psycopg2
+# experiment.py
+import uuid
 from datetime import datetime
+from flex.db import FLEXDB
+from  .script_to_db import CellLogger
+from IPython import get_ipython
+from .users import User
+from .dbexptoAsana import trigger_n8n_dbexptoAsana
+
+# TODO: Should load the user updater here
 
 class Experiment:
-    def __init__(self, db_config):
-        """
-        Initialize the Experiment class with database configuration.
+    def __init__(self, user: User, notes="", enable_cell_log=True):
+        # TODO: Add a feature to support collaborators
+        # TODO: Add failsafes. If one script fails, the experiment should not be halted.
+        # TODO: Should add a logging feature 
+        
+        # User availability check
+        if user not in set(User.__args__): 
+            raise ValueError(f"User '{user}' is not registered.")
+        if enable_cell_log and get_ipython():
+            self.cell_logger = CellLogger(self)
+        # Use date and time for session ID
+        self.session_id = datetime.now().strftime("%Y%m%d%H%M%S")
+        self.user = user
+        self.notes = [notes] if notes else [] #TODO: These should be logged to the database
+        self.start_time = datetime.now()
+        self.end_time = None
+        self.instruments = {}
 
-        :param db_config: A dictionary containing database connection details (dbname, user, password, host, port).
-        """
-        self.db_config = db_config
-        self.connection = psycopg2.connect(**db_config)
-        self.create_table()
+        self.db = FLEXDB(dbname="levylab_test", username='llab_admin')
+        print(f"[{self.start_time}] Experiment started: {self.session_id}")
+        self._log_start_to_db()
+        trigger_n8n_dbexptoAsana()
 
-    def create_table(self):
+    def _log_start_to_db(self):
+        sql = """
+            INSERT INTO exp (id, username, start_time, end_time, instruments)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        Create the experiments table if it doesn't already exist.
-        """
-        query = """
-        CREATE TABLE IF NOT EXISTS experiments (
-            id SERIAL PRIMARY KEY,
-            user_name VARCHAR(255) NOT NULL,
-            experiment_name VARCHAR(255) NOT NULL,
-            description TEXT,
-            start_time TIMESTAMP NOT NULL,
-            end_time TIMESTAMP
-        );
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(query)
-            self.connection.commit()
+        self.db.execute_fetch(
+            sql_string=sql,
+            params=(str(self.session_id), self.user, self.start_time, None, []),
+            method='none'
+        )
 
-    def start_experiment(self, user_name, experiment_name, description):
-        """
-        Start a new experiment instance.
+    def init(self, cls, name=None, *args, **kwargs): 
+        #TODO: Databse should be updated whenever a new instrument is added with the serial number
+        name = name or cls.__name__
+        if name in self.instruments:
+            raise ValueError(f"Instrument '{name}' already initialized.")
+        self.instruments[name] = cls(*args, **kwargs)
+        return self.instruments[name]
 
-        :param user_name: Name of the user.
-        :param experiment_name: Name of the experiment.
-        :param description: Description of the experiment.
-        """
-        start_time = datetime.now()
-        query = """
-        INSERT INTO experiments (user_name, experiment_name, description, start_time)
-        VALUES (%s, %s, %s, %s)
-        RETURNING id;
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(query, (user_name, experiment_name, description, start_time))
-            experiment_id = cursor.fetchone()[0]
-            self.connection.commit()
-        return experiment_id
+    def new_measurement(self, notes=""):
+        return Measurement(self, notes=notes)
 
-    def end_experiment(self, experiment_id):
-        """
-        End an experiment instance by recording the end time.
+    def end(self):
+        self.end_time = datetime.now()
+        self._update_end_time()
+        if hasattr(self, "cell_logger"):
+            self.cell_logger.unregister()
+        self.db.close_connection()
+        trigger_n8n_dbexptoAsana()
+        print(f"[{self.end_time}] Experiment ended and saved.")
 
-        :param experiment_id: ID of the experiment to end.
+    def _update_end_time(self):
+        sql = """
+            UPDATE exp SET end_time = %s, instruments = %s
+            WHERE id = %s
         """
-        end_time = datetime.now()
-        query = """
-        UPDATE experiments
-        SET end_time = %s
-        WHERE id = %s;
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(query, (end_time, experiment_id))
-            self.connection.commit()
+        self.db.execute_fetch(
+            sql_string=sql,
+            params=(self.end_time, list(self.instruments.keys()), str(self.session_id)),
+            method='none'
+        )
 
-    def get_experiment_by_name(self, experiment_name):
+    def _log_to_db(self):
+        sql = """
+            INSERT INTO exp (id, username, start_time, end_time, instruments)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        Retrieve experiments by name.
-
-        :param experiment_name: Name of the experiment.
-        """
-        query = """
-        SELECT * FROM experiments WHERE experiment_name = %s;
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(query, (experiment_name,))
-            results = cursor.fetchall()
-        return results
-
-    def get_experiments_by_time_range(self, start_time, end_time):
-        """
-        Retrieve experiments within a specific time range.
-
-        :param start_time: Start of the time range (datetime).
-        :param end_time: End of the time range (datetime).
-        """
-        query = """
-        SELECT * FROM experiments
-        WHERE start_time >= %s AND end_time <= %s;
-        """
-        with self.connection.cursor() as cursor:
-            cursor.execute(query, (start_time, end_time))
-            results = cursor.fetchall()
-        return results
-
-    def close(self):
-        """
-        Close the database connection.
-        """
-        self.connection.close()
+        self.db.execute_fetch(
+            sql_string=sql,
+            params=(str(self.session_id), self.user, self.start_time, self.end_time, list(self.instruments.keys())),
+            method=None  # no fetch
+        )
+        print(f"Experiment {self.session_id} logged to DB.")
 
 
-if __name__ == "__main__":
-    db_config = {
-    'dbname': 'postgres',
-    'user': 'postgres',
-    'password': 'flex',
-    'host': '10.226.177.185',
-    'port': 5433
-}
+class Measurement:
+    def __init__(self, experiment, notes=""):
+        self.experiment = experiment
+        self.experiment_id = experiment.session_id
+        self.notes = [notes] if notes else []
+        self.start_time = None
+        self.end_time = None
+        # Generate measurement ID using current date and time
+        self.measurement_id = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    def __enter__(self):
+        self.start_time = datetime.now()
+        print(f"[{self.start_time}] Measurement started.")
+        return self
+
+    def add_note(self, note):
+        self.notes.append(f"{datetime.now().isoformat()}: {note}")
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.end()
+
+    def end(self):
+        self.end_time = datetime.now()
+        self._log_to_db()
+        print(f"[{self.end_time}] Measurement ended and logged.")
+
+    def _log_to_db(self):
+        sql = """
+            INSERT INTO meas (id, experiment_id, start_time, end_time, notes)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        self.experiment.db.execute_fetch(
+            sql_string=sql,
+            params=(str(self.measurement_id), str(self.experiment_id),
+                    self.start_time, self.end_time, self.notes),
+            method='none'  # no fetch
+        )
+

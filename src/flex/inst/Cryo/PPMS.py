@@ -9,6 +9,7 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
+from flex.db import FLEXDB
 import time
 import os
 
@@ -19,7 +20,7 @@ os.makedirs(logpath, exist_ok=True)
 
 class PPMS(Instrument):
     def __init__(self, address=_DEFAULT_ADDRESS):
-        super().__init__(address, log_file= logpath + '\instrument.log')
+        super().__init__(address, log_file= logpath + '\\instrument.log')
     
     def setTemperature(self, value: float, rate: float) -> None:
         cmd = 'Set Temperature'
@@ -73,8 +74,21 @@ class PPMS(Instrument):
             time.sleep(1)
         print(f"Magnetic field set to {target_field} T.")
 
+    def get_temp_from_db(self, start_time, end_time):
+        db = FLEXDB('levylab', 'llab_admin')
+        sql = """
+            SELECT d007 FROM llab_039
+            WHERE time BETWEEN %s AND %s
+        """
+        params = (start_time, end_time)
+        result = db.execute_fetch(sql, params, method='all')
+        db.close_connection()
+        return result
+
 if __name__ == "__main__":
     # Test the PPMS class
     ppms = PPMS()
     print(ppms.help())
+    data = ppms.get_temp_from_db('2025-05-09 07:00:08.638105', '2025-05-09 07:30:00.543921')
+    print(data)
     ppms.close()

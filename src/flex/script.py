@@ -36,3 +36,8 @@ print(data)
 
 #%% - End Experiment
 exp.end()
+
+#%%
+from flex.inst import *
+kh = KH7008("tcp://localhost:29160")
+kh.getAllChannels()

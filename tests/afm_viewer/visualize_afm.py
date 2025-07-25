@@ -4,7 +4,6 @@ import matplotlib.animation as animation
 import igor.binarywave as ibw
 from flex.db import FLEXDB
 
-
 class AFMImageLoader:
     """Class to handle loading and processing AFM images from IBW files."""
     
@@ -66,6 +65,9 @@ class AFMImageLoader:
         x_origin = self.header['sfB'][0]       # x origin
         y_delta = self.header['sfA'][1]        # y step size
         y_origin = self.header['sfB'][1]       # y origin
+        self.image_width = n_x * x_delta
+        self.image_height = n_y * y_delta
+
         
         # Construct physical axes
         x = x_origin + np.arange(n_x) * x_delta
@@ -142,6 +144,7 @@ class TipTraceData:
         current_points = []
         for row in rows:
             timestamp, x, y, speed, voltage, path_name = row
+            
             if all(v is None for v in [speed, voltage, path_name]) and None not in (x, y):
                 current_points.append((x, y + 20e-6))  # Flip Y to match image orientation
             elif any(v is not None for v in [speed, voltage, path_name]):
@@ -312,15 +315,15 @@ class AFMAnimator:
 def main():
     """Main function to run the AFM viewer."""
     # Load AFM image
-    afm_image = AFMImageLoader("./tests/afm_viewer/ahmed/SA405230014.ibw").load()
+    afm_image = AFMImageLoader("./tests/afm_viewer/ahmed/SA405240010.ibw").load()
     
     # Fetch tip trace data
     # start_time = '2025-04-16 17:00:00 -0400'
     # end_time = '2025-04-16 19:00:00 -0400'
     # start_time = '2025-04-22 14:30:00 -0400'
     # end_time = '2025-04-22 16:00:00 -0400'
-    start_time = '2025-05-01 18:30:00 -0400'
-    end_time = '2025-05-01 19:00:00 -0400'
+    start_time = '2025-06-17 15:40:00 -0400'
+    end_time = '2025-06-17 16:40:00 -0400'
     tip_trace = TipTraceData("levylab", "llab_admin").fetch_data(start_time, end_time, "llab_079")
     
     # Display first few segments for debugging

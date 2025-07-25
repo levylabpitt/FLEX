@@ -1,0 +1,23 @@
+def callTimeDelayVIx64(start, stop, wait, sweep_time, fs=1000, lockin_refresh=1, timeout=100, exp_folder=None, comments=None):
+#     """
+#     Call the THz Time Delay VI.
+#     """
+#     vi_path = r"C:\Program Files (x86)\National Instruments\LabVIEW 2019\user.lib\LevyLab\Transport\Transport\THz_TimeDelay.vi"
+#     labview = win32com.client.Dispatch("Labview.Application")
+#     VI = labview.getvireference(vi_path)
+#     print(f'Name: {VI.Name}')
+    
+#     VI.setcontrolvalue('Delay Start (ps)', start)
+#     VI.setcontrolvalue('Delay End (ps)', stop)
+#     VI.setcontrolvalue('Initial Wait (s)', wait)
+#     VI.setcontrolvalue('Sweep Time (s)', sweep_time)
+#     VI.setcontrolvalue('Fs (S/s)', fs)
+#     VI.setcontrolvalue('Lockin Refresh (s)', lockin_refresh)
+#     VI.setcontrolvalue('Timeout (ms)', timeout)
+#     VI.setcontrolvalue('Experiment Folder', exp_folder) if exp_folder else None
+#     VI.setcontrolvalue('Experiment Comments', comments) if comments else None
+
+#     # VI.Call
+#     # time.sleep(sweep_time + wait)
+#     # while VI.getcontrolvalue('Current State') != 'Exit':
+#     #     time.sleep(1)

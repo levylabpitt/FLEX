@@ -23,7 +23,7 @@ def getExpPath():
     return result.stdout.rstrip('\n'), result.stdout.rstrip('\n').partition('Nextcloud')[2]
 
 if __name__ == "__main__":
-    callTransport(exp_folder="test1", tdms_params={"test":124}, VI="Lockin_sweep", comments='Test comment')
+    callTransport(exp_folder="test1", tdms_params={"test":124, "test2":345}, VI="Lockin_sweep", comments='Test comment')
     # callVNA(exp_folder="test", comments='testing', tdms_params=5)
     # print(getExpPath()[0])
 

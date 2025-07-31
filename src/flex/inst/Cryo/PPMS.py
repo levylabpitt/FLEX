@@ -22,36 +22,61 @@ class PPMS(Instrument):
     def __init__(self, address=_DEFAULT_ADDRESS):
         super().__init__(address, log_file= logpath + '\\instrument.log')
     
-    def setTemperature(self, value: float, rate: float) -> None:
-        cmd = 'Set Temperature'
-        param = {'Temperature (K)': value, 'Rate (K/min)': rate}
+    def setTemperature(self, temperature: float, rate: float, channel:int=0) -> None:
+        cmd = 'setTemperature'
+        param = {'temperature': temperature, 'rate': rate, 'channel': channel}
         self._send_command(cmd, param)
 
     def getTemperature(self) -> float:
-        cmd = 'Get Temperature'
+        cmd = 'getTemperature'
         response = self._send_command(cmd)
         return response['result']
 
-    def setMagnet(self, field: float, rate: float) -> None:
-        cmd = 'Set Magnet'
-        param = {'Field (T)': field, 'Rate (T/min)': rate}
+    def setMagnet(self, field: float, rate: float, axis: str='Z', mode: str='Persistent') -> None:
+        cmd = 'setMagnet'
+        param = {'field': field, 'rate': rate, 'axis': axis, 'mode': mode}
         self._send_command(cmd, param)
     
     def getMagnet(self) -> float:
-        cmd = 'Get Magnet'
+        cmd = 'getMagnet'
         response = self._send_command(cmd)
         return response['result']
+
+    def getLHeLevel(self) -> float:
+        cmd = 'getLHeLevel'
+        response = self._send_command(cmd)
+        return response['result']
+
+    # def setAngle(self, angle: float, rate: float, channel: int) -> None:
+    #     cmd = 'setAngle'
+    #     param = {'angle': angle, 'rate': rate, 'channel': channel}
+    #     self._send_command(cmd, param)
+
+    # def getAngle(self) -> float:
+    #     cmd = 'getAngle'
+    #     response = self._send_command(cmd)
+    #     return response['result']
+    
+    # def setChamber(self, angle: float, rate: float, channel: int) -> None:
+    #     cmd = 'setAngle'
+    #     param = {'angle': angle, 'rate': rate, 'channel': channel}
+    #     self._send_command(cmd, param)
+
+    # def getChamber(self):
+    #     cmd = 'getChamber'
+    #     response = self._send_command(cmd)
+    #     return response['result']
 
 # -------------- Custom functions ---------------->
 
     def _is_temperature_set(self, target_temp):
-        current_temp = self.getTemperature()['Temperature (K)']
+        current_temp = self.getTemperature()['temperature']
         if current_temp is not None:
             return current_temp == target_temp
         return False
 
     def _is_field_set(self, target_field):
-        current_field = self.getMagnet()['Field (T)']
+        current_field = self.getMagnet()['field']
         if current_field is not None:
             return current_field == target_field
         return False

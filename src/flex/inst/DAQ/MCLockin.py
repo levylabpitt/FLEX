@@ -29,6 +29,12 @@ class MCLockin(Instrument):
         response = self._send_command(cmd, params)
         return response['result']
     
+    def getAI(self, channel):
+        cmd = 'getAI'
+        params = {'channel': channel}
+        response = self._send_command(cmd, params)
+        return response['result']
+    
     def setAO_Amplitude(self, channel: int, value: float) -> None:
         cmd = 'setAO_Amplitude'
         param = {'Channel': channel, 'Amplitude': value}
@@ -36,17 +42,17 @@ class MCLockin(Instrument):
 
     def setAO_DC(self, channel: int, value: float) -> None:
         cmd = 'setAO_DC'
-        param = {'AO Channel': channel, 'DC (V)': value}
+        param = {'Channel': channel, 'DC': value}
         self._send_command(cmd, param)
 
     def setAO_Frequency(self, channel: int, value: float) -> None:
         cmd = 'setAO_Frequency'
-        param = {'AO Channel': channel, 'Frequency (Hz)': value}
+        param = {'Channel': channel, 'Frequency': value}
         self._send_command(cmd, param)
 
     def setAO_Phase(self, channel: int, value: float) -> None:
         cmd = 'setAO_Phase'
-        param = {'AO Channel': channel, 'Phase (deg)': value}
+        param = {'Channel': channel, 'Phase': value}
         self._send_command(cmd, param)
 
     def setAO_Function(self, channel: int, value: str) -> None:
@@ -64,7 +70,7 @@ class MCLockin(Instrument):
             raise ValueError(f"Invalid value: {value}. Allowed values are: {', '.join(allowed_values)}")
         
         cmd = 'setAO_Function'
-        param = {'AO Channel': channel, 'Function': value}
+        param = {'Channel': channel, 'Function': value}
         self._send_command(cmd, param)
 
     def getResults(self) -> dict:

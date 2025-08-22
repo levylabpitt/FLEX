@@ -50,10 +50,22 @@ class Transport(Instrument):
         param = {'folder': folder}
         self._send_command(cmd, param)
 
+    def getExptFolder(self):
+        cmd = 'getExptFolder'
+        params = {}
+        response = self._send_command(cmd, params)
+        return response['result']['folder']
+
     def setExptComments(self, comments: str) -> None:
         cmd = 'setExptComments'
         param = {'comments': comments}
         self._send_command(cmd, param)
+
+    def getExptComments(self):
+        cmd = 'getExptComments'
+        params = {}
+        response = self._send_command(cmd, params)
+        return response['result']['comments']
     
     def setExptParam(self, param: str, value: Union[str, int, float, list[str], list[int], list[float]]) -> None:
 
@@ -99,6 +111,11 @@ class Transport(Instrument):
                                     'Table': [1]}]}
         self._send_command(cmd, param)
 
+    def getSweepConfig(self):
+        cmd = 'getSweepConfig'
+        params = {}
+        response = self._send_command(cmd, params)
+        return response['result']
 
 # -------------- Custom functions ---------------->
 
@@ -116,6 +133,11 @@ class Transport(Instrument):
             return None
         else:
             self.stopTransport()
+
+    def getExptDetails(self, show=False):
+        folder = self.getExptFolder()
+        comments = self.getExptComments()
+        return folder, comments
     
 if __name__ == "__main__":
     # Test the Transport Server

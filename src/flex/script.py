@@ -39,7 +39,24 @@ exp.end()
 
 #%%
 from flex.inst import *
+lockin = MCLockin()
+transport = Transport()
+sweep_config = {
+    "sweep_channel" : 2,
+    "sweep_start" : 0,
+    "sweep_stop" : 0.1,
+    "duration" : 20,
+    "measure_channel" : 1,
+    "ref_channel" : 1
+}
+transport.LockinSweep('TestFolder', 'Test Comments', sweep_config, run_continuous=False)
 # kh = KH7008("tcp://localhost:29160")
 # kh.getAllChannels()
 
+# %%
+from flex.tdms import flexTDMS
+import numpy as np
+data_dict = {
+    "Time": np.linspace(0, 10, 100)}
+flexTDMS.write_tdms("test_file.tdms", data_dict)
 # %%

@@ -130,9 +130,13 @@ class Transport(Instrument):
         self.startTransport('LockinSweep')
         time.sleep(2)  # Allow some time for the transport to start
         if run_continuous:
+            print('Continuous Sweep Running Asynchronously...')
             return None
         else:
             self.stopTransport()
+            while self.getStatus() != 'idle':
+                time.sleep(1)
+            print('Sweep Ended.')
 
     def getExptDetails(self, show=False):
         folder = self.getExptFolder()

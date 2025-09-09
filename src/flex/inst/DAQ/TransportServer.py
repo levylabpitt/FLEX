@@ -98,6 +98,7 @@ class Transport(Instrument):
         stop = sweep_config.get('sweep_stop')
         duration = sweep_config.get('duration')
         measure_channel = sweep_config.get('measure_channel')
+        pattern = sweep_config.get('pattern')
 
         cmd = 'setSweepConfig'
         param = {'sweepTime': duration,
@@ -107,7 +108,7 @@ class Transport(Instrument):
                                     'Channel': sweep_channel,
                                     'Start': start,
                                     'End': stop,
-                                    'Pattern': 'Ramp /',
+                                    'Pattern': pattern,
                                     'Table': [1]}]}
         self._send_command(cmd, param)
 
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     # Test the Transport Server
     transport = Transport()
     print(transport.help())
-    transport.startTransport('LockinSweep')
-    time.sleep(10)
-    transport.stopTransport()
-    transport.close()
+    # transport.startTransport('LockinSweep')
+    # time.sleep(10)
+    # transport.stopTransport()
+    # transport.close()

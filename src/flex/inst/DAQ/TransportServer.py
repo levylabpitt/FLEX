@@ -92,24 +92,32 @@ class Transport(Instrument):
         params = {param: value}
         self._send_command(cmd, params)
 
-    def setSweepConfig(self, sweep_config: dict) -> None:
-        sweep_channel = sweep_config.get('sweep_channel')
-        start = sweep_config.get('sweep_start')
-        stop = sweep_config.get('sweep_stop')
-        duration = sweep_config.get('duration')
-        measure_channel = sweep_config.get('measure_channel')
-        pattern = sweep_config.get('pattern')
+    # --- deprecated ---
+    # def setSweepConfig(self, sweep_config: dict) -> None:
+    #     sweep_channel = sweep_config.get('sweep_channel')
+    #     start = sweep_config.get('sweep_start')
+    #     stop = sweep_config.get('sweep_stop')
+    #     duration = sweep_config.get('duration')
+    #     measure_channel = sweep_config.get('measure_channel')
+    #     pattern = sweep_config.get('pattern')
 
+    #     cmd = 'setSweepConfig'
+    #     param = {'sweepTime': duration,
+    #             'initialWaitTime': 1,
+    #             'returnToStart': False,
+    #             'sweepChannels': [{'Enable?': True,
+    #                                 'Channel': sweep_channel,
+    #                                 'Start': start,
+    #                                 'End': stop,
+    #                                 'Pattern': pattern,
+    #                                 'Table': [1]}
+    #                                 # add more channels here if needed
+    #                                 ]}
+    #     self._send_command(cmd, param)
+
+    def setSweepConfig(self, sweep_config: dict) -> None:
         cmd = 'setSweepConfig'
-        param = {'sweepTime': duration,
-                'initialWaitTime': 1,
-                'returnToStart': False,
-                'sweepChannels': [{'Enable?': True,
-                                    'Channel': sweep_channel,
-                                    'Start': start,
-                                    'End': stop,
-                                    'Pattern': pattern,
-                                    'Table': [1]}]}
+        param = sweep_config
         self._send_command(cmd, param)
 
     def getSweepConfig(self):

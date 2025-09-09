@@ -119,7 +119,14 @@ class MCLockin(Instrument):
                               "Start":start,
                               "End":stop,
                               "Pattern": "Ramp /",
-                              "Table":[]}]}      
+                              "Table":[]},
+                              {"Enable?":True,
+                              "Channel":channel,
+                              "Start":start,
+                              "End":stop,
+                              "Pattern": "Ramp /",
+                              "Table":[]},
+                              ]}      
         self._send_command('setSweep', param)
 
 

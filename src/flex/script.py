@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
+from flex import lv
 
 #%% Initialize Instruments
 lockin = MCLockin()
@@ -13,7 +14,7 @@ transport = Transport()
 
 dscan = DScan("DM240913")
 ophir = OphirNova2()
-newfocus = NF8742(axis=1)
+# newfocus = NF8742(axis=1)
 
 # %% Experiment variables and functions
 def insertion_sweep(start, stop, step, file_suffix, lockin_measure_channel=1, save_path=None, notes=None):
@@ -51,7 +52,7 @@ def run_timedelay(exp_folder="", comments="", tdms_params=""):
     Run the time delay experiment.
     """
     lv.callTransport(exp_folder=exp_folder, comments=comments, tdms_params=tdms_params, VI="THz_TimeDelay")
-device_folder = r'G:\.shortcut-targets-by-id\0B8-gGFa6hkR4XzJJMDlqZXVKRk0\ansom\Data\THz 1\SA40458.20250806'
+device_folder = r'C:\Users\Admin\Nextcloud\Shared\PHONON\SA40653C.20250826'
 
 #%% Experiment 1 - PC vs. Insertion (single)
 """
@@ -117,7 +118,7 @@ Sets Insertion -> Takes TD -> Goes to the reference insertion -> Takes TD -> Goe
 (Make sure the call_timedelay.vi is open and TimeDelay VI is configured)
 """
 
-experiment_folder = '02 - 20250808_WingExp_6K_50mBias'
+experiment_folder = '04 - 20250902_WingExp_6K_50mBias_SingleJunc_750LPFilter'
 
 ref_insertion = 35
 insertion_array = np.arange(0, 90, 1)
@@ -334,7 +335,7 @@ kh.close()
 transport.close()
 dscan.disconnect()
 ophir.disconnect()
-newfocus.close()
+# newfocus.close()
 print("Instruments closed.")    
 
 

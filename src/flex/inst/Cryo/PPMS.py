@@ -70,7 +70,7 @@ class PPMS(Instrument):
 # -------------- Custom functions ---------------->
 
     def _is_temperature_set(self, target_temp):
-        current_temp = self.getTemperature()['temperature']
+        current_temp = round(self.getTemperature()['temperature'],4)
         if current_temp is not None:
             return current_temp == target_temp
         return False

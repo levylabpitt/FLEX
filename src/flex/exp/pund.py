@@ -83,7 +83,7 @@ _DAC_DELAY_SAMPLES = 63   # DAC pipeline delay at 204800 Hz
 _ADC_DELAY_SAMPLES = 36   # ADC pipeline delay at 204800 Hz
 _DEFAULT_DELAY_SAMPLES = _DAC_DELAY_SAMPLES + _ADC_DELAY_SAMPLES  # = 99
 
-WaveformType = Literal["triangle", "sine", "square"]
+WaveformType = Literal["triangle", "double-triangle", "sine", "square"]
 
 
 # ---------------------------------------------------------------------------
@@ -215,10 +215,22 @@ class PUNDMeasurement:
             wave = A * np.sin(2 * np.pi * f * t)
         elif cfg.waveform == "square":
             wave = A * np.sign(np.sin(2 * np.pi * f * t))
+        elif cfg.waveform == "double-triangle":
+            # PUND double-triangle: two positive triangles in [0, T/2),
+            # two negative triangles in [T/2, T).
+            # Each sub-triangle has period T/4.
+            phase = (f * t) % 1.0                        # 0→1 over one period
+            sub_phase_pos = (phase * 4) % 1.0             # 4× faster within each half
+            sub_phase_neg = ((phase - 0.5) * 4) % 1.0
+
+            pos_tri = A * (1 - np.abs(2 * sub_phase_pos - 1))   # 0 → A → 0
+            neg_tri = -A * (1 - np.abs(2 * sub_phase_neg - 1))   # 0 → -A → 0
+
+            wave = np.where(phase < 0.5, pos_tri, neg_tri)
         else:
             raise ValueError(
                 f"Unknown waveform type '{cfg.waveform}'. "
-                "Choose from 'triangle', 'sine', or 'square'."
+                "Choose from 'triangle', 'double-triangle', 'sine', or 'square'."
             )
         return wave
 

@@ -61,14 +61,14 @@ data_dict = {
 flexTDMS.write_tdms("test_file.tdms", data_dict)
 
 # %% - Test PUND
-from flex.exp.pund import PUNDMeasurement
-pund = PUNDMeasurement(
+from flex.exp.pund import PUNDMeasurement, PUNDConfig
+pund = PUNDMeasurement(PUNDConfig(
     sample_id="SA40XXX",
     daq_name='PXI1Slot2',
     amplitude=5.0,
-    waveform="triangle",
+    waveform="double-triangle",
     save_to_file=False,
-    save_path=r"C:\Users\voodoo\Desktop\Aswini_PUND_Data",
+    save_path=r"C:\Users\voodoo\Desktop\Aswini_PUND_Data")
 )
 results = pund.run()
 

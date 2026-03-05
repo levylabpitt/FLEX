@@ -15,7 +15,7 @@ setup(
     ],
     python_requires='>=3.11',
     install_requires=[
-        'matplotlib', 'numpy','psycopg2', 'pyzmq', 'pyvisa', 'tqdm', 'pandas', 'asana', 'requests'
+        'matplotlib', 'numpy','psycopg2', 'pyzmq', 'pyvisa', 'tqdm', 'pandas', 'asana', 'requests', 'nidaqmx'
 
     ],
 )

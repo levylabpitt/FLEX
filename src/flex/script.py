@@ -59,4 +59,17 @@ import numpy as np
 data_dict = {
     "Time": np.linspace(0, 10, 100)}
 flexTDMS.write_tdms("test_file.tdms", data_dict)
+
+# %% - Test PUND
+from flex.exp.pund import PUNDMeasurement
+pund = PUNDMeasurement(
+    sample_id="SA40XXX",
+    daq_name='PXI1Slot2',
+    amplitude=5.0,
+    waveform="triangle",
+    save_to_file=False,
+    save_path=r"C:\Users\voodoo\Desktop\Aswini_PUND_Data",
+)
+results = pund.run()
+
 # %%

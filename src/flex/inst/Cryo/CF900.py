@@ -1,7 +1,8 @@
 '''
 Levylab FLEX instrument driver for CF900 - OIVRM and Leiden TC (Z Bridge)
 <https://github.com/levylabpitt/Oxford-VRM>
-<https://github.com/levylabpitt/Oxford-1820>
+<https://github.com/levylabpitt/Leiden-FP-and-TC>
+
 
 Authors:
 Pubudu Wijesinghe <pubudu.wijesinghe@levylab.org>

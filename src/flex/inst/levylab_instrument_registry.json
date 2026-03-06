@@ -1,0 +1,9 @@
+{
+  "_comment": "Maps the LabVIEW class file stem (ClassPath) to the Python module and class to import.",
+  "_format": "{\"module\": \"flex.inst.SubPackage.ClassName\", \"class\": \"ClassName\"}",
+
+  "Instrument.Lockin": {"module": "flex.inst.DAQ.MCLockin", "class": "MCLockin"},
+  "Inst.Krohn-Hite-7008": {"module": "flex.inst.DAQ.KH7008", "class": "KH7008"},
+  "Inst.TC.MNK": {"module": "flex.inst.Cryo.MNK", "class": "_MNKTemp"},
+  "Instrument.Oxford1820": {"module": "flex.inst.Cryo.MNK", "class": "_MNKMagnet"}
+}

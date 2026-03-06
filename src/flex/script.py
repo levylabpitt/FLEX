@@ -72,4 +72,7 @@ pund = PUNDMeasurement(PUNDConfig(
 )
 results = pund.run()
 
+# %% - Test CESession
+from flex.exp.CESession import CESession
+exp = CESession()
 # %%

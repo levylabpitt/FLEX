@@ -5,5 +5,7 @@
   "Instrument.Lockin": {"module": "flex.inst.DAQ.MCLockin", "class": "MCLockin"},
   "Inst.Krohn-Hite-7008": {"module": "flex.inst.DAQ.KH7008", "class": "KH7008"},
   "Inst.TC.MNK": {"module": "flex.inst.Cryo.MNK", "class": "_MNKTemp"},
-  "Instrument.Oxford1820": {"module": "flex.inst.Cryo.MNK", "class": "_MNKMagnet"}
+  "Instrument.Oxford1820": {"module": "flex.inst.Cryo.MNK", "class": "_MNKMagnet"},
+  "Instrument.PPMS1": {"module": "flex.inst.Cryo.PPMS", "class": "PPMS"},
+  "Instrument.PPMS3": {"module": "flex.inst.Cryo.PPMS", "class": "PPMS"}
 }

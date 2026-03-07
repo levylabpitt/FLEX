@@ -1,5 +1,5 @@
 '''
-Levylab FLEX instrument driver for Krohn-Hite 7008.
+Levylab FLEX instrument driver for Levylab Krohn-Hite 7008.
 <https://github.com/levylabpitt/Krohn-Hite-7008>
 
 Authors: 
@@ -10,16 +10,18 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
+from flex.inst.levylab.types.Amplifier import Amplifier
 import os
 
 _DEFAULT_ADDRESS = 'tcp://localhost:29160'
+_LABVIEW_CLASS_NAME = "Inst.Krohn-Hite-7008.lvclass"
 
 logpath = os.path.join(os.environ.get('LOCALAPPDATA'), 'Levylab', 'FLEX', 'logs')
 os.makedirs(logpath, exist_ok=True)
 
-class KH7008(Instrument):
+class Krohn_Hite_7008(Instrument, Amplifier):
     def __init__(self, address= _DEFAULT_ADDRESS):
-        super().__init__(address, log_file= logpath + '\instrument.log')
+      super().__init__(address, log_file=os.path.join(logpath, "Krohn-Hite-7008.log"))
     
     # def get_allowed_values(cls):
     #     """
@@ -292,7 +294,7 @@ class KH7008(Instrument):
     
 if __name__ == "__main__":
     # Test the KH7008 class
-    kh = KH7008()
+    kh = Krohn_Hite_7008()
     
     # channel_config = [{"channel":1,"gain":"10","input":"DIFF","shunt":"10M","couple":"AC","filter":"OFF"},
     #     {"channel":2,"gain":"10","input":"SE-","shunt":"5k","couple":"DC","filter":"ON"},

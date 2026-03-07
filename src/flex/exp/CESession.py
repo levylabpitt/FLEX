@@ -10,17 +10,117 @@ Usage:
     myexp = CESession()
 """
 
+import importlib
 import json
 import os
+import pkgutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+
 _CONFIG_PATH = Path(os.environ.get("LOCALAPPDATA", "")) / \
     "Levylab" / "Control Experiment" / "Control Experiment.json"
 
-_REGISTRY_PATH = Path(__file__).parent.parent / "inst" / "levylab_instrument_registry.json"
+_SUMMARY_TEMPLATE = """
+<style>
+    .ce-session {{
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 13px;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 10px;
+        padding: 20px 24px;
+        max-width: 760px;
+    }}
+    .ce-session .header {{
+        font-size: 11px;
+        letter-spacing: 3px;
+        color: #4ade80;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }}
+    .ce-session .header::before {{ content: '● '; }}
+    .ce-session .meta-grid {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 24px;
+        margin-bottom: 16px;
+    }}
+    .ce-session .meta-item {{ display: flex; flex-direction: column; }}
+    .ce-session .meta-label {{
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #475569;
+        text-transform: uppercase;
+    }}
+    .ce-session .meta-value {{
+        font-size: 13px;
+        color: #f1f5f9;
+        font-weight: 600;
+    }}
+    .ce-session .section {{
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #475569;
+        text-transform: uppercase;
+        margin: 14px 0 6px;
+    }}
+    .ce-session table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }}
+    .ce-session th {{
+        text-align: left;
+        padding: 6px 10px;
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #475569;
+        border-bottom: 1px solid #1e293b;
+        text-transform: uppercase;
+    }}
+    .ce-session td {{
+        text-align: left;
+        padding: 7px 10px;
+        color: #94a3b8;
+        border-bottom: 1px solid #0f172a;
+    }}
+    .ce-session td:first-child {{ color: #e2e8f0; font-weight: 600; }}
+    .ce-session .found {{ color: #4ade80; }}
+    .ce-session .not-found {{ color: #f87171; font-style: italic; }}
+    .ce-session code {{
+        font-size: 11px;
+        color: #64748b;
+        background: #1e293b;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }}
+</style>
+<div class="ce-session">
+    <div class="header">CE Session Initialized</div>
+    <div class="meta-grid">
+        <div class="meta-item"><span class="meta-label">User</span><span class="meta-value">{user}</span></div>
+        <div class="meta-item"><span class="meta-label">Device</span><span class="meta-value">{device}</span></div>
+        <div class="meta-item"><span class="meta-label">Station</span><span class="meta-value">{station}</span></div>
+        <div class="meta-item"><span class="meta-label">Last Update</span><span class="meta-value">{timestamp}</span></div>
+        <div class="meta-item" style="grid-column: span 2"><span class="meta-label">Description</span><span class="meta-value">{description}</span></div>
+        <div class="meta-item" style="grid-column: span 2"><span class="meta-label">Device Path</span><span class="meta-value" style="font-size:11px; color:#64748b">{device_path}</span></div>
+    </div>
+    <div class="section">Connected Instruments</div>
+    <table>
+        <thead><tr><th>Type</th><th>Address</th><th>LV Class</th><th>Flex Class</th></tr></thead>
+        <tbody>{inst_rows}</tbody>
+    </table>
+    <div class="section">Wiring</div>
+    <table>
+        <thead><tr><th>Ch</th><th>Electrode</th><th>Label</th></tr></thead>
+        <tbody>{wiring_rows}</tbody>
+    </table>
+</div>
+"""
+
 
 @dataclass
 class ExperimentSession:
@@ -29,44 +129,68 @@ class ExperimentSession:
     device_path: str
     description: str
     station: str
-    instruments: list[dict]       # {Type, Address, ClassPath, ClassPathFull}
-    wiring: dict                  # {lockin_ch: (electrode, label)}
+    instruments: list[dict]   # {Type, Address, ClassPath, LVClass, FlexClass}
+    wiring: dict              # {lockin_ch: (electrode, label)}
     timestamp: Optional[datetime] = None
+
+
+def _is_interactive() -> bool:
+    try:
+        from IPython import get_ipython
+        return get_ipython() is not None
+    except ImportError:
+        return False
+
+
+def _find_and_instantiate(lv_class_filename: str) -> tuple:
+    """
+    Scan flex.inst.levylab for a module whose _LABVIEW_CLASS_NAME matches
+    lv_class_filename. Returns (instance, class_name) or (None, None).
+    """
+    package = importlib.import_module("flex.inst.levylab")
+    for _, module_name, _ in pkgutil.iter_modules(package.__path__):
+        try:
+            module = importlib.import_module(f"flex.inst.levylab.{module_name}")
+            if getattr(module, "_LABVIEW_CLASS_NAME", None) == lv_class_filename:
+                cls = getattr(module, module_name)
+                return cls(), cls.__name__
+        except Exception:
+            continue
+    return None, None
+
 
 class CESession:
     """
     Initializes a Flex experiment session driven by the LevyLab Configure
-    Experiment VI. Connected instruments are auto-instantiated from the
-    registry and attached as attributes by Type, e.g.:
-        myexp.DAQ        # MCLockin instance
-        myexp.Amplifier  # KrohnHite7008 instance
+    Experiment VI. Connected instruments are auto-discovered from
+    flex.inst.levylab via _LABVIEW_CLASS_NAME and attached as attributes
+    by Type, e.g.:
+
+        myexp.DAQ        # Lockin instance
+        myexp.Amplifier  # Krohn_Hite_7008 instance
+
+    A rich HTML summary is displayed automatically in VSCode interactive /
+    Jupyter environments. No output is produced in plain script runs.
 
     Parameters
     ----------
     config_path : str or Path, optional
         Override default config location.
-    registry_path : str or Path, optional
-        Override default registry location.
-    verbose : bool, optional
-        Print summary on init (default True).
     """
 
-    def __init__(
-        self,
-        config_path: Optional[str | Path] = None,
-        registry_path: Optional[str | Path] = None,
-        verbose: bool = True,
-    ):
-        self._config_path   = Path(config_path)   if config_path   else _CONFIG_PATH
-        self._registry_path = Path(registry_path) if registry_path else _REGISTRY_PATH
-        self._registry = self._load_registry()
+    def __init__(self, config_path: Optional[str | Path] = None):
+        self._config_path = Path(config_path) if config_path else _CONFIG_PATH
         self._instrument_attrs: set[str] = set()
 
         self.session = self._parse(self._load_config())
         self._instantiate_instruments()
 
-        if verbose:
-            self._print_summary()
+        if _is_interactive():
+            self._display_summary()
+
+    # ------------------------------------------------------------------
+    # Loading & parsing
+    # ------------------------------------------------------------------
 
     def _load_config(self) -> dict:
         if not self._config_path.exists():
@@ -76,15 +200,6 @@ class CESession:
             )
         with open(self._config_path, encoding="utf-8") as f:
             return json.load(f)
-
-    def _load_registry(self) -> dict:
-        if not self._registry_path.exists():
-            raise FileNotFoundError(
-                f"Instrument registry not found at:\n  {self._registry_path}"
-            )
-        with open(self._registry_path, encoding="utf-8") as f:
-            data = json.load(f)
-        return {k: v for k, v in data.items() if not k.startswith("_")}
 
     def _parse(self, raw: dict) -> ExperimentSession:
         exp  = raw.get("Experiment", {})
@@ -106,20 +221,22 @@ class CESession:
                 "Type":      inst.get("Type", "Unknown"),
                 "Address":   inst.get("Address", ""),
                 "ClassPath": Path(cp_full).stem if cp_full else "—",
+                "LVClass":   Path(cp_full).name if cp_full else "—",
+                "FlexClass": None,   # populated during instantiation
             })
 
         # Wiring: {lockin_ch: (electrode, label)}, skip empty electrodes
         wc = raw.get("Wiring Configuration", {})
-        channels   = wc.get("Lockin Ch", [])
-        electrodes = wc.get("KH", {}).get("Electrodes", [])
-        labels     = wc.get("KH", {}).get("Labels", [])
         wiring = {
             ch: (el, lb)
-            for ch, el, lb in zip(channels, electrodes, labels)
+            for ch, el, lb in zip(
+                wc.get("Lockin Ch", []),
+                wc.get("KH", {}).get("Electrodes", []),
+                wc.get("KH", {}).get("Labels", []),
+            )
             if el
         }
 
-        # Timestamp
         try:
             ts = datetime.fromisoformat(device_meta.get("Time", "")[:19])
         except (ValueError, TypeError):
@@ -136,89 +253,99 @@ class CESession:
             timestamp=ts,
         )
 
+    # ------------------------------------------------------------------
+    # Instrument instantiation
+    # ------------------------------------------------------------------
+
     def _instantiate_instruments(self, instruments: list[dict] | None = None):
         targets = instruments if instruments is not None else self.session.instruments
         for inst in targets:
             attr_name = inst["Type"]
-            stem      = inst["ClassPath"]
-
-            if stem not in self._registry:
-                raise KeyError(
-                    f"No registry entry for '{stem}' (Type: {attr_name}).\n"
-                    f"Add to {self._registry_path}:\n"
-                    f'  "{stem}": {{"module": "flex.inst.<pkg>.<module>", "class": "<Class>"}}'
+            obj, class_name = _find_and_instantiate(inst["LVClass"])
+            inst["FlexClass"] = class_name  # None if not found
+            if obj is None:
+                raise RuntimeError(
+                    f"No driver found for '{inst['LVClass']}' (Type: {attr_name}).\n"
+                    f"Ensure a module in flex.inst.levylab declares "
+                    f'_LABVIEW_CLASS_NAME = "{inst["LVClass"]}"'
                 )
-
-            entry = self._registry[stem]
-            if "module" not in entry or "class" not in entry:
-                raise ValueError(f"Malformed registry entry for '{stem}': {entry}")
-
-            module_path = entry["module"]
-            class_name  = entry["class"]
-            namespace   = {}
-            try:
-                exec(f"from {module_path} import {class_name}", namespace)
-            except Exception as e:
-                raise ModuleNotFoundError(
-                    f"Failed: from {module_path} import {class_name}\n{e}"
-                ) from e
-
-            setattr(self, attr_name, namespace[class_name]())
+            setattr(self, attr_name, obj)
             self._instrument_attrs.add(attr_name)
 
-    def _print_summary(self):
-        s   = self.session
-        sep = "─" * 68
-        print(f"\n┌{sep}┐")
-        print(f"│  CE SESSION INITIALIZED".ljust(69) + "│")
-        print(f"├{sep}┤")
-        print(f"│  User        : {s.user:<52}│")
-        print(f"│  Device      : {s.device:<52}│")
-        print(f"│  Station     : {s.station:<52}│")
-        print(f"│  Description : {(s.description or '—'):<52}│")
-        print(f"│  Last Update : {s.timestamp.strftime('%Y-%m-%d %H:%M:%S') if s.timestamp else '—':<52}│")
-        print(f"├{sep}┤")
-        print(f"│  {'Type':<18} {'Address':<18} {'Class Path':<28}│")
-        print(f"│  {'─'*18} {'─'*18} {'─'*28}│")
-        for inst in s.instruments:
-            print(f"│  {inst['Type'][:17]:<18} {(inst['Address'] or '—')[:17]:<18} {inst['ClassPath'][:27]:<28}│")
-        print(f"├{sep}┤")
-        print(f"│  {'Ch':<8} {'Electrode':<18} {'Label':<38}│")
-        print(f"│  {'─'*8} {'─'*18} {'─'*38}│")
-        for ch, (el, lb) in s.wiring.items():
-            print(f"│  {str(ch):<8} {el:<18} {lb:<38}│")
-        print(f"└{sep}┘\n")
+    # ------------------------------------------------------------------
+    # HTML summary (interactive only)
+    # ------------------------------------------------------------------
 
+    def _display_summary(self):
+        from IPython.display import display, HTML
+        s = self.session
+
+        inst_rows = "".join(
+            f"<tr>"
+            f"<td>{i['Type']}</td>"
+            f"<td>{i['Address'] or '—'}</td>"
+            f"<td><code>{i['ClassPath']}</code></td>"
+            f"<td class=\"{'found' if i['FlexClass'] else 'not-found'}\">"
+            f"{i['FlexClass'] if i['FlexClass'] else 'Not found'}</td>"
+            f"</tr>"
+            for i in s.instruments
+        )
+        wiring_rows = "".join(
+            f"<tr><td>{ch}</td><td>{el}</td><td>{lb}</td></tr>"
+            for ch, (el, lb) in s.wiring.items()
+        )
+
+        display(HTML(_SUMMARY_TEMPLATE.format(
+            user=s.user,
+            device=s.device,
+            station=s.station,
+            timestamp=s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "—",
+            description=s.description or "—",
+            device_path=s.device_path or "—",
+            inst_rows=inst_rows,
+            wiring_rows=wiring_rows,
+        )))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def get_device_path(self) -> Path:
+        """Return the device path as a Path object, for use in file saving."""
+        return Path(self.session.device_path)
 
     def get_instrument(self, instrument_type: str) -> Optional[dict]:
-        """Return the first instrument dict matching the given Type."""
+        """Return the instrument dict matching the given Type."""
         for inst in self.session.instruments:
             if inst["Type"].lower() == instrument_type.lower():
                 return inst
         return None
 
-    def get_instruments(self, instrument_type: str) -> list[dict]:
-        """Return all instrument dicts matching the given Type."""
-        return [i for i in self.session.instruments if i["Type"].lower() == instrument_type.lower()]
-
     def get_wiring(self) -> dict:
         """Return wiring as {lockin_channel: (electrode, label)}."""
         return self.session.wiring
 
-    def update(self, verbose: bool = True):
+    def update(self):
         """Reload config and instantiate any newly added instruments."""
+        # Preserve FlexClass for already-instantiated instruments
+        prev_flex = {i["Type"]: i["FlexClass"] for i in self.session.instruments}
+
         self.session = self._parse(self._load_config())
+
+        for inst in self.session.instruments:
+            if inst["Type"] in self._instrument_attrs:
+                inst["FlexClass"] = prev_flex.get(inst["Type"])
         new_types = {i["Type"] for i in self.session.instruments} - self._instrument_attrs
         if new_types:
             self._instantiate_instruments([
                 i for i in self.session.instruments if i["Type"] in new_types
             ])
-            if verbose:
-                for t in new_types:
-                    print(f"New instrument added: {t}")
-        if verbose:
+            for t in new_types:
+                print(f"New instrument added: {t}")
+        if _is_interactive():
+            self._display_summary()
+        else:
             print("Session refreshed.")
-            self._print_summary()
 
     def close_all(self):
         """Call close() on every instantiated instrument that supports it."""
@@ -237,7 +364,6 @@ class CESession:
         if skipped: print(f"No close(): {', '.join(skipped)}")
 
     def __repr__(self):
-        """Object representation with Exp Summary"""
         s = self.session
         return (
             f"CESession(device='{s.device}', user='{s.user}', "

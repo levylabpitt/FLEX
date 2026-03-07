@@ -1,20 +1,21 @@
+# flex/inst/levylab/PPMS.py
 from flex.inst.base import Instrument
 from flex.inst.levylab.types.Temperature import Temperature
 from flex.inst.levylab.types.Magnet import Magnet
 import os
 
-_DEFAULT_ADDRESS = "tcp://localhost:<port>"
-_LABVIEW_CLASS_NAME = "<lvclassname>.lvclass"
+_DEFAULT_ADDRESS = "tcp://localhost:29171"
+_LABVIEW_CLASS_NAME = "instrument.PPMS.lvclass"
 
 logpath = os.path.join(os.environ.get("LOCALAPPDATA"), "Levylab", "FLEX", "logs")
 os.makedirs(logpath, exist_ok=True)
 
-# NOTE: Class should have the same name as the module name
-class inst_template(Instrument, Temperature, Magnet):
-    """FLEX Driver for a Levylab Instrument Framework Instrument"""
+
+class PPMS1(Instrument, Temperature, Magnet):
+    """PPMS driver with Temperature and Magnet capabilities."""
 
     def __init__(self, address: str = _DEFAULT_ADDRESS):
-        super().__init__(address, log_file=os.path.join(logpath, "<inst_template>.log"))
+        super().__init__(address, log_file=os.path.join(logpath, "PPMS1.log"))
 
     # --------- Optional overrides (only if different from default) ---------
     # For standard PPMS, the default ZMQ commands in Temperature and Magnet work,
@@ -27,9 +28,9 @@ class inst_template(Instrument, Temperature, Magnet):
     # instrument-specific commands
     def get_LHe_level(self) -> float:
         return self._send_command("getLHeLevel")["result"]
-
-# Test the class    
+    
 if __name__ == '__main__':
-    inst = inst_template()
-    inst.help()
-    inst.close()
+    ppms = PPMS1()
+    ppms.help()
+    ppms.getTemperature()
+    ppms.close()

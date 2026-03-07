@@ -161,7 +161,7 @@ if __name__ == "__main__":
     address = "tcp://localhost:29170"
     logpath = os.path.join(os.environ.get('LOCALAPPDATA'), 'Levylab', 'FLEX', 'logs')
     os.makedirs(logpath, exist_ok=True)
-    log_file= logpath + '\instrument.log'
+    log_file= logpath + '\\dummy_instrument.log'
     inst = Instrument(address, log_file=log_file)
     print(inst._send_command("getResults"))
     inst.close()

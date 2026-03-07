@@ -9,19 +9,21 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
+from flex.inst.levylab.types.DAQ import DAQ
 import time
 import os
 from datetime import datetime, timedelta
 from flex.db import db_dataviewer as dv
 
 _DEFAULT_ADDRESS = 'tcp://localhost:29170'
+_LABVIEW_CLASS_NAME = "Instrument.Lockin.lvclass"
 
 logpath = os.path.join(os.environ.get('LOCALAPPDATA'), 'Levylab', 'FLEX', 'logs')
 os.makedirs(logpath, exist_ok=True)
 
-class MCLockin(Instrument):
+class Lockin(Instrument, DAQ):
     def __init__(self, address=_DEFAULT_ADDRESS):
-        super().__init__(address, log_file= logpath + '\instrument.log')
+        super().__init__(address, log_file=os.path.join(logpath, "Lockin.log"))
           
     def getAO(self, channel):
         cmd = 'getAO'
@@ -165,7 +167,7 @@ class MCLockin(Instrument):
         
 if __name__ == "__main__":
     # Test the MCLockin class
-    lockin = MCLockin("tcp://localhost:29170",)
+    lockin = Lockin("tcp://localhost:29170",)
     lockin.set_amplitude(1, 0.01)
     lockin.set_freq(1, 13)
     lockin.set_func(1, 'Sine')

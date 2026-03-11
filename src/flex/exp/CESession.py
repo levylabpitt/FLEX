@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import threading
 
 
 _CONFIG_PATH = Path(os.environ.get("LOCALAPPDATA", "")) / \
@@ -142,7 +143,7 @@ def _is_interactive() -> bool:
         return False
 
 
-def _find_and_instantiate(lv_class_filename: str) -> tuple:
+def _find_and_instantiate(lv_class_filename: str, address: str) -> tuple: # Added address param
     """
     Scan flex.inst.levylab for a module whose _LABVIEW_CLASS_NAME matches
     lv_class_filename. Returns (instance, class_name) or (None, None).
@@ -153,7 +154,8 @@ def _find_and_instantiate(lv_class_filename: str) -> tuple:
             module = importlib.import_module(f"flex.inst.levylab.{module_name}")
             if getattr(module, "_LABVIEW_CLASS_NAME", None) == lv_class_filename:
                 cls = getattr(module, module_name)
-                return cls(), cls.__name__
+                # Now passing the address from JSON to the constructor
+                return cls(address=address), cls.__name__ 
         except Exception:
             continue
     return None, None
@@ -178,15 +180,39 @@ class CESession:
         Override default config location.
     """
 
-    def __init__(self, config_path: Optional[str | Path] = None):
-        self._config_path = Path(config_path) if config_path else _CONFIG_PATH
-        self._instrument_attrs: set[str] = set()
+    def __init__(self, config_path: Optional[str | Path] = None, timeout: float = 10.0, verbose: bool = False):
+            self._config_path = Path(config_path) if config_path else _CONFIG_PATH
+            self._instrument_attrs: set[str] = set()
+            self.verbose = verbose
 
-        self.session = self._parse(self._load_config())
-        self._instantiate_instruments()
+            def log(msg):
+                if self.verbose: print(f"[*] {msg}")
 
-        if _is_interactive():
-            self._display_summary()
+            # Start watchdog
+            timer = threading.Timer(timeout, self._timeout_warning, [timeout])
+            timer.start()
+
+            try:
+                log(f"Loading config from: {self._config_path}")
+                config_data = self._load_config()
+                
+                log("Parsing experiment metadata and wiring...")
+                self.session = self._parse(config_data)
+                
+                log(f"Found {len(self.session.instruments)} instruments. Initializing drivers...")
+                self._instantiate_instruments()
+                
+                log("Initialization complete.")
+            finally:
+                timer.cancel()
+
+            if _is_interactive():
+                self._display_summary()
+
+    def _timeout_warning(self, seconds):
+        """Prints a warning if initialization exceeds the timeout."""
+        print(f"\n[!] WARNING: CESession initialization is taking longer than {seconds}s.")
+        print("    Please check instrument connections, addresses, and LabVIEW status.\n")
 
     # ------------------------------------------------------------------
     # Loading & parsing
@@ -258,19 +284,25 @@ class CESession:
     # ------------------------------------------------------------------
 
     def _instantiate_instruments(self, instruments: list[dict] | None = None):
-        targets = instruments if instruments is not None else self.session.instruments
-        for inst in targets:
-            attr_name = inst["Type"]
-            obj, class_name = _find_and_instantiate(inst["LVClass"])
-            inst["FlexClass"] = class_name  # None if not found
-            if obj is None:
-                raise RuntimeError(
-                    f"No driver found for '{inst['LVClass']}' (Type: {attr_name}).\n"
-                    f"Ensure a module in flex.inst.levylab declares "
-                    f'_LABVIEW_CLASS_NAME = "{inst["LVClass"]}"'
-                )
-            setattr(self, attr_name, obj)
-            self._instrument_attrs.add(attr_name)
+            targets = instruments if instruments is not None else self.session.instruments
+            for inst in targets:
+                attr_name = inst["Type"]
+                addr = inst["Address"]
+                
+                if self.verbose:
+                    print(f"    -> Connecting to {attr_name} @ {addr or 'No Address'}...", end=" ", flush=True)
+                
+                obj, class_name = _find_and_instantiate(inst["LVClass"], addr)
+                inst["FlexClass"] = class_name
+                
+                if obj is None:
+                    if self.verbose: print("FAILED")
+                    raise RuntimeError(f"No driver found for '{inst['LVClass']}'")
+                
+                setattr(self, attr_name, obj)
+                self._instrument_attrs.add(attr_name)
+                
+                if self.verbose: print(f"OK ({class_name})")
 
     # ------------------------------------------------------------------
     # HTML summary (interactive only)
@@ -369,3 +401,14 @@ class CESession:
             f"CESession(device='{s.device}', user='{s.user}', "
             f"station='{s.station}', instruments={len(s.instruments)})"
         )
+    
+    # --- Context Manager Protocol ---
+    def __enter__(self):
+        """Allows usage: with CESession() as exp:"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Automatically closes instruments when the block exits."""
+        if self.verbose:
+            print("\n[*] Block exited. Cleaning up instruments...")
+        self.close_all()

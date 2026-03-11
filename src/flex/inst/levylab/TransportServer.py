@@ -22,7 +22,7 @@ os.makedirs(logpath, exist_ok=True)
 
 class Transport(Instrument):
     def __init__(self, address=_DEFAULT_ADDRESS):
-        super().__init__(address, log_file= logpath + '\instrument.log')
+        super().__init__(address, log_file=os.path.join(logpath, "TransportServer.log"))
           
     def startTransport(self, VI: Literal['LockinTime', 'LockinSweep', 'LockinTimeDelay']) -> dict:
         allowed_values = {"LockinSweep", "LockinTime", "LockinTimeDelay"}

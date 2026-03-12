@@ -9,11 +9,11 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Temperature import Temperature
+from flex.inst.levylab.insttypes.Temperature import Temperature
 import os
 
 # Default addresses for the subsystems
-_DEFAULT_ADDRESS_TEMP = 'tcp://10.226.177.219:10025'
+_DEFAULT_ADDRESS_TEMP = 'tcp://localhost:10025'
 _LABVIEW_CLASS_NAME = "Inst.TC.CF.lvclass"
 
 # Path to the log file
@@ -28,6 +28,13 @@ class TC_CF(Instrument, Temperature):
     def __init__(self, address=_DEFAULT_ADDRESS_TEMP):
         super().__init__(address, log_file=os.path.join(logpath, "TC_CF.log"))
     
+    def setTemperature(self, *args, **kwargs):
+            """Override to disable control for this specific hardware."""
+            raise NotImplementedError(
+                f"{self.__class__.__name__} is a passive cooling system. "
+                "Manual gas handling is required to change base temperature."
+            )
+    
     def getTemperature(self, channel):
         cmd = 'getTemperature'
         params = [channel]
@@ -39,3 +46,11 @@ class TC_CF(Instrument, Temperature):
         params = [channel]
         response = self._send_command(cmd, params)
         return response['result']
+    
+if __name__ == "__main__":
+    # Test the Oxford MNK Instrument Class
+    cf = TC_CF()
+    # print(f"LN2Level: {mnk.getLN2Level()}")
+    print(f"Temperature (ch 0): {cf.getTemperature(channel=0)}")
+    print(f"Heater (ch 0): {cf.getHeater(channel=0)}")
+    # mnk.close()

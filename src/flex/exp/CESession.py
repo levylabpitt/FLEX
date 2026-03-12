@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import threading
+from flex.inst.levylab.TransportServer import Transport
 
 
 _CONFIG_PATH = Path(os.environ.get("LOCALAPPDATA", "")) / \
@@ -199,6 +200,11 @@ class CESession:
                 log("Parsing experiment metadata and wiring...")
                 self.session = self._parse(config_data)
                 
+                # --- Initialize Transport Server ---
+                log("Initializing Transport Server...")
+                self.Transport = Transport()  # Assigned specifically to .Transport
+                self._instrument_attrs.add("Transport")
+                
                 log(f"Found {len(self.session.instruments)} instruments. Initializing drivers...")
                 self._instantiate_instruments()
                 
@@ -312,7 +318,18 @@ class CESession:
         from IPython.display import display, HTML
         s = self.session
 
-        inst_rows = "".join(
+        # --- Added Transport to the instrument rows ---
+        # We manually create the row for Transport since it's not in self.session.instruments
+        transport_row = (
+            f"<tr>"
+            f"<td>Transport</td>"
+            f"<td>{getattr(self.Transport, '_address', 'Local')}</td>"
+            f"<td><code>flex.inst.levylab</code></td>"
+            f"<td class='found'>Transport</td>"
+            f"</tr>"
+        )
+
+        inst_rows = transport_row + "".join(
             f"<tr>"
             f"<td>{i['Type']}</td>"
             f"<td>{i['Address'] or '—'}</td>"

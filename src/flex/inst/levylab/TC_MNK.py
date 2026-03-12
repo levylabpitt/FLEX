@@ -9,11 +9,11 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Temperature import Temperature
+from flex.inst.levylab.insttypes.Temperature import Temperature
 import os
 
 # Default addresses for the subsystems
-_DEFAULT_ADDRESS_TEMP = 'tcp://10.226.177.244:10024' 
+_DEFAULT_ADDRESS_TEMP = 'tcp://localhost:10024' 
 _LABVIEW_CLASS_NAME = "Inst.TC.MNK.lvclass"
 
 # Path to the log file
@@ -33,7 +33,14 @@ class TC_MNK(Instrument, Temperature):
         params = [channel]
         response = self._send_command(cmd, params)
         return response['result']
-    
+
+    def setTemperature(self, *args, **kwargs):
+            """Override to disable control for this specific hardware."""
+            raise NotImplementedError(
+                f"{self.__class__.__name__} is a passive cooling system. "
+                "Manual gas handling is required to change base temperature."
+            )
+
     def getHeater(self, channel):
         cmd = 'getHeater'
         params = [channel]
@@ -41,13 +48,10 @@ class TC_MNK(Instrument, Temperature):
         return response['result']
 
 
-
-
 if __name__ == "__main__":
     # Test the Oxford MNK Instrument Class
     mnk = TC_MNK()
-    print(f"Magnetic field: {mnk.getMagnet()}")
     # print(f"LN2Level: {mnk.getLN2Level()}")
     print(f"Temperature (ch 0): {mnk.getTemperature(channel=0)}")
     print(f"Heater (ch 0): {mnk.getHeater(channel=0)}")
-    mnk.close()
+    # mnk.close()

@@ -155,6 +155,14 @@ class Instrument:
         self.logger.debug(f"Received response: {response}")
         return response
 
+    def __enter__(self):
+        """Allows usage of the instrument as a context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Automatically closes the connection when exiting a 'with' block."""
+        self.close()
+
 if __name__ == "__main__":
     # Test the Instrument class
     import os

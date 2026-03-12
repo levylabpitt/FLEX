@@ -9,7 +9,7 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.DAQ import DAQ
+from flex.inst.levylab.insttypes.DAQ import DAQ
 import time
 import os
 from datetime import datetime, timedelta

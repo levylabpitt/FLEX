@@ -1,6 +1,6 @@
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Temperature import Temperature
-from flex.inst.levylab.types.Magnet import Magnet
+from flex.inst.levylab.insttypes.Temperature import Temperature
+from flex.inst.levylab.insttypes.Magnet import Magnet
 import os
 
 _DEFAULT_ADDRESS = "tcp://localhost:<port>"

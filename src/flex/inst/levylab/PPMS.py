@@ -1,6 +1,6 @@
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Temperature import Temperature
-from flex.inst.levylab.types.Magnet import Magnet
+from flex.inst.levylab.insttypes.Temperature import Temperature
+from flex.inst.levylab.insttypes.Magnet import Magnet
 import os
 
 _DEFAULT_ADDRESS = "tcp://localhost:29270"
@@ -16,15 +16,25 @@ class PPMS(Instrument, Temperature, Magnet):
     def __init__(self, address: str = _DEFAULT_ADDRESS):
         super().__init__(address, log_file=os.path.join(logpath, "PPMS.log"))
 
-    # --------- Optional overrides (only if different from default) ---------
-    # For standard PPMS, the default ZMQ commands in Temperature and Magnet work,
-    # so no override is strictly necessary.
+    def getTemperature(self, channel = 0):
+        return super().getTemperature(channel)
+    
+    def setTemperature(self, temperature, rate, channel = 0):
+        return super().setTemperature(temperature, rate, channel)
+    
+    def getTemperatureTarget(self, channel = 0):
+        return super().getTemperatureTarget(channel)
+    
+    def getMagnet(self):
+        return super().getMagnet()
+    
+    def setMagnet(self, field, rate, axis = "Z", mode = "Persistent"):
+        return super().setMagnet(field, rate, axis, mode)
+    
+    def getMagnetTarget(self):
+        return super().getMagnetTarget()
 
-    # Example: override only if your instrument behaves differently:
-    # def set_temperature(self, temperature: float, rate: float, channel: int = 0):
-    #     self._send_command("setTempCustom", {"target": temperature, "rate": rate, "ch": channel})
-
-    # instrument-specific commands
+    # Level type not defined yet
     def get_LHe_level(self) -> float:
         return self._send_command("getLHeLevel")["result"]
     
@@ -32,4 +42,4 @@ if __name__ == '__main__':
     ppms = PPMS()
     ppms.help()
     ppms.getTemperature()
-    ppms.close()
+    # ppms.close()

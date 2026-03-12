@@ -9,7 +9,7 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Magnet import Magnet
+from flex.inst.levylab.insttypes.Magnet import Magnet
 import os
 
 # Default addresses for the subsystems
@@ -30,19 +30,15 @@ class OxfordVRM(Instrument, Magnet):
         super().__init__(address, log_file=os.path.join(logpath, "OxfordVRM.log"))
 
     def getMagnet(self):
-        cmd = 'getMagnet'
-        params = {}
-        response = self._send_command(cmd, params)
-        return response['result']
+        return super().getMagnet()
     
-    def getLN2Level(self):
-        cmd = 'getLN2Level'
-        params = {}
-        response = self._send_command(cmd, params)
-        return response['result']
+    def setMagnet(self, field, rate, axis = "Z", mode = "Persistent"):
+        return super().setMagnet(field, rate, axis, mode)
 
-    def getLHeLevel(self):
-        cmd = 'getLHeLevel'
-        params = {}
-        response = self._send_command(cmd, params)
-        return response['result']
+    def getMagnetTarget(self):
+        return super().getMagnetTarget()
+    
+if __name__ == "__main__":
+    cf_mag = OxfordVRM()
+    print(f"Magnetic field: {cf_mag.getMagnet()}")
+    cf_mag.close()

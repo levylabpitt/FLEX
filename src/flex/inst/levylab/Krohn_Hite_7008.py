@@ -10,7 +10,7 @@ Contact an author for any queries.
 '''
 
 from flex.inst.base import Instrument
-from flex.inst.levylab.types.Amplifier import Amplifier
+from flex.inst.levylab.insttypes.Amplifier import Amplifier
 import os
 
 _DEFAULT_ADDRESS = 'tcp://localhost:29160'

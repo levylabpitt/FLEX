@@ -1,90 +1,45 @@
-'''
-Levylab FLEX instrument driver for Levylab Quantum Design Opticool.
-<https://github.com/levylabpitt/PPMS-Monitor-and-Control>
-
-Authors: 
-Pubudu Wijesinghe <pubudu.wijesinghe@levylab.org>
-
-Contact an author for any queries.
-'''
-
 from flex.inst.base import Instrument
-import time
+from flex.inst.levylab.insttypes.Temperature import Temperature
+from flex.inst.levylab.insttypes.Magnet import Magnet
 import os
 
-_DEFAULT_ADDRESS = 'tcp://localhost:29174'
+_DEFAULT_ADDRESS = "tcp://localhost:29174"
 _LABVIEW_CLASS_NAME = "instrument.Opticool.lvclass"
 
-logpath = os.path.join(os.environ.get('LOCALAPPDATA'), 'Levylab', 'FLEX', 'logs')
+logpath = os.path.join(os.environ.get("LOCALAPPDATA"), "Levylab", "FLEX", "logs")
 os.makedirs(logpath, exist_ok=True)
 
-class Opticool(Instrument):
-    def __init__(self, address=_DEFAULT_ADDRESS):
+
+class Opticool(Instrument, Temperature, Magnet):
+    """Opticool driver with Temperature and Magnet capabilities."""
+
+    def __init__(self, address: str = _DEFAULT_ADDRESS):
         super().__init__(address, log_file=os.path.join(logpath, "Opticool.log"))
+
+    def getTemperature(self, channel = 0):
+        return super().getTemperature(channel)
     
-    def setTemperature(self, value: float, rate: float) -> None:
-        cmd = 'setTemperature'
-        param = {'temperature': value, 'rate': rate, 'channel': 0}
-        self._send_command(cmd, param)
-
-    def getTemperature(self) -> float:
-        cmd = 'getTemperature'
-        response = self._send_command(cmd)
-        return response['result']
-
-    def setMagnet(self, field: float, rate: float) -> None:
-        cmd = 'setMagnet'
-        param = {'field': field, 'rate': rate, 'axis': 'Z', 'mode': 'Persistent'}
-        self._send_command(cmd, param)
+    def setTemperature(self, temperature, rate, channel = 0):
+        return super().setTemperature(temperature, rate, channel)
     
-    def getMagnet(self) -> float:
-        cmd = 'getMagnet'
-        response = self._send_command(cmd)
-        return response['result']
+    def getTemperatureTarget(self, channel = 0):
+        return super().getTemperatureTarget(channel)
     
-    def setChamber(self):
-        pass
-
-    def getChamber(self):
-        cmd = 'getChamber'
-        response = self._send_command(cmd)
-        return response['result']
-
-# -------------- Custom functions ---------------->
-
-    def _is_temperature_set(self, target_temp):
-        current_temp = self.getTemperature()['Temperature (K)']
-        if current_temp is not None:
-            return current_temp == target_temp
-        return False
-
-    def _is_field_set(self, target_field):
-        current_field = self.getMagnet()['Field (T)']
-        if current_field is not None:
-            return current_field == target_field
-        return False
-
-    def setTemperatureAndWait(self, target_temp: float, rate: float, timeout: float = 600) -> None:
-        self.setTemperature(target_temp, rate)
-        start_time = time.time()
-        while not self._is_temperature_set(target_temp):
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Temperature setting timed out.")
-            time.sleep(1)
-        print(f"Temperature set to {target_temp} K.")
+    def getMagnet(self):
+        return super().getMagnet()
     
-    def setMagnetAndWait(self, target_field: float, rate: float, timeout: float = 600) -> None:
-        self.setMagnet(target_field, rate)
-        start_time = time.time()
-        while not self._is_field_set(target_field):
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Field setting timed out.")
-            time.sleep(1)
-        print(f"Magnetic field set to {target_field} T.")
+    def setMagnet(self, field, rate, axis = "Z", mode = "Persistent"):
+        return super().setMagnet(field, rate, axis, mode)
+    
+    def getMagnetTarget(self):
+        return super().getMagnetTarget()
 
-
-if __name__ == "__main__":
-    # Test the PPMS class
+    # Level type not defined yet
+    def get_LHe_level(self) -> float:
+        return self._send_command("getLHeLevel")["result"]
+    
+if __name__ == '__main__':
     opticool = Opticool()
-    print(opticool.help())
-    opticool.close()
+    opticool.help()
+    opticool.getTemperature()
+    # ppms.close()

@@ -146,7 +146,7 @@ class Lockin(Instrument, DAQ):
             time.sleep(0.5)
 
     def set_backgate(self, bg_channel, bg_target, sweep_rate, initial_wait=1):
-        current_bg = lockin.getAO(bg_channel)[bg_channel-1]['Y'][0]
+        current_bg = self.getAO(bg_channel)[bg_channel-1]['Y'][0]
         duration = abs(bg_target - current_bg)*sweep_rate
         print(f"Sweeping backgate from {current_bg:.2f} to {bg_target:.2f} V...")
         sweep_config = {"Sweep Time (s)":duration,
@@ -159,7 +159,7 @@ class Lockin(Instrument, DAQ):
                             "Pattern": "Ramp /",
                             "Table":[]},
                                     ]}
-        lockin.lockin_sweep(sweep_config)
+        self.lockin_sweep(sweep_config)
 
 if __name__ == "__main__":
     # Test the MCLockin class

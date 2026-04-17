@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='flex',
-    version='1.0.0',
+    version='1.0.1',
     description='Framework for Laboratory EXperiments',
     author='Pubudu Wijesinghe',
     author_email='pubudu.wijesinghe@levylab.org',
@@ -15,7 +15,17 @@ setup(
     ],
     python_requires='>=3.11',
     install_requires=[
-        'matplotlib', 'numpy','psycopg2', 'pyzmq', 'pyvisa', 'tqdm', 'pandas', 'asana', 'requests', 'nidaqmx'
-
+        'matplotlib', 
+        'numpy',
+        'psycopg2', 
+        'pyzmq', 
+        'pyvisa', 
+        'tqdm', 
+        'pandas', 
+        'asana', 
+        'requests', 
+        'nidaqmx',
+        'pythonnet',
+        'pyserial',
     ],
 )

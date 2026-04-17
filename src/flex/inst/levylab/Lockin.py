@@ -102,18 +102,10 @@ class Lockin(Instrument, DAQ):
         cmd = 'getSweepWaveforms'
         return self._send_command(cmd)['result']
 
-    def setSweep(self, channel: int, start: float, stop: float, sweep_time: float) -> None:
+    def setSweep(self, sweep_config) -> None:
         '''
-        Sets the sweep configuration for the lock-in
-        Currently only supports one channel
-        Args:
-            channel: The channel to set the sweep configuration for
-            start: The start time of the sweep
-            stop: The stop time of the sweep
-            sweep_time: The time of the sweep
-            pattern: The pattern of the sweep
-        '''
-        param = {"Sweep Time (s)":sweep_time,
+        sweep_config format:
+        sweep_config = {"Sweep Time (s)":sweep_time,
                  "Initial Wait (s)":2,
                  "Return to Start":False,
                  "Channels":[{"Enable?":True,
@@ -122,14 +114,9 @@ class Lockin(Instrument, DAQ):
                               "End":stop,
                               "Pattern": "Ramp /",
                               "Table":[]},
-                              {"Enable?":True,
-                              "Channel":channel,
-                              "Start":start,
-                              "End":stop,
-                              "Pattern": "Ramp /",
-                              "Table":[]},
-                              ]}      
-        self._send_command('setSweep', param)
+                              ]}
+        '''
+        self._send_command('setSweep', sweep_config)
 
 
 # -------------- Custom functions ---------------->
@@ -141,30 +128,39 @@ class Lockin(Instrument, DAQ):
         results_dict = {item['key']: item['value'] for item in results}
         return results_dict.get(key)
 
-    def sweep1d(self, sweep_config: dict, plot_data=False, timeout=10) -> None:
-        sweep_channel = sweep_config.get('sweep_channel')
-        start = sweep_config.get('sweep_start')
-        stop = sweep_config.get('sweep_stop')
-        duration = sweep_config.get('duration')
-        measure_channel = sweep_config.get('measure_channel')
-        
+    def lockin_sweep(self, sweep_config: dict, timeout=10) -> None:        
         if self.getState() == 'sweeping':
             raise Exception('Request Denied! Already sweeping')    
         elif self.getState() == 'idle':
             self.setState('start')   
-        # TODO: The state check should be happening with another function
-        self.setSweep(sweep_channel, start, stop, duration)
+        self.setSweep(sweep_config)
         time.sleep(0.5)
         self.setState('start sweep')
-        # *wait for the sweep time since it'll anyway take that long (saves processor resources)
-        time.sleep(duration) 
+        # wait for the sweep time since it'll anyway take that long (saves processor resources)
+        wait_time = sweep_config.get("Sweep Time (s)") + sweep_config.get("Initial Wait (s)")
+        time.sleep(wait_time) 
         start_time = time.time()
         while self.getState() == 'sweeping':
             if time.time() - start_time > timeout:
                 raise TimeoutError(f"Sweep operation timed out after {timeout} seconds. Please check the Multichannel Lock-in Application.")
             time.sleep(0.5)
 
-        
+    def set_backgate(self, bg_channel, bg_target, sweep_rate, initial_wait=1):
+        current_bg = lockin.getAO(bg_channel)[bg_channel-1]['Y'][0]
+        duration = abs(bg_target - current_bg)*sweep_rate
+        print(f"Sweeping backgate from {current_bg:.2f} to {bg_target:.2f} V...")
+        sweep_config = {"Sweep Time (s)":duration,
+                        "Initial Wait (s)":initial_wait,
+                        "Return to Start":False,
+                        "Channels":[{"Enable?":True,
+                            "Channel":bg_channel,
+                            "Start":current_bg,
+                            "End":bg_target,
+                            "Pattern": "Ramp /",
+                            "Table":[]},
+                                    ]}
+        lockin.lockin_sweep(sweep_config)
+
 if __name__ == "__main__":
     # Test the MCLockin class
     lockin = Lockin("tcp://localhost:29170",)

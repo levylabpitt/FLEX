@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='flex',
-    version='1.0.3',
+    version='1.0.4',
     description='Framework for Laboratory EXperiments',
     author='Pubudu Wijesinghe',
     author_email='pubudu.wijesinghe@levylab.org',

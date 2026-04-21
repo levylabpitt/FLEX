@@ -13,7 +13,7 @@ class DScan:
         status = self._lib.dscan_Create(serial_number.encode('utf-8'), ctypes.byref(handle))
         self._throw(status)
         self._handle = handle.value
-        self.close()
+        self.conect()
 
     def __del__(self):
         if self._handle != self._lib.dscan_INVALID_HANDLE():
@@ -21,11 +21,11 @@ class DScan:
             self._handle = self._lib.dscan_INVALID_HANDLE()
             self._throw(status)
 
-    def close(self):
+    def connect(self):
         status = self._lib.dscan_Connect(self._handle)
         self._throw(status)
 
-    def disconnect(self):
+    def close(self):
         status = self._lib.dscan_Disconnect(self._handle)
         self._throw(status)
 

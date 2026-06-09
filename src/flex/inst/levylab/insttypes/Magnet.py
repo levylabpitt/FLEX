@@ -9,8 +9,8 @@ class Magnet:
         Default ZMQ command to set magnetic field.
         """
         self._send_command("setMagnet", {
-            "field": field,
-            "rate": rate,
+            "field": float(field),
+            "rate": float(rate),
             "axis": axis,
             "mode": mode
         })

@@ -9,9 +9,9 @@ class Temperature(ABC):
         Default ZMQ command to set temperature.
         """
         self._send_command("setTemperature", {
-            "temperature": temperature,
-            "rate": rate,
-            "channel": channel
+            "temperature": float(temperature),
+            "rate": float(rate),
+            "channel": int(channel)
         })
 
     @abstractmethod

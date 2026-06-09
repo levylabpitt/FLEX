@@ -7,5 +7,9 @@ exp = CESession()
 with CESession(timeout=5.0, verbose=True) as myexp:
     # Everything inside this block is "safe"
     print(myexp.DAQ.help())
+    
 # Instruments are closed automatically here!
 # %%
+exp.Temperature.help()
+exp.Transport.help()
+exp.close_all()

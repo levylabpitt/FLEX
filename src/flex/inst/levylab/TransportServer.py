@@ -92,6 +92,11 @@ class Transport(Instrument):
         params = {param: value}
         self._send_command(cmd, params)
 
+    def setRefreshTime(self, RefreshTime: float) -> None:
+        cmd = 'setRefreshTime'
+        param = {'Refresh Time (ms)': RefreshTime}
+        self._send_command(cmd, param)
+
     # --- deprecated ---
     # def setSweepConfig(self, sweep_config: dict) -> None:
     #     sweep_channel = sweep_config.get('sweep_channel')

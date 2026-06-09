@@ -145,20 +145,57 @@ class Lockin(Instrument, DAQ):
                 raise TimeoutError(f"Sweep operation timed out after {timeout} seconds. Please check the Multichannel Lock-in Application.")
             time.sleep(0.5)
 
-    def set_backgate(self, bg_channel, bg_target, sweep_rate, initial_wait=1):
+    def set_backgate(self, bg_channel:int, bg_target:float, sweep_rate:float, initial_wait:float = 1, tol:float = 1e-3):
+        """
+        Sweep the backgate voltage to a target value.
+
+        Parameters
+        ----------
+        bg_channel : int
+            Analog output channel used for the backgate.
+
+        bg_target : float
+            Target backgate voltage in volts (V).
+
+        sweep_rate : float
+            Sweep rate in seconds per volt (s/V).
+
+        initial_wait : float, optional
+            Delay before starting the sweep in seconds. Default is 1 s.
+
+        tol : float, optional
+            Voltage tolerance in volts used to determine whether
+            the gate is already at the target voltage.
+            Default is 1e-3 V.
+        """
+                
         current_bg = self.getAO(bg_channel)[bg_channel-1]['Y'][0]
-        duration = abs(bg_target - current_bg)*sweep_rate
+
+        # Skip sweep if already at target
+        if abs(bg_target - current_bg) < tol:
+            print(f"Backgate already at {bg_target:.2f} V. Target is within tolerance.")
+            return
+
+        duration = abs(bg_target - current_bg) * sweep_rate
+
         print(f"Sweeping backgate from {current_bg:.2f} to {bg_target:.2f} V...")
-        sweep_config = {"Sweep Time (s)":duration,
-                        "Initial Wait (s)":initial_wait,
-                        "Return to Start":False,
-                        "Channels":[{"Enable?":True,
-                            "Channel":bg_channel,
-                            "Start":current_bg,
-                            "End":bg_target,
-                            "Pattern": "Ramp /",
-                            "Table":[]},
-                                    ]}
+
+        sweep_config = {
+            "Sweep Time (s)": duration,
+            "Initial Wait (s)": initial_wait,
+            "Return to Start": False,
+            "Channels": [
+                {
+                    "Enable?": True,
+                    "Channel": bg_channel,
+                    "Start": current_bg,
+                    "End": bg_target,
+                    "Pattern": "Ramp /",
+                    "Table": []
+                },
+            ]
+        }
+
         self.lockin_sweep(sweep_config)
 
 if __name__ == "__main__":

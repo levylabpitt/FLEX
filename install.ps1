@@ -1,215 +1,243 @@
 # ==============================================================================
-# FLEX Installer
-# Levy Lab
+# FLEX Installer  -  Levy Lab
+# Author: Pubudu Wijesinghe
+#
+#   Usage:   irm flex.levylab.org/install.ps1 | iex
+#
+#   Optional environment overrides (set before piping):
+#     $env:FLEX_BRANCH = 'develop'   # install from a specific branch (default: main)
+#     $env:FLEX_YES    = '1'         # non-interactive: accept all defaults
 # ==============================================================================
 
-$ErrorActionPreference = "Stop"
+& {
+    $RepoOwner = 'levylabpitt'
+    $RepoName  = 'FLEX'
 
-function Write-Log([string]$Level, [string]$Message, [string]$Color="White") {
-    $Timestamp = Get-Date -Format "HH:mm:ss"
-    Write-Host "[$Timestamp] [$Level] $Message" -ForegroundColor $Color
-}
-
-function Invoke-NativeCommand([string]$Executable, [string]$Arguments) {
-    try {
-        $StartInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $StartInfo.FileName = $Executable
-        $StartInfo.Arguments = $Arguments
-        $StartInfo.RedirectStandardOutput = $true
-        $StartInfo.RedirectStandardError = $true
-        $StartInfo.UseShellExecute = $false
-        $StartInfo.CreateNoWindow = $true
-
-        $Process = New-Object System.Diagnostics.Process
-        $Process.StartInfo = $StartInfo
-        
-        $null = $Process.Start()
-        $Output = $Process.StandardOutput.ReadToEnd()
-        $ErrorOut = $Process.StandardError.ReadToEnd()
-        $Process.WaitForExit()
-
-        return @{
-            ExitCode = $Process.ExitCode
-            Output   = $Output.Trim()
-            Error    = $ErrorOut.Trim()
-        }
-    } catch {
-        return @{ ExitCode = -1; Output = ""; Error = $_.Exception.Message }
+    # --- logging ---------------------------------------------------------------
+    function Log  ([string]$m, [string]$c = 'Gray') { Write-Host "  $m" -ForegroundColor $c }
+    function Ok   ([string]$m) { Write-Host "  [ OK ] $m"   -ForegroundColor Green }
+    function Warn ([string]$m) { Write-Host "  [WARN] $m"   -ForegroundColor Yellow }
+    function Fail ([string]$m) {
+        Write-Host ""
+        Write-Host "  [FAIL] $m" -ForegroundColor Red
+        Write-Host "  Installation aborted." -ForegroundColor Yellow
     }
-}
 
-function Terminate-Installation([string]$Message) {
-    Write-Log "FATAL" $Message "Red"
-    Write-Host "`nInstallation aborted. Resolving environment errors required." -ForegroundColor "Yellow"
-    Read-Host "Press Enter to exit"
-    exit 1
-}
-
-Write-Log "INFO" "Initializing system diagnostics..." "Gray"
-
-# Default States
-$pyStatus   = "Missing or Corrupt (Requires 3.10+)"
-$pipStatus  = "Missing"
-$gitStatus  = "Missing"
-$vsStatus   = "Not installed (Optional)"
-$flexStatus = "None detected"
-$PythonPath = $null
-
-# ------------------------------------------------------------------------------
-# 1. Component Discovery & Validation
-# ------------------------------------------------------------------------------
-
-# Identify Python without triggering Windows Store execution traps
-foreach ($Cmd in @("py", "python")) {
-    $Target = Get-Command $Cmd -ErrorAction SilentlyContinue
-    if ($Target -and $Target.Source -notlike "*\Microsoft\WindowsApps\*") {
-        $PythonPath = $Target.Source
-        break
-    }
-}
-
-# Advanced Registry Fallback if Path fails
-if ($null -eq $PythonPath) {
-    foreach ($Hive in @("HKLM:\SOFTWARE\Python\PythonCore", "HKCU:\SOFTWARE\Python\PythonCore")) {
-        if (Test-Path $Hive) {
-            $Versions = Get-ChildItem $Hive | Select-Object -ExpandProperty Name
-            if ($Versions) {
-                $Latest = $Versions | Sort-Object | Select-Object -Last 1
-                $InstallPath = Get-ItemProperty -Path "$Hive\$($Latest.Split('\')[-1])\InstallPath" -Name "(Default)" -ErrorAction SilentlyContinue
-                if ($InstallPath) {
-                    $PythonPath = Join-Path $InstallPath.'(Default)' "python.exe"
-                    if (Test-Path $PythonPath) { break }
-                }
+    # Run a native executable with array args (robust quoting on PS 5 & 7).
+    function Invoke-Exe {
+        param([string]$FilePath, [string[]]$Arguments = @())
+        try {
+            $global:LASTEXITCODE = 0
+            $out = & $FilePath @Arguments 2>&1
+            [pscustomobject]@{
+                ExitCode = $LASTEXITCODE
+                Output   = (($out | Out-String) -replace "`r", '').Trim()
             }
+        } catch {
+            [pscustomobject]@{ ExitCode = -1; Output = $_.Exception.Message }
         }
     }
-}
 
-# Evaluate Python Core Environment
-if ($null -ne $PythonPath) {
-    $PyCheck = Invoke-NativeCommand $PythonPath "-c `"import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')`""
-    if ($PyCheck.ExitCode -eq 0 -and $PyCheck.Output) {
-        $PyVer = $PyCheck.Output
-        if ([version]$PyVer -lt [version]"3.10") {
-            $pyStatus = "FAIL (v$PyVer detected, requires 3.10+)"
-        } else {
-            $pyStatus = "Verified (v$PyVer)"
-            
-            # Evaluate Pip Context safely using isolation runner
-            $PipCheck = Invoke-NativeCommand $PythonPath "-m pip --version"
-            if ($PipCheck.ExitCode -eq 0 -and $PipCheck.Output) {
-                $pipStatus = "Verified (v$($PipCheck.Output.Split(' ')[1]))"
-            } else {
-                $pipStatus = "Broken or Missing Package Manager"
-            }
+    # Run a native executable attached to the current console so its output
+    # (including pip's live progress bars) streams in real time. The caller sees
+    # the actual install as it happens. Returns the process exit code.
+    function Invoke-ExeLive {
+        param([string]$FilePath, [string[]]$Arguments = @())
+        try {
+            $p = Start-Process -FilePath $FilePath -ArgumentList $Arguments -NoNewWindow -PassThru
+            $null = $p.Handle          # cache handle so ExitCode is populated after exit
+            $p.WaitForExit()
+            return $p.ExitCode
+        } catch {
+            Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+            return -1
         }
-    } else {
-        $pyStatus = "Error evaluating runtime"
     }
-}
 
-# Evaluate Git Core
-$GitCmd = Get-Command git -ErrorAction SilentlyContinue
-if ($GitCmd) {
-    $GitCheck = Invoke-NativeCommand $GitCmd.Source "--version"
-    if ($GitCheck.ExitCode -eq 0 -and $GitCheck.Output -match "\d+\.\d+\.\d+") {
-        $gitStatus = "Verified (v$($Matches[0]))"
+    # Probe a Python invocation; return its version + real executable, or $null.
+    function Test-Python {
+        param([string]$Exe, [string[]]$Prefix = @())
+        $code = 'import sys;print("%d.%d.%d|%s"%(sys.version_info[0],sys.version_info[1],sys.version_info[2],sys.executable))'
+        $r = Invoke-Exe $Exe (@($Prefix) + @('-c', $code))
+        if ($r.ExitCode -ne 0) { return $null }
+        $line = ($r.Output -split "`n" | Where-Object { $_ -match '^\d+\.\d+\.\d+\|' } | Select-Object -First 1)
+        if (-not $line) { return $null }
+        $parts = $line.Split('|')
+        [pscustomobject]@{ Exe = $Exe; Prefix = $Prefix; Version = [version]$parts[0]; Path = $parts[1] }
     }
-}
 
-# Evaluate Visual Studio Code (Optional Environment Target)
-$VsCmd = Get-Command code -ErrorAction SilentlyContinue
-if ($VsCmd) {
-    $VsCheck = Invoke-NativeCommand $VsCmd.Source "--version"
-    if ($VsCheck.ExitCode -eq 0 -and $VsCheck.Output) {
-        $vsStatus = "Verified (v$($VsCheck.Output.Split("`n")[0].Trim()))"
+    # Read a CLI app's version (first numeric line of its --version output).
+    function Get-AppVersion {
+        param([string]$Command, [string[]]$Paths = @())
+        $exe = (Get-Command $Command -ErrorAction SilentlyContinue).Source
+        if (-not $exe) { foreach ($p in $Paths) { if ($p -and (Test-Path $p)) { $exe = $p; break } } }
+        if (-not $exe) { return $null }
+        $r = Invoke-Exe $exe @('--version')
+        if ($r.ExitCode -ne 0) { return $null }
+        $line = ($r.Output -split "`n" | Where-Object { $_ -match '\d+\.\d+' } | Select-Object -First 1)
+        if ($line) { $line.Trim() } else { 'installed' }
     }
-}
 
-# Evaluate Existing FLEX Footprint
-if ($pyStatus -like "Verified*") {
-    $FlexCheck = Invoke-NativeCommand $PythonPath "-c `"try: import flex; print(flex.__version__)\nexcept Exception: pass`""
-    if ($FlexCheck.ExitCode -eq 0 -and $FlexCheck.Output) {
-        $flexStatus = "v$($FlexCheck.Output)"
+    function Read-Default {
+        param([string]$Prompt, [string]$Default)
+        if ($env:FLEX_YES -or -not [Environment]::UserInteractive) { return $Default }
+        $ans = Read-Host $Prompt
+        if ([string]::IsNullOrWhiteSpace($ans)) { return $Default }
+        $ans
     }
-}
 
-# ------------------------------------------------------------------------------
-# 2. Diagnostic Interface & Threshold Guard
-# ------------------------------------------------------------------------------
-$pyColor   = if ($pyStatus -like "Verified*") { "Green" } else { "Red" }
-$pipColor  = if ($pipStatus -like "Verified*") { "Green" } else { "Red" }
-$gitColor  = if ($gitStatus -like "Verified*") { "Green" } else { "Red" }
-$vscodecolor = if ($gitStatus -like "Verified*") { "Green" } else { "Red" }
-$flexColor = if ($flexStatus -ne "None detected") { "Cyan" } else { "DarkGray" }
+    Write-Host ""
+    Write-Host "  ===============================================" -ForegroundColor Cyan
+    Write-Host "                 FLEX  Installer                 " -ForegroundColor White
+    Write-Host "  ===============================================" -ForegroundColor Cyan
+    Write-Host ""
 
-Write-Host "`n=========================================================" -ForegroundColor "Gray"
-Write-Host "                 SYSTEM COMPONENT REPORT                 " -ForegroundColor "White"
-Write-Host "=========================================================" -ForegroundColor "Gray"
-Write-Host " [Prereq] Python Context:    $pyStatus" -ForegroundColor $pyColor
-Write-Host " [Prereq] Pip Environment:   $pipStatus" -ForegroundColor $pipColor
-Write-Host " [Prereq] Git Core Engine:   $gitStatus" -ForegroundColor $gitColor
-Write-Host " [Prereq] VSCode Editor:     $vsStatus" -ForegroundColor $vscodecolor
-Write-Host "---------------------------------------------------------" -ForegroundColor "Gray"
-Write-Host " [FLEX] Existing FLEX:       $flexStatus" -ForegroundColor $flexColor
-Write-Host "=========================================================`n" -ForegroundColor "Gray"
+    # --- 1. Discover every plausible Python, pick the best >= 3.10 -------------
+    Log "Locating a suitable Python (3.10+)..."
 
-if ($pyStatus -notlike "Verified*" -or $pipStatus -notlike "Verified*" -or $gitStatus -notlike "Verified*") {
-    Terminate-Installation "Structural prerequisite criteria unmet. Please check missing items."
-}
-
-# ------------------------------------------------------------------------------
-# 3. Execution Scope Context Selection
-# ------------------------------------------------------------------------------
-if ($null -ne $env:VIRTUAL_ENV) {
-    Write-Log "INFO" "Active Virtual Environment context discovered: $env:VIRTUAL_ENV" "Cyan"
-    $Selection = Read-Host "Install FLEX into this specific Virtual Environment? (Y/n)"
-    if ($Selection -match "^(n|N)$") {
-        Write-Log "INFO" "Sourcing global pipeline runtime environment..." "Yellow"
+    $invocations = New-Object System.Collections.Generic.List[object]
+    $seen = New-Object System.Collections.Generic.HashSet[string]
+    function Add-Invocation { param([string]$Exe, [string[]]$Prefix = @())
+        $key = ($Exe + '|' + ($Prefix -join ' ')).ToLowerInvariant()
+        if ($seen.Add($key)) { $invocations.Add(@{ Exe = $Exe; Prefix = $Prefix }) }
     }
-}
 
-Write-Host "`n Target Distribution Pipeline Channels:"
-Write-Host " [1] Stable Release Branch (main)"
-Write-Host " [2] Development Edge Branch (develop)"
-$BranchSelection = Read-Host "Select channel [Default: 1]"
-$Branch = if ($BranchSelection -eq "2") { "develop" } else { "main" }
+    # (a) The 'py' launcher (handles version selection itself).
+    if (Get-Command py -ErrorAction SilentlyContinue) { Add-Invocation 'py' @('-3') }
 
-if ($flexStatus -ne "None detected") {
-    $ReinstallPrompt = Read-Host "FLEX framework instance detected. Force upgrade/reinstall package? (y/N)"
-    if ($ReinstallPrompt -notmatch "^(y|Y)$") {
-        Write-Log "INFO" "Deployment execution cancelled by user." "Gray"
-        exit 0
+    # (b) python / python3 on PATH, skipping the Windows Store stub.
+    foreach ($name in 'python', 'python3') {
+        foreach ($c in @(Get-Command $name -All -ErrorAction SilentlyContinue)) {
+            if ($c.Source -and $c.Source -notlike '*\WindowsApps\*') { Add-Invocation $c.Source }
+        }
     }
+
+    # (c) Registry (per-machine, per-user, 32-bit hive).
+    $hives = @(
+        'HKLM:\SOFTWARE\Python\PythonCore',
+        'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore',
+        'HKCU:\SOFTWARE\Python\PythonCore'
+    )
+    foreach ($hive in $hives) {
+        if (-not (Test-Path $hive)) { continue }
+        foreach ($ver in Get-ChildItem $hive -ErrorAction SilentlyContinue) {
+            $ip = Get-ItemProperty "$($ver.PSPath)\InstallPath" -ErrorAction SilentlyContinue
+            if (-not $ip) { continue }
+            $exe = $ip.ExecutablePath
+            if (-not $exe) { $exe = Join-Path $ip.'(default)' 'python.exe' }
+            if ($exe -and (Test-Path $exe)) { Add-Invocation $exe }
+        }
+    }
+
+    # (d) Common install locations.
+    $globs = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+        "$env:ProgramFiles\Python3*\python.exe",
+        "${env:ProgramFiles(x86)}\Python3*\python.exe",
+        "C:\Python3*\python.exe"
+    )
+    foreach ($g in $globs) {
+        foreach ($f in @(Get-ChildItem $g -ErrorAction SilentlyContinue)) { Add-Invocation $f.FullName }
+    }
+
+    # Probe candidates; keep those >= 3.10, dedup by real executable, pick newest.
+    $found = @{}
+    foreach ($inv in $invocations) {
+        $info = Test-Python -Exe $inv.Exe -Prefix $inv.Prefix
+        if ($info -and $info.Version -ge [version]'3.10') {
+            $k = $info.Path.ToLowerInvariant()
+            if (-not $found.ContainsKey($k) -or $info.Version -gt $found[$k].Version) { $found[$k] = $info }
+        }
+    }
+    $python = $found.Values | Sort-Object Version -Descending | Select-Object -First 1
+
+    if (-not $python) {
+        Fail "No Python 3.10+ was found on this system."
+        Write-Host ""
+        Write-Host "  Install Python from https://www.python.org/downloads/ (check" -ForegroundColor Yellow
+        Write-Host "  'Add python.exe to PATH'), or run:  winget install Python.Python.3.12" -ForegroundColor Yellow
+        Write-Host "  Then re-run this installer." -ForegroundColor Yellow
+        return
+    }
+    # Use the resolved real executable for everything from here on.
+    $py = $python.Path
+
+    # --- 2. Ensure pip ---------------------------------------------------------
+    if ((Invoke-Exe $py @('-m', 'pip', '--version')).ExitCode -ne 0) {
+        Log "pip not found; bootstrapping with ensurepip..."
+        $ep = Invoke-Exe $py @('-m', 'ensurepip', '--upgrade')
+        if ((Invoke-Exe $py @('-m', 'pip', '--version')).ExitCode -ne 0) {
+            Fail "Could not provision pip for this Python.`n$($ep.Output)"
+            return
+        }
+    }
+    # Quietly upgrade pip itself (non-fatal).
+    $up = Invoke-Exe $py @('-m', 'pip', 'install', '--upgrade', 'pip', '--quiet', '--disable-pip-version-check')
+    if ($up.ExitCode -ne 0) { Warn "Could not upgrade pip; continuing." }
+
+    # --- 3. Detect tooling + existing FLEX, then report environment ------------
+    $vscode = Get-AppVersion 'code' @(
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
+        "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd",
+        "${env:ProgramFiles(x86)}\Microsoft VS Code\bin\code.cmd"
+    )
+
+    $flexProbe = Invoke-Exe $py @('-c', 'import importlib.metadata as m; print(m.version("flex"))')
+    if ($flexProbe.ExitCode -eq 0 -and $flexProbe.Output) { $flexVer = $flexProbe.Output } else { $flexVer = $null }
+
+    Write-Host ""
+    Write-Host "  Environment" -ForegroundColor White
+    Write-Host ("    Python   : v{0}" -f $python.Version) -ForegroundColor Green
+    Write-Host ("               {0}" -f $py)              -ForegroundColor DarkGray
+    if ($vscode) { Write-Host ("    VS Code  : v{0}" -f $vscode) -ForegroundColor Green }
+    else { Write-Host "    VS Code  : not found  (recommended: https://code.visualstudio.com)" -ForegroundColor Yellow }
+    if ($flexVer) { Write-Host ("    FLEX     : v{0}  (already installed - will be upgraded)" -f $flexVer) -ForegroundColor Cyan }
+    else { Write-Host "    FLEX     : not installed" -ForegroundColor DarkGray }
+    if ($env:VIRTUAL_ENV) { Write-Host ("    Target   : venv -> {0}" -f $env:VIRTUAL_ENV) -ForegroundColor Cyan }
+
+    # --- 4. Choose branch ------------------------------------------------------
+    $branch = $env:FLEX_BRANCH
+    if ([string]::IsNullOrWhiteSpace($branch)) {
+        Write-Host ""
+        Log "Release channel:  [1] main (stable)   [2] develop (edge)"
+        if ((Read-Default "  Select channel [1] or Press Ctrl + C to abort" '1') -eq '2') { $branch = 'develop' } else { $branch = 'main' }
+    }
+
+    # --- 5. Install from the GitHub zip archive (no Git needed) ----------------
+    $archive = "https://github.com/$RepoOwner/$RepoName/archive/refs/heads/$branch.zip"
+    Write-Host ""
+    Log "Installing FLEX from '$branch' - downloading packages, this can take a few minutes..." 'Yellow'
+    Write-Host "  ----------------------------- pip ----------------------------" -ForegroundColor DarkGray
+
+    # Pass 1: install/upgrade dependencies (and FLEX). Output streams live so the
+    # user watches the real download/build progress instead of a blank screen.
+    $code = Invoke-ExeLive $py @('-m', 'pip', 'install', '--upgrade', $archive)
+    if ($code -ne 0 -and (Get-Command git -ErrorAction SilentlyContinue)) {
+        Warn "Archive install failed; retrying via Git..."
+        $code = Invoke-ExeLive $py @('-m', 'pip', 'install', '--upgrade', "git+https://github.com/$RepoOwner/$RepoName.git@$branch")
+    }
+    if ($code -ne 0) {
+        Write-Host "  --------------------------------------------------------------" -ForegroundColor DarkGray
+        Fail "Installation failed - see the pip output above for the cause."
+        return
+    }
+
+    # Pass 2: force-refresh the FLEX package only, so branch updates without a
+    # version bump still land (skips reinstalling the heavy dependency tree).
+    $code = Invoke-ExeLive $py @('-m', 'pip', 'install', '--upgrade', '--force-reinstall', '--no-deps', '--quiet', $archive)
+    Write-Host "  --------------------------------------------------------------" -ForegroundColor DarkGray
+    if ($code -ne 0) { Warn "Could not force-refresh FLEX package; existing copy retained." }
+
+    # --- 6. Verify -------------------------------------------------------------
+    $verify = Invoke-Exe $py @('-c', 'import flex, importlib.metadata as m; print(m.version("flex"))')
+    if ($verify.ExitCode -ne 0) {
+        Fail "FLEX imported but could not be verified.`n$($verify.Output)"
+        return
+    }
+
+    Write-Host ""
+    Write-Host "  ===============================================" -ForegroundColor Green
+    Ok "FLEX $($verify.Output) installed successfully."
+    Write-Host "  ===============================================" -ForegroundColor Green
+    Write-Host ""
 }
-
-# ------------------------------------------------------------------------------
-# 4. Framework Deployment Execution & Integrity Checks
-# ------------------------------------------------------------------------------
-Write-Log "INFO" "Updating underlying Pip management module..." "Yellow"
-$UpgradePip = Invoke-NativeCommand $PythonPath "-m pip install --upgrade pip --quiet"
-if ($UpgradePip.ExitCode -ne 0) {
-    Write-Log "WARN" "Pip auto-update exited with exception code: $($UpgradePip.ExitCode). Continuing..." "Yellow"
-}
-
-Write-Log "INFO" "Deploying FLEX Framework Engine via Remote Repository ($Branch)..." "Yellow"
-$RepoUrl = "git+https://github.com/levylabpitt/FLEX.git@$Branch"
-$DeployTask = Invoke-NativeCommand $PythonPath "-m pip install --upgrade --force-reinstall `"$RepoUrl`""
-
-if ($DeployTask.ExitCode -ne 0) {
-    Terminate-Installation "Deployment routine failed.`nError Trace: $($DeployTask.Error)"
-}
-
-Write-Log "INFO" "Running integration verification checks..." "Yellow"
-$VerifyTask = Invoke-NativeCommand $PythonPath "-c `"import flex; print(flex.__version__)`""
-
-if ($VerifyTask.ExitCode -eq 0 -and $VerifyTask.Output) {
-    Write-Log "SUCCESS" "FLEX Environment verification passed (v$($VerifyTask.Output))" "Green"
-} else {
-    Terminate-Installation "Verification check failed. Core files could not be structuralized by Python execution environment."
-}
-
-Write-Host "`n=========================================================" -ForegroundColor "Green"
-Write-Log "SUCCESS" "FLEX Deployment Sequence Executed Successfully." "Green"
-Write-Host "=========================================================" -ForegroundColor "Green"
-Read-Host "`nPress Enter to finalize deployment and close terminal"

@@ -105,10 +105,13 @@
     # (a) The 'py' launcher (handles version selection itself).
     if (Get-Command py -ErrorAction SilentlyContinue) { Add-Invocation 'py' @('-3') }
 
-    # (b) python / python3 on PATH, skipping the Windows Store stub.
+    # (b) python / python3 on PATH. NOTE: do not exclude \WindowsApps\ by path -
+    #     a real Microsoft Store Python also lives there and works fine. The
+    #     "install me" Store stub fails the probe below (exits 9009, prints no
+    #     version), so Test-Python filters it out without skipping real installs.
     foreach ($name in 'python', 'python3') {
         foreach ($c in @(Get-Command $name -All -ErrorAction SilentlyContinue)) {
-            if ($c.Source -and $c.Source -notlike '*\WindowsApps\*') { Add-Invocation $c.Source }
+            if ($c.Source) { Add-Invocation $c.Source }
         }
     }
 

@@ -10,6 +10,11 @@
 # ==============================================================================
 
 & {
+    # Pin error handling so the caller's session preferences (e.g. a profile that
+    # sets 'Stop') can't turn a native command's stderr into a fatal error and
+    # break Python detection. Scoped to this block only.
+    $ErrorActionPreference = 'Continue'
+
     $RepoOwner = 'levylabpitt'
     $RepoName  = 'FLEX'
 
@@ -57,13 +62,21 @@
     # Probe a Python invocation; return its version + real executable, or $null.
     function Test-Python {
         param([string]$Exe, [string[]]$Prefix = @())
-        $code = 'import sys;print("%d.%d.%d|%s"%(sys.version_info[0],sys.version_info[1],sys.version_info[2],sys.executable))'
+        # CRITICAL: pass NO double quotes in the -c snippet. Windows PowerShell 5.1
+        # strips embedded double quotes when building a native command line, which
+        # corrupts the code (e.g. "%s" -> %s -> SyntaxError). Tab-separate the
+        # fields with chr(9) instead of a quoted delimiter - no quotes needed.
+        $code = 'import sys;print(sys.version_info[0],sys.version_info[1],sys.version_info[2],sys.executable,sep=chr(9))'
         $r = Invoke-Exe $Exe (@($Prefix) + @('-c', $code))
         if ($r.ExitCode -ne 0) { return $null }
-        $line = ($r.Output -split "`n" | Where-Object { $_ -match '^\d+\.\d+\.\d+\|' } | Select-Object -First 1)
-        if (-not $line) { return $null }
-        $parts = $line.Split('|')
-        [pscustomobject]@{ Exe = $Exe; Prefix = $Prefix; Version = [version]$parts[0]; Path = $parts[1] }
+        $line = ($r.Output -split "`n" | Where-Object { $_ -match "^\d+`t\d+`t\d+`t" } | Select-Object -First 1)
+        if (-not $line -or $line -notmatch "^(\d+)`t(\d+)`t(\d+)`t(.+)$") { return $null }
+        [pscustomobject]@{
+            Exe     = $Exe
+            Prefix  = $Prefix
+            Version = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+            Path    = $Matches[4].Trim()
+        }
     }
 
     # Read a CLI app's version (first numeric line of its --version output).
@@ -185,7 +198,7 @@
         "${env:ProgramFiles(x86)}\Microsoft VS Code\bin\code.cmd"
     )
 
-    $flexProbe = Invoke-Exe $py @('-c', 'import importlib.metadata as m; print(m.version("flex"))')
+    $flexProbe = Invoke-Exe $py @('-c', 'import importlib.metadata as m; print(m.version(''flex''))')
     if ($flexProbe.ExitCode -eq 0 -and $flexProbe.Output) { $flexVer = $flexProbe.Output } else { $flexVer = $null }
 
     Write-Host ""
@@ -232,7 +245,7 @@
     if ($code -ne 0) { Warn "Could not force-refresh FLEX package; existing copy retained." }
 
     # --- 6. Verify -------------------------------------------------------------
-    $verify = Invoke-Exe $py @('-c', 'import flex, importlib.metadata as m; print(m.version("flex"))')
+    $verify = Invoke-Exe $py @('-c', 'import flex, importlib.metadata as m; print(m.version(''flex''))')
     if ($verify.ExitCode -ne 0) {
         Fail "FLEX imported but could not be verified.`n$($verify.Output)"
         return

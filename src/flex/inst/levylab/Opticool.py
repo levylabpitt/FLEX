@@ -4,7 +4,7 @@ from flex.inst.levylab.insttypes.Magnet import Magnet
 import os
 
 _DEFAULT_ADDRESS = "tcp://localhost:29174"
-_LABVIEW_CLASS_NAME = "instrument.Opticool.lvclass"
+_LABVIEW_CLASS_NAME = "instrument.OptiCool.lvclass"
 
 logpath = os.path.join(os.environ.get("LOCALAPPDATA"), "Levylab", "FLEX", "logs")
 os.makedirs(logpath, exist_ok=True)

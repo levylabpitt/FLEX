@@ -46,6 +46,20 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "UP", "B"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = [
+    "flex",
+    "flex_protocols",
+    "flex_db",
+    "flex_exp",
+    "flex_drivers",
+    "flex_drivers_levylab",
+    "flex_nextcloud",
+    "flex_asana",
+    "flex_tdms",
+    "flex_dashboard",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 addopts = "-q"

@@ -1,0 +1,64 @@
+{
+  "flex-core": {
+    "group": "Core",
+    "summary": "Instrument model, data & metadata services, package manager, CLI",
+    "default": true,
+    "provides": {
+      "flex.writers": ["hdf5"],
+      "flex.storage": ["local"]
+    }
+  },
+  "flex-protocols": {
+    "group": "Core",
+    "summary": "Protocol instrument base classes: VISA, TCP, Serial, ZMQ",
+    "default": true
+  },
+  "flex-db": {
+    "group": "Core",
+    "summary": "Metadata database backends: SQLite (default) and PostgreSQL",
+    "default": true,
+    "provides": {
+      "flex.db_backends": ["sqlite", "postgres"]
+    }
+  },
+  "flex-exp": {
+    "group": "Core",
+    "summary": "Experiment handling: Experiment, Measurement, Scan, lab sessions",
+    "default": true,
+    "provides": {
+      "flex.handlers": ["default", "ce"]
+    }
+  },
+  "flex-drivers": {
+    "group": "Drivers",
+    "summary": "General instrument drivers, organized by vendor",
+    "drivers": []
+  },
+  "flex-drivers-levylab": {
+    "group": "LevyLab Drivers",
+    "summary": "Drivers for LevyLab Instrument-Framework apps (ZMQ/JSON-RPC)",
+    "drivers": []
+  },
+  "flex-tdms": {
+    "group": "Integrations",
+    "summary": "TDMS data file writer (LabVIEW-compatible)",
+    "provides": {
+      "flex.writers": ["tdms"]
+    }
+  },
+  "flex-nextcloud": {
+    "group": "Integrations",
+    "summary": "Nextcloud storage backend (WebDAV upload + share links)",
+    "provides": {
+      "flex.storage": ["nextcloud"]
+    }
+  },
+  "flex-asana": {
+    "group": "Integrations",
+    "summary": "Asana project-tracking hooks (via n8n webhooks)"
+  },
+  "flex-dashboard": {
+    "group": "Apps",
+    "summary": "Local web UI: package manager, configurator, experiment browser"
+  }
+}

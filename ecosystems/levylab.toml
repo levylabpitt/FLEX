@@ -1,0 +1,65 @@
+# The LevyLab ecosystem: Instrument-Framework drivers over ZMQ, PostgreSQL
+# metadata, TDMS data files, Nextcloud storage, Asana notifications via n8n.
+# Activate with: flex ecosystem use ecosystems/levylab.toml
+
+[ecosystem]
+name = "levylab"
+packages = [
+    "flex-drivers-levylab",
+    "flex-tdms",
+    "flex-nextcloud",
+    "flex-asana",
+    "flex-db[postgres]",
+]
+
+[lab]
+name = "levylab"
+station = "" # e.g. "ppms1" — pick from [stations.*] below
+
+[db]
+backend = "postgres"
+dsn = "postgresql://llab_admin@db.levylab.org/levylab_test"
+
+[storage]
+backend = "nextcloud"
+url = "https://nextcloud.levylab.org"
+user = "llab_shared"
+remote_root = "Shared/Data/FLEX"
+# password comes from the NEXTCLOUD_PASSWORD environment variable
+
+[data]
+writer = "tdms"
+
+[exp]
+handler = "ce"   # CESession: bootstrapped from the Configure Experiments VI
+
+[asana]
+webhook_url = "https://n8n.levylab.org/webhook/32be1239-a29b-4e69-bfec-74d312301c9b"
+
+[hooks]
+on_experiment_start = ["flex_asana.hooks:notify_n8n"]
+on_experiment_end = ["flex_asana.hooks:notify_n8n"]
+
+[drivers]
+enabled = [
+    "levylab.lockin",
+    "levylab.krohn_hite",
+    "levylab.transport_server",
+    "levylab.ppms",
+    "levylab.opticool",
+    "levylab.cryostation",
+]
+
+# -- station definitions (addresses of the Instrument-Framework apps) ---------
+
+[stations.ppms1.instruments.lockin]
+driver = "levylab.lockin"
+address = "tcp://localhost:29170"
+
+[stations.ppms1.instruments.amplifier]
+driver = "levylab.krohn_hite"
+address = "tcp://localhost:29171"
+
+[stations.ppms1.instruments.ppms]
+driver = "levylab.ppms"
+address = "tcp://localhost:29270"

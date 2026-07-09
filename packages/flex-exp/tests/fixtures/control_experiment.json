@@ -1,0 +1,34 @@
+{
+  "Experiment": {
+    "User": "jane.doe",
+    "Device": "SA40001A",
+    "Device Path": "C:\\Data\\Devices\\SA40001A",
+    "Device Description": "Test device (sanitized fixture)",
+    "Instrument": "PPMS-1",
+    "Instruments": [
+      {
+        "Type": "DAQ",
+        "Address": "tcp://localhost:29170",
+        "class path": "C:\\LevyLab\\Drivers\\Instrument.Lockin.lvclass"
+      },
+      {
+        "Type": "Amplifier",
+        "Address": "tcp://localhost:29171",
+        "class path": "C:\\LevyLab\\Drivers\\Instrument.KH7008.lvclass"
+      },
+      {
+        "Type": "Generic",
+        "Address": "",
+        "class path": "C:\\LevyLab\\Instrument Framework\\Instrument Types\\Instrument.Generic.lvclass"
+      }
+    ]
+  },
+  "json": "{\"Device\": {\"User\": \"jane.doe\", \"Device\": \"SA40001A\", \"Time\": \"2026-07-01T10:30:00.000\"}}",
+  "Wiring Configuration": {
+    "Lockin Ch": [1, 2, 3, 4],
+    "KH": {
+      "Electrodes": ["S", "D", "", "TG"],
+      "Labels": ["source", "drain", "", "top gate"]
+    }
+  }
+}

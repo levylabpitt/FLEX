@@ -12,9 +12,8 @@ Pubudu Wijesinghe <pubudu.wijesinghe@levylab.org>). Both conform to
 
 from __future__ import annotations
 
-from flex_protocols import ZMQInstrument
-
 from flex_drivers_levylab._commands import IFMagnetCommands
+from flex_protocols import ZMQInstrument
 
 
 class Oxford1820(ZMQInstrument, IFMagnetCommands):

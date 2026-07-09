@@ -8,9 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from flex_protocols import ZMQInstrument
-
 from flex_drivers_levylab._commands import IFMagnetCommands, IFTemperatureCommands
+from flex_protocols import ZMQInstrument
 
 
 class Opticool(ZMQInstrument, IFTemperatureCommands, IFMagnetCommands):

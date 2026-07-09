@@ -32,12 +32,24 @@
   "flex-drivers": {
     "group": "Drivers",
     "summary": "General instrument drivers, organized by vendor",
-    "drivers": []
+    "drivers": ["srs.sr7270", "colby.pdl", "rotrics.dexarm"]
   },
   "flex-drivers-levylab": {
     "group": "LevyLab Drivers",
     "summary": "Drivers for LevyLab Instrument-Framework apps (ZMQ/JSON-RPC)",
-    "drivers": []
+    "drivers": [
+      "levylab.lockin",
+      "levylab.krohn_hite",
+      "levylab.transport_server",
+      "levylab.ppms",
+      "levylab.opticool",
+      "levylab.cryostation",
+      "levylab.oxford1820",
+      "levylab.oxford_vrm",
+      "levylab.tc_cf",
+      "levylab.tc_mnk",
+      "levylab.aerotech"
+    ]
   },
   "flex-tdms": {
     "group": "Integrations",

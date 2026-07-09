@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flex"
+version = "2.0.0a1"
+description = "FLEX: Framework for Laboratory EXperiments — standard installation"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "flex-core",
+    "flex-protocols[visa]",
+    "flex-db",
+    "flex-exp",
+]
+
+[tool.setuptools]
+packages = []

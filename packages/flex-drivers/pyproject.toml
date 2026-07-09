@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flex-drivers"
+version = "2.0.0a1"
+description = "FLEX instrument drivers (general, organized by vendor)"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["flex-core", "flex-protocols"]
+
+[project.entry-points."flex.drivers"]
+flex-drivers = "flex_drivers:CATALOG"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flex_drivers"]

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flex-drivers-levylab"
+version = "2.0.0a1"
+description = "FLEX drivers for LevyLab Instrument-Framework apps (ZMQ/JSON-RPC)"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["flex-core", "flex-protocols[zmq]"]
+
+[project.entry-points."flex.drivers"]
+flex-drivers-levylab = "flex_drivers_levylab:CATALOG"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flex_drivers_levylab"]

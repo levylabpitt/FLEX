@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flex-tdms"
+version = "2.0.0a1"
+description = "FLEX data writer for the NI TDMS file format"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["flex-core", "npTDMS>=1.9"]
+
+[project.entry-points."flex.writers"]
+tdms = "flex_tdms:TDMSWriter"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flex_tdms"]

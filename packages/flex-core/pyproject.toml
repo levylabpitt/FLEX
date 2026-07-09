@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flex-core"
+version = "2.0.0a1"
+description = "FLEX core: instrument model, data & metadata services, package manager, ecosystem configuration, CLI"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "h5py>=3.10",
+    "pydantic>=2.7",
+    "typer>=0.12",
+    "rich>=13",
+    "platformdirs>=4",
+    "tqdm>=4.66",
+    "tomlkit>=0.12",
+]
+
+[project.scripts]
+flex = "flex.cli:app"
+
+[project.entry-points."flex.writers"]
+hdf5 = "flex.data.hdf5:HDF5Writer"
+
+[project.entry-points."flex.storage"]
+local = "flex.data.storage:LocalStorage"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flex"]

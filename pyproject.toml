@@ -5,6 +5,7 @@ description = "Development workspace for the FLEX platform (not a distributable 
 requires-python = ">=3.11"
 dependencies = [
     "flex",
+    "flex-protocols[all]",
     "flex-drivers",
     "flex-drivers-levylab",
     "flex-nextcloud",

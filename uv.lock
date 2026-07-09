@@ -492,6 +492,7 @@ dependencies = [
     { name = "flex-drivers" },
     { name = "flex-drivers-levylab" },
     { name = "flex-nextcloud" },
+    { name = "flex-protocols", extra = ["all"] },
     { name = "flex-tdms" },
 ]
 
@@ -509,6 +510,7 @@ requires-dist = [
     { name = "flex-drivers", editable = "packages/flex-drivers" },
     { name = "flex-drivers-levylab", editable = "packages/flex-drivers-levylab" },
     { name = "flex-nextcloud", editable = "packages/flex-nextcloud" },
+    { name = "flex-protocols", extras = ["all"], editable = "packages/flex-protocols" },
     { name = "flex-tdms", editable = "packages/flex-tdms" },
 ]
 

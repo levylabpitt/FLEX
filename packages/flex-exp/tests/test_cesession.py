@@ -72,12 +72,23 @@ def test_session_connects_instruments(servers, config):
 
 
 def test_missing_driver_is_actionable(servers, config):
+    import logging
+
+    from flex_db.sqlite import SQLiteStore
+
     ce_path, *_ = servers
     with pytest.raises(RuntimeError, match="No driver for 'Instrument.Lockin.lvclass'"):
         CESession(
             ce_path=ce_path, config=config, driver_registry={}, transport_server=False,
             cell_log=False,
         )
+    # the half-built Experiment was cleaned up: file log detached, record ended
+    handlers = logging.getLogger("flex").handlers
+    assert not [h for h in handlers if isinstance(h, logging.FileHandler)]
+    store = SQLiteStore(path=config.data.root / "flex.db")
+    (rec,) = store.list_experiments()
+    assert rec.end_time is not None
+    store.close()
 
 
 def test_missing_ce_file_is_actionable(tmp_path, config):

@@ -45,13 +45,17 @@ class FakeIFServer:
         while not self._stop.is_set():
             if not self._socket.poll(50, zmq.POLLIN):
                 continue
-            request = json.loads(self._socket.recv_string())
-            self.requests.append(request)
-            if self.delay:
-                time.sleep(self.delay)
-            reply: dict[str, Any] = {"jsonrpc": "2.0", "id": request.get("id")}
+            raw = self._socket.recv_string()
+            reply: dict[str, Any] = {"jsonrpc": "2.0", "id": None}
             try:
+                request = json.loads(raw)
+                reply["id"] = request.get("id")
+                self.requests.append(request)
+                if self.delay:
+                    time.sleep(self.delay)
                 reply["result"] = self._dispatch(request["method"], request.get("params"))
+            except json.JSONDecodeError as e:
+                reply["error"] = {"code": -32700, "message": f"Parse error: {e}"}
             except KeyError as e:
                 reply["error"] = {"code": -32601, "message": f"Unknown method: {e.args[0]}"}
             except Exception as e:

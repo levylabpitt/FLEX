@@ -1,10 +1,20 @@
+from typing import Protocol, runtime_checkable
+
 import h5py
 import numpy as np
 import pytest
 
-from flex.instrument import SimulatedInstrument, capabilities
+from flex.instrument import SimulatedInstrument
 from flex_db.sqlite import SQLiteStore
 from flex_exp import Experiment
+
+
+@runtime_checkable
+class Temperature(Protocol):
+    """A minimal capability protocol, for testing structural conformance."""
+
+    def get_temperature(self) -> float: ...
+    def set_temperature(self, setpoint: float, *, rate: float | None = None) -> None: ...
 
 
 def test_end_to_end_measurement(config, tmp_path):
@@ -56,7 +66,7 @@ def test_instrument_registry_and_capabilities(config):
         exp.add(FakeCryostat, "cryo")
         assert exp.cryo is exp.get("cryo")
         assert exp.get(FakeCryostat) is exp.cryo
-        assert exp.get(capabilities.Temperature) is exp.cryo
+        assert exp.get(Temperature) is exp.cryo
         with pytest.raises(KeyError, match="No instrument 'magnet'"):
             exp.get("magnet")
         with pytest.raises(ValueError, match="already registered"):
@@ -95,6 +105,22 @@ def test_aborted_measurement_is_finalized(config, tmp_path):
     store = SQLiteStore(path=tmp_path / "flex.db")
     (meas,) = store.list_measurements(exp.id)
     assert meas.aborted
+    store.close()
+
+
+def test_writer_close_failure_still_records_end(config, tmp_path):
+    def bad_close():
+        raise OSError("disk full")
+
+    with Experiment("u", config=config) as exp:
+        with exp.measurement("m") as m:
+            m.add_row(x=1.0)
+            m._writer.close = bad_close
+
+    store = SQLiteStore(path=tmp_path / "flex.db")
+    (meas,) = store.list_measurements(exp.id)
+    assert meas.end_time is not None
+    assert not meas.aborted
     store.close()
 
 

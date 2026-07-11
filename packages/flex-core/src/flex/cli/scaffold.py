@@ -26,8 +26,9 @@ class {name}({base}):
         #     get_parser=float, unit="V",
         # )
 
-    # Add instrument methods here. Conform to a capability protocol
-    # (flex.instrument.capabilities) where one fits, e.g. get_temperature().
+    # Add instrument methods here. If your driver package defines capability
+    # protocols (see flex_drivers.levylab.capabilities for an example),
+    # conform to one where it fits, e.g. get_temperature().
 '''
 
 _PYPROJECT = """[build-system]
@@ -41,17 +42,16 @@ description = "FLEX drivers for {label}"
 requires-python = ">=3.11"
 dependencies = ["flex-core", "flex-protocols"]
 
-[project.entry-points."flex.drivers"]
-{name} = "{module}:CATALOG"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/{module}"]
 """
 
 _PKG_INIT = '''"""FLEX drivers for {label}."""
 
-# Driver catalog: {{driver name: "module:Class"}} — the package manager lists
-# these and `flex enable <name>` activates them individually.
+# Driver catalog: {{driver name: "module:Class"}} — `flex enable <name>`
+# activates one individually. To make this package discoverable by name
+# (`flex install {name}`), add it to a catalog.local.json next to your
+# ecosystem config: {{"{name}": {{"registries": {{"drivers": "{module}:CATALOG"}}}}}}.
 CATALOG: dict[str, str] = {{
     # "{prefix}.mydevice": "{module}.mydevice:MyDevice",
 }}
@@ -78,7 +78,7 @@ def create_package(name: str, out: Path) -> Path:
         _PYPROJECT.format(name=name, module=module, label=label), encoding="utf-8"
     )
     (src / "__init__.py").write_text(
-        _PKG_INIT.format(label=label, module=module, prefix=label), encoding="utf-8"
+        _PKG_INIT.format(name=name, label=label, module=module, prefix=label), encoding="utf-8"
     )
     (src / "py.typed").touch()
     return root

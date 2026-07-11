@@ -115,12 +115,14 @@ class FlexConfig(BaseModel):
     def build_writer(self, name: str | None = None):
         """Instantiate a data writer (the configured default unless overridden)."""
         cls = components.resolve("writer", name or self.data.writer)
-        return cls()
+        return cls(**self.data.options())
 
     def build_storage(self):
         """Instantiate the configured storage backend."""
         cls = components.resolve("storage", self.storage.backend)
-        return cls(root=self.data.root, **self.storage.options())
+        opts = self.storage.options()
+        root = opts.pop("root", self.data.root)  # explicit [storage] root wins
+        return cls(root=root, **opts)
 
     def build_bus(self) -> EventBus:
         """Create an EventBus with all configured hooks subscribed."""

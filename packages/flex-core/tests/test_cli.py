@@ -10,7 +10,7 @@ def test_list_packages():
     result = runner.invoke(app, ["list"])
     assert result.exit_code == 0
     assert "flex-core" in result.output
-    assert "flex-dashboard" in result.output
+    assert "flex-datatypes" in result.output
 
 
 def test_version():
@@ -86,20 +86,12 @@ def test_new_package(tmp_path):
     assert "CATALOG" in init
 
 
-def test_dashboard_missing_package(monkeypatch):
-    import builtins
-
-    real_import = builtins.__import__
-
-    def no_dashboard(name, *args, **kwargs):
-        if name == "flex_dashboard":
-            raise ImportError("nope")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", no_dashboard)
+def test_dashboard_launches(monkeypatch):
+    calls = []
+    monkeypatch.setattr("flex.dashboard.run", lambda **kw: calls.append(kw))
     result = runner.invoke(app, ["dashboard"])
-    assert result.exit_code == 1
-    assert "flex install flex-dashboard" in result.output
+    assert result.exit_code == 0
+    assert calls == [{"host": "127.0.0.1", "port": 8756}]
 
 
 def test_instruments_without_stations(monkeypatch, tmp_path):

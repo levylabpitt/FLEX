@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
+import pyvisa
 
 from flex_protocols import VISAInstrument
 
@@ -65,9 +66,7 @@ class SR7270(VISAInstrument):
             doc="Oscillator amplitude.",
         )
 
-    # ------------------------------------------------------------
-    # Framing
-    # ------------------------------------------------------------
+    # -- Framing --------------------------------------------------------------
 
     def query(self, cmd: str) -> tuple[str, int, int]:
         """Send a command and read the framed response.
@@ -90,28 +89,22 @@ class SR7270(VISAInstrument):
         for _ in range(100):  # max 100 chunks to prevent an infinite loop
             try:
                 response += self._resource.read()
-                # Complete termination is \x00<status><overload>.
-                if len(response) >= 3 and "\x00" in response:
-                    null_pos = response.find("\x00")
-                    if len(response) >= null_pos + 3:
-                        break
-            except Exception:
-                break
-
-        if "\x00" in response:
+            except pyvisa.errors.VisaIOError as e:
+                raise TimeoutError(f"{self.name}: incomplete frame: {response!r}") from e
+            # Complete termination is \x00<status><overload>.
             null_pos = response.find("\x00")
-            status = ord(response[null_pos + 1]) & 0x8F if len(response) >= null_pos + 2 else 0
-            overload = ord(response[null_pos + 2]) if len(response) >= null_pos + 3 else 0
-            text = response[:null_pos].rstrip()
+            if null_pos != -1 and len(response) >= null_pos + 3:
+                break
         else:
-            status = overload = 0
-            text = response.rstrip()
+            raise TimeoutError(f"{self.name}: no complete frame in 100 chunks: {response!r}")
+
+        status = ord(response[null_pos + 1]) & 0x8F
+        overload = ord(response[null_pos + 2])
+        text = response[:null_pos].rstrip()
         self.log.debug("reply: %r status=0x%02x overload=0x%02x", text, status, overload)
         return text, status, overload
 
-    # ------------------------------------------------------------
-    # Basic queries
-    # ------------------------------------------------------------
+    # -- Basic queries --------------------------------------------------------
 
     def get_id(self) -> str:
         """Get instrument identification string."""
@@ -129,9 +122,7 @@ class SR7270(VISAInstrument):
             "firmware": self.get_ver(),
         }
 
-    # ------------------------------------------------------------
-    # Reference / Oscillator
-    # ------------------------------------------------------------
+    # -- Reference / Oscillator -----------------------------------------------
 
     def set_ref_frequency(self, freq_hz: float) -> None:
         """Set internal oscillator frequency in Hz."""
@@ -157,9 +148,7 @@ class SR7270(VISAInstrument):
         """Get reference phase shift in degrees."""
         return float(self.query("REFP.")[0])
 
-    # ------------------------------------------------------------
-    # Signal Channel Setup
-    # ------------------------------------------------------------
+    # -- Signal Channel Setup -------------------------------------------------
 
     def set_sensitivity(self, index: int) -> None:
         """Set full-scale sensitivity range (1-27, see manual)."""
@@ -181,9 +170,7 @@ class SR7270(VISAInstrument):
         """Perform Auto-Measure (ASM) operation."""
         self.query("ASM")
 
-    # ------------------------------------------------------------
-    # Single-point Data Acquisition
-    # ------------------------------------------------------------
+    # -- Single-point Data Acquisition ----------------------------------------
 
     def get_x(self) -> float:
         """Get X channel output in Volts."""
@@ -209,9 +196,7 @@ class SR7270(VISAInstrument):
         """Get (Magnitude, Phase) tuple."""
         return self.get_magnitude(), self.get_phase()
 
-    # ------------------------------------------------------------
-    # Continuous Data Acquisition (Curve Buffer)
-    # ------------------------------------------------------------
+    # -- Continuous Data Acquisition (Curve Buffer) ---------------------------
 
     def setup_curve_buffer(self, buffer_size: int) -> None:
         """Set curve buffer length.

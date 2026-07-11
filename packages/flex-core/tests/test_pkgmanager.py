@@ -1,11 +1,12 @@
 import pytest
 
 from flex.pkgmanager import PackageManager, load_catalog
+from flex.pkgmanager.manager import _workspace_root
 
 FAKE_CATALOG = {
     "flex-core": {"group": "Core", "summary": "core", "default": True},
-    "flex-drivers-levylab": {
-        "group": "LevyLab Drivers",
+    "flex-drivers": {
+        "group": "Drivers",
         "summary": "levylab drivers",
         "drivers": ["levylab.lockin", "levylab.ppms"],
     },
@@ -24,7 +25,7 @@ def manager(tmp_path, monkeypatch):
 def test_catalog_loads_real_file():
     catalog = load_catalog()
     assert "flex-core" in catalog
-    assert catalog["flex-tdms"]["provides"]["flex.writers"] == ["tdms"]
+    assert catalog["flex-datatypes"]["provides"]["writer"] == ["hdf5", "tdms"]
 
 
 def test_list_packages_marks_installed(manager):
@@ -38,12 +39,38 @@ def test_install_skips_present(manager):
     assert manager.commands == []
 
 
+def test_install_with_extras_runs_even_if_base_installed(manager, monkeypatch):
+    monkeypatch.setattr("flex.pkgmanager.manager.installed_version", lambda p: "2.0.0")
+    manager.install("flex-db[postgres]")
+    (cmd,) = manager.commands
+    assert "install" in cmd
+
+
 def test_install_runs_installer(manager, monkeypatch):
     monkeypatch.setattr("flex.pkgmanager.manager.installed_version", lambda p: None)
-    manager.install("flex-tdms")
+    manager.install("flex-datatypes")
     (cmd,) = manager.commands
-    assert cmd[-1] == "flex-tdms"
     assert "install" in cmd
+
+
+def test_install_uses_editable_path_for_workspace_members(manager, monkeypatch):
+    """Workspace members install editable, not by (unpublished) name."""
+    monkeypatch.setattr("flex.pkgmanager.manager.installed_version", lambda p: None)
+    manager.install("flex-datatypes")
+    (cmd,) = manager.commands
+    assert cmd[-2:] == ["-e", str(_workspace_root() / "packages" / "flex-datatypes")]
+
+
+def test_install_falls_back_to_github_source_outside_workspace(manager, monkeypatch):
+    """Outside a checkout, install from GitHub source, not a bare name."""
+    monkeypatch.setattr("flex.pkgmanager.manager.installed_version", lambda p: None)
+    monkeypatch.setattr("flex.pkgmanager.manager._workspace_root", lambda: None)
+    manager.install("flex-nextcloud")
+    (cmd,) = manager.commands
+    assert cmd[-1] == (
+        "flex-nextcloud @ git+https://github.com/levylabpitt/flex.git"
+        "@v2#subdirectory=packages/flex-nextcloud"
+    )
 
 
 def test_list_drivers_from_catalog(manager, monkeypatch):
@@ -72,7 +99,7 @@ def test_enable_installs_missing_package(manager, monkeypatch):
     monkeypatch.setattr("flex.pkgmanager.manager.installed_version", lambda p: None)
     manager.enable_driver("levylab.ppms")
     (cmd,) = manager.commands
-    assert cmd[-1] == "flex-drivers-levylab"
+    assert cmd[-2:] == ["-e", str(_workspace_root() / "packages" / "flex-drivers")]
 
 
 def test_unknown_driver_message(manager):

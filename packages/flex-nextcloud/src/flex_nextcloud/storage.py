@@ -76,6 +76,8 @@ class NextcloudStorage(StorageBackend):
     def open_local(self, pointer: FilePointer) -> Path:
         """Prefer the local cache; download from Nextcloud if it is gone."""
         prefix = f"{self.url}/remote.php/dav/files/{self.user}/{self.remote_root}/"
+        if not pointer.uri.startswith(prefix):
+            raise ValueError(f"Not a file under this Nextcloud storage ({prefix}): {pointer.uri}")
         relative = pointer.uri.removeprefix(prefix)
         local = self.root / Path(relative)
         if local.exists():
@@ -86,6 +88,9 @@ class NextcloudStorage(StorageBackend):
         local.write_bytes(response.content)
         log.info("Downloaded %s", pointer.uri)
         return local
+
+    def close(self) -> None:
+        self._session.close()
 
     # -- internals ---------------------------------------------------------
 

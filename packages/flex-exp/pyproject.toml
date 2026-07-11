@@ -10,9 +10,5 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["flex-core", "flex-db"]
 
-[project.entry-points."flex.handlers"]
-default = "flex_exp.experiment:Experiment"
-ce = "flex_exp.sessions.ce:CESession"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_exp"]

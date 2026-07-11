@@ -4,13 +4,9 @@ This is the remote-API dialect of the LevyLab Instrument Framework (LabVIEW
 apps exposing ACK / IDN / HELP plus instrument-specific methods), but works
 with any JSON-RPC-over-ZMQ endpoint.
 
-Improvements over FLEX v1:
-
-* a JSON-RPC ``error`` response raises :class:`ZMQInstrumentError` instead of
-  silently returning ``None``;
-* a timeout automatically recreates the REQ socket (a REQ socket that missed
-  its reply is stuck forever otherwise) — the next call works again;
-* unique request ids, and no fixed sleep per message.
+A JSON-RPC ``error`` response raises :class:`ZMQInstrumentError`; a timeout
+recreates the REQ socket (a REQ socket that missed its reply is stuck forever
+otherwise) so the next call works again.
 """
 
 from __future__ import annotations
@@ -60,7 +56,11 @@ class ZMQInstrument(Instrument):
         self._ids = itertools.count(1)
         self._connect()
         if connect_check:
-            self.call("ACK")
+            try:
+                self.call("ACK")
+            except Exception:
+                self.close()
+                raise
         self.log.info("Connected: %s", address)
 
     # -- transport -----------------------------------------------------------

@@ -11,5 +11,6 @@ The standard FLEX installation. Installing this metapackage gives you:
 pip install flex
 ```
 
-Optional packages (`flex install <name>` or pip): `flex-drivers`, `flex-drivers-levylab`,
-`flex-nextcloud`, `flex-asana`, `flex-tdms`, `flex-dashboard`.
+Optional packages (`flex install <name>` or pip): `flex-drivers` (including
+LevyLab), `flex-datatypes`, `flex-nextcloud`, `flex-asana`. The dashboard is
+part of `flex-core` — launch it with `flex dashboard`.

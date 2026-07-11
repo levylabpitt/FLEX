@@ -87,10 +87,13 @@ def _resolve_manifest(target: str) -> Path:
     path = Path(target)
     if path.exists():
         return path
-    candidate = Path("ecosystems") / f"{target}.toml"
-    if candidate.exists():
-        return candidate
-    raise typer.BadParameter(f"No manifest at '{target}' (also tried {candidate})")
+    from flex.pkgmanager import ecosystems
+
+    bundled = ecosystems.resolve(target)
+    if bundled is not None:
+        return bundled
+    known = ", ".join(e["name"] for e in ecosystems.list_bundled())
+    raise typer.BadParameter(f"No manifest at '{target}' (bundled ecosystems: {known})")
 
 
 @ecosystem_app.command()
@@ -250,6 +253,8 @@ def new_package(
     """Generate a FLEX package skeleton (installable, with a driver catalog)."""
     from flex.cli.scaffold import create_package
 
+    if (out / name).exists():
+        raise typer.BadParameter(f"{out / name} already exists")
     root = create_package(name, out)
     console.print(f"[green]Created[/] {root} (install with: pip install -e {root})")
 
@@ -259,12 +264,9 @@ def dashboard(
     host: str = typer.Option("127.0.0.1"),
     port: int = typer.Option(8756),
 ):
-    """Launch the FLEX dashboard (requires flex-dashboard)."""
-    try:
-        from flex_dashboard import run
-    except ImportError as e:
-        console.print("[red]flex-dashboard is not installed.[/] Run: flex install flex-dashboard")
-        raise typer.Exit(1) from e
+    """Launch the FLEX dashboard."""
+    from flex.dashboard import run
+
     run(host=host, port=port)
 
 

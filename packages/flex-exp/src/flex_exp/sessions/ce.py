@@ -16,8 +16,8 @@ Usage::
         exp.DAQ.set_ao_dc(1, 0.5)      # instruments attach by their CE "Type"
         ...
 
-Requires the ``flex-drivers-levylab`` package (``flex install
-flex-drivers-levylab``), activated by the ``levylab`` ecosystem.
+Requires the ``flex-drivers`` package (``flex install flex-drivers``),
+activated by the ``levylab`` ecosystem.
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ class CESession(Experiment):
         timeout: Seconds before a slow initialization prints a warning.
         transport_server: Also connect the (implicit) Transport server app.
         driver_registry: Override the LabVIEW-class -> driver mapping
-            (defaults to the flex-drivers-levylab registry).
+            (defaults to the flex_drivers.levylab registry).
     """
 
     def __init__(
@@ -144,6 +144,10 @@ class CESession(Experiment):
             if transport_server:
                 self._connect_transport_server()
             self._connect_instruments(self.ce.instruments)
+        except BaseException:
+            self.close_all()
+            self.end()
+            raise
         finally:
             watchdog.cancel()
 
@@ -193,7 +197,7 @@ class CESession(Experiment):
                 raise RuntimeError(
                     f"No driver for '{lv_class}' ({name}). Enable it with "
                     f"`flex list --drivers` / `flex enable <driver>`, or add it to "
-                    "flex-drivers-levylab."
+                    "flex_drivers.levylab."
                 )
             cls = load_ref(ref) if isinstance(ref, str) else ref
             driver = cls(name, address) if address else cls(name)
@@ -266,12 +270,12 @@ class CESession(Experiment):
 
 def _levylab_registry() -> dict[str, str]:
     try:
-        from flex_drivers_levylab import LVCLASS_REGISTRY
+        from flex_drivers.levylab import lvclass_registry
     except ImportError as e:
         raise ImportError(
             "CESession needs the LevyLab drivers. Install them with: "
-            "flex install flex-drivers-levylab   (or: flex ecosystem use levylab)"
+            "flex install flex-drivers   (or: flex ecosystem use levylab)"
         ) from e
-    registry = dict(LVCLASS_REGISTRY)
-    registry.setdefault("__transport_server__", "flex_drivers_levylab.transport_server:TransportServer")
+    registry = lvclass_registry()
+    registry.setdefault("__transport_server__", "flex_drivers.levylab.transport_server:TransportServer")
     return registry

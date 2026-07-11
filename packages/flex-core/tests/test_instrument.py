@@ -1,6 +1,22 @@
+from typing import Protocol, runtime_checkable
+
 import pytest
 
-from flex.instrument import Enum, Numbers, SimulatedInstrument, capabilities
+from flex.instrument import Enum, Numbers, SimulatedInstrument
+
+
+@runtime_checkable
+class Temperature(Protocol):
+    """A minimal capability protocol, for testing structural conformance."""
+
+    def get_temperature(self) -> float: ...
+    def set_temperature(self, setpoint: float, *, rate: float | None = None) -> None: ...
+
+
+@runtime_checkable
+class Magnet(Protocol):
+    def get_field(self) -> float: ...
+    def set_field(self, setpoint: float, *, rate: float | None = None) -> None: ...
 
 
 def test_command_parameters():
@@ -32,6 +48,16 @@ def test_validators():
         mode("Sawtooth")
     mode("Square")
     assert mode() == "Square"
+
+
+def test_numbers_accepts_numpy_scalars():
+    import numpy as np
+
+    vals = Numbers(-1, 1)
+    vals.validate(np.int64(1))
+    vals.validate(np.float32(0.5))
+    with pytest.raises(TypeError):
+        vals.validate(True)
 
 
 def test_unreadable_unwritable_parameters():
@@ -74,8 +100,8 @@ def test_capability_conformance():
             pass
 
     cryo = FakeCryostat()
-    assert isinstance(cryo, capabilities.Temperature)
-    assert not isinstance(cryo, capabilities.Magnet)
+    assert isinstance(cryo, Temperature)
+    assert not isinstance(cryo, Magnet)
 
 
 def test_context_manager_and_reprs():

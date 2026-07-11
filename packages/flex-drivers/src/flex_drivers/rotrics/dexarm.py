@@ -50,11 +50,12 @@ class DexArm(SerialInstrument):
             return
         while True:
             serial_str = self._serial.readline().decode("utf-8")
-            if len(serial_str) > 0:
-                if serial_str.find("ok") > -1:
-                    self.log.debug("read ok")
-                    break
-                self.log.debug("read: %s", serial_str.strip())
+            if not serial_str:
+                raise TimeoutError(f"{self.name}: no 'ok' before read timeout")
+            if serial_str.find("ok") > -1:
+                self.log.debug("read ok")
+                break
+            self.log.debug("read: %s", serial_str.strip())
 
     def go_home(self) -> None:
         """Go to the home position and enable the motors.
@@ -84,7 +85,7 @@ class DexArm(SerialInstrument):
             + str(acceleration)
             + "T"
             + str(travel_acceleration)
-            + "T"
+            + "R"
             + str(retract_acceleration)
             + "\r\n"
         )
@@ -111,17 +112,18 @@ class DexArm(SerialInstrument):
         module_type = None
         while True:
             serial_str = self._serial.readline().decode("utf-8")
-            if len(serial_str) > 0:
-                if serial_str.find("PEN") > -1:
-                    module_type = "PEN"
-                if serial_str.find("LASER") > -1:
-                    module_type = "LASER"
-                if serial_str.find("PUMP") > -1:
-                    module_type = "PUMP"
-                if serial_str.find("3D") > -1:
-                    module_type = "3D"
-                if serial_str.find("ok") > -1:
-                    return module_type
+            if not serial_str:
+                raise TimeoutError(f"{self.name}: no 'ok' before read timeout")
+            if serial_str.find("PEN") > -1:
+                module_type = "PEN"
+            if serial_str.find("LASER") > -1:
+                module_type = "LASER"
+            if serial_str.find("PUMP") > -1:
+                module_type = "PUMP"
+            if serial_str.find("3D") > -1:
+                module_type = "3D"
+            if serial_str.find("ok") > -1:
+                return module_type
 
     def move_to(
         self,
@@ -138,11 +140,11 @@ class DexArm(SerialInstrument):
         Adds a linear move to the queue, performed after all previous moves
         complete.
 
+        Position is in millimeters by default (inches after G20); the center
+        of the y axis is 300 mm.
+
         Args:
             mode: ``"G1"`` (default) or ``"G0"`` for fast mode.
-            x, y, z, e: The position, in millimeters by default. Units may be
-                set to inches by G20. Note that the center of the y axis is
-                300 mm.
             feedrate: Sets the feedrate for all subsequent moves.
             wait: Block until the arm acknowledges the move.
         """
@@ -166,10 +168,9 @@ class DexArm(SerialInstrument):
         feedrate: int = 2000,
         wait: bool = True,
     ) -> None:
-        """Fast move to a cartesian position, i.e. in mode G0.
+        """Fast move to a cartesian position (mode G0), in millimeters.
 
         Args:
-            x, y, z: The position, in millimeters by default.
             feedrate: Sets the feedrate for all subsequent moves.
             wait: Block until the arm acknowledges the move.
         """
@@ -197,35 +198,28 @@ class DexArm(SerialInstrument):
         x, y, z, e, a, b, c = None, None, None, None, None, None, None
         while True:
             serial_str = self._serial.readline().decode("utf-8")
-            if len(serial_str) > 0:
-                if serial_str.find("X:") > -1:
-                    temp = re.findall(r"[-+]?\d*\.\d+|\d+", serial_str)
-                    x = float(temp[0])
-                    y = float(temp[1])
-                    z = float(temp[2])
-                    e = float(temp[3])
-                if serial_str.find("DEXARM Theta") > -1:
-                    temp = re.findall(r"[-+]?\d*\.\d+|\d+", serial_str)
-                    a = float(temp[0])
-                    b = float(temp[1])
-                    c = float(temp[2])
-                if serial_str.find("ok") > -1:
-                    return x, y, z, e, a, b, c
+            if not serial_str:
+                raise TimeoutError(f"{self.name}: no 'ok' before read timeout")
+            if serial_str.find("X:") > -1:
+                temp = re.findall(r"[-+]?\d*\.\d+|\d+", serial_str)
+                x = float(temp[0])
+                y = float(temp[1])
+                z = float(temp[2])
+                e = float(temp[3])
+            if serial_str.find("DEXARM Theta") > -1:
+                temp = re.findall(r"[-+]?\d*\.\d+|\d+", serial_str)
+                a = float(temp[0])
+                b = float(temp[1])
+                c = float(temp[2])
+            if serial_str.find("ok") > -1:
+                return x, y, z, e, a, b, c
 
     def delay_ms(self, value: int) -> None:
-        """Pause the command queue and wait for a period of time in ms.
-
-        Args:
-            value: Time in ms.
-        """
+        """Pause the command queue for ``value`` milliseconds."""
         self._send_cmd("G4 P" + str(value) + "\r")
 
     def delay_s(self, value: int) -> None:
-        """Pause the command queue and wait for a period of time in s.
-
-        Args:
-            value: Time in s.
-        """
+        """Pause the command queue for ``value`` seconds."""
         self._send_cmd("G4 S" + str(value) + "\r")
 
     def soft_gripper_pick(self) -> None:
@@ -282,7 +276,7 @@ class DexArm(SerialInstrument):
         """Move the belt backward."""
         self._send_cmd("M2012 F" + str(speed) + "D1\r")
 
-    def conveyor_belt_stop(self, speed: int = 0) -> None:
+    def conveyor_belt_stop(self) -> None:
         """Stop the belt."""
         self._send_cmd("M2013\r")
 

@@ -36,7 +36,7 @@ def __getattr__(name: str):
         try:
             return getattr(import_module(module), name)
         except ImportError as e:
-            if dependency and dependency in str(e).replace("-", ""):
+            if dependency and e.name in (dependency, extra):
                 raise ImportError(
                     f"{name} requires {dependency}. Install it with: "
                     f"pip install flex-protocols[{extra}]"

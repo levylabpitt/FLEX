@@ -16,6 +16,21 @@ from typing import Any
 
 @lru_cache(maxsize=1)
 def load_catalog() -> dict[str, dict[str, Any]]:
-    """Return the catalog as {package name: info dict}."""
+    """Return the catalog as {package name: info dict}.
+
+    Starts from the built-in catalog shipped with flex-core, then merges in
+    an optional project-local ``catalog.local.json`` next to the active
+    ecosystem config, if one exists -- lets a lab register its own packages
+    and drivers without editing an installed package.
+    """
     raw = files("flex.pkgmanager").joinpath("catalog.json").read_text(encoding="utf-8")
-    return json.loads(raw)
+    catalog: dict[str, dict[str, Any]] = json.loads(raw)
+
+    from flex.ecosystem import find_config
+
+    config_path = find_config()
+    if config_path is not None:
+        local_path = config_path.parent / "catalog.local.json"
+        if local_path.exists():
+            catalog.update(json.loads(local_path.read_text(encoding="utf-8")))
+    return catalog

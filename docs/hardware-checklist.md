@@ -5,8 +5,8 @@ box before switching production work to v2.
 
 ## Setup
 - [ ] Fresh venv: `pip install -e` the workspace packages (or `uv sync`)
-- [ ] `flex ecosystem use ecosystems/levylab.toml` completes; `flex ecosystem show` looks right
-- [ ] `NEXTCLOUD_PASSWORD` set; `flex ecosystem validate ecosystems/levylab.toml` all green
+- [ ] `flex ecosystem use levylab` completes; `flex ecosystem show` looks right
+- [ ] `NEXTCLOUD_PASSWORD` set; `flex ecosystem validate levylab` all green
 
 ## Instruments
 - [ ] `flex instruments --probe` reaches every configured IF app
@@ -26,8 +26,8 @@ box before switching production work to v2.
 - [ ] n8n webhook fires on experiment start/end (check Asana)
 
 ## UX
-- [ ] `flex dashboard`: packages page installs/enables a driver; experiments
-      page shows the runs from today
+- [ ] `flex dashboard`: Drivers tab installs/enables a driver; Experiments
+      tab shows the runs from today
 - [ ] Jupyter: `CESession()` renders the summary card; cells are logged as notes
 
 ## Cleanup decisions to confirm with the lab

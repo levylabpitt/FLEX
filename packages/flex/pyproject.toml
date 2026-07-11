@@ -1,4 +1,5 @@
 [build-system]
+# setuptools, not hatchling: hatchling can't build an empty metapackage.
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
@@ -14,6 +15,7 @@ dependencies = [
     "flex-protocols[visa]",
     "flex-db",
     "flex-exp",
+    "flex-datatypes",
 ]
 
 [tool.setuptools]

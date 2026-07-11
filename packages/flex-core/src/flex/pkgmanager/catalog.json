@@ -1,11 +1,13 @@
 {
   "flex-core": {
     "group": "Core",
-    "summary": "Instrument model, data & metadata services, package manager, CLI",
+    "summary": "Instrument model, data & metadata services, package manager, dashboard, CLI",
     "default": true,
     "provides": {
-      "flex.writers": ["hdf5"],
-      "flex.storage": ["local"]
+      "storage": ["local"]
+    },
+    "registries": {
+      "storage": "flex.data:STORAGE"
     }
   },
   "flex-protocols": {
@@ -18,26 +20,24 @@
     "summary": "Metadata database backends: SQLite (default) and PostgreSQL",
     "default": true,
     "provides": {
-      "flex.db_backends": ["sqlite", "postgres"]
+      "db": ["sqlite", "postgres"]
+    },
+    "registries": {
+      "db": "flex_db:DB_BACKENDS"
     }
   },
   "flex-exp": {
     "group": "Core",
     "summary": "Experiment handling: Experiment, Measurement, Scan, lab sessions",
-    "default": true,
-    "provides": {
-      "flex.handlers": ["default", "ce"]
-    }
+    "default": true
   },
   "flex-drivers": {
     "group": "Drivers",
-    "summary": "General instrument drivers, organized by vendor",
-    "drivers": ["srs.sr7270", "colby.pdl", "rotrics.dexarm"]
-  },
-  "flex-drivers-levylab": {
-    "group": "LevyLab Drivers",
-    "summary": "Drivers for LevyLab Instrument-Framework apps (ZMQ/JSON-RPC)",
+    "summary": "Instrument drivers, organized by vendor (including LevyLab)",
     "drivers": [
+      "srs.sr7270",
+      "colby.pdl",
+      "rotrics.dexarm",
       "levylab.lockin",
       "levylab.krohn_hite",
       "levylab.transport_server",
@@ -49,28 +49,34 @@
       "levylab.tc_cf",
       "levylab.tc_mnk",
       "levylab.aerotech"
-    ]
+    ],
+    "registries": {
+      "drivers": "flex_drivers:CATALOG"
+    }
   },
-  "flex-tdms": {
+  "flex-datatypes": {
     "group": "Integrations",
-    "summary": "TDMS data file writer (LabVIEW-compatible)",
+    "summary": "HDF5 and TDMS (LabVIEW-compatible) data file writers",
+    "default": true,
     "provides": {
-      "flex.writers": ["tdms"]
+      "writer": ["hdf5", "tdms"]
+    },
+    "registries": {
+      "writer": "flex_datatypes:WRITERS"
     }
   },
   "flex-nextcloud": {
     "group": "Integrations",
-    "summary": "Nextcloud storage backend (WebDAV upload + share links)",
+    "summary": "Nextcloud storage backend (WebDAV upload)",
     "provides": {
-      "flex.storage": ["nextcloud"]
+      "storage": ["nextcloud"]
+    },
+    "registries": {
+      "storage": "flex_nextcloud:STORAGE"
     }
   },
   "flex-asana": {
     "group": "Integrations",
     "summary": "Asana project-tracking hooks (via n8n webhooks)"
-  },
-  "flex-dashboard": {
-    "group": "Apps",
-    "summary": "Local web UI: package manager, configurator, experiment browser"
   }
 }

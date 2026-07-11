@@ -7,7 +7,7 @@ from flex.ecosystem import FlexConfig, default_data_root, find_config, load_conf
 MANIFEST = """
 [ecosystem]
 name = "testlab"
-packages = ["flex-tdms"]
+packages = ["flex-datatypes"]
 
 [lab]
 name = "testlab"
@@ -52,7 +52,7 @@ def test_load_manifest(tmp_path):
     cfg = load_config(path)
     assert cfg.source == path
     assert cfg.ecosystem.name == "testlab"
-    assert cfg.ecosystem.packages == ["flex-tdms"]
+    assert cfg.ecosystem.packages == ["flex-datatypes"]
     assert cfg.db.backend == "postgres"
     assert cfg.db.options() == {"dsn": "postgresql://example.org/lab"}
     assert cfg.data.root == Path("D:/data")

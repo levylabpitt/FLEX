@@ -12,11 +12,14 @@ package is missing installs that package first.
 
 from __future__ import annotations
 
+import os
+import re
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 
@@ -28,6 +31,24 @@ from flex.log import get_logger
 from flex.pkgmanager.catalog import load_catalog
 
 log = get_logger("pkgmanager")
+
+#: Where to fetch an official package from when it isn't found in this dev
+#: workspace (e.g. a real install, not `uv sync`). Not published anywhere
+#: else, so this is a direct source install rather than a registry name.
+#: Override with $FLEX_SOURCE_REF if you're tracking a different branch/tag.
+SOURCE_REPO = "levylabpitt/flex"
+SOURCE_BRANCH = os.environ.get("FLEX_SOURCE_REF", "v2")
+
+
+@lru_cache(maxsize=1)
+def _workspace_root() -> Path | None:
+    """The uv workspace root this code is running from, if any."""
+    here = Path(__file__).resolve()
+    for candidate in (here, *here.parents):
+        pyproject = candidate / "pyproject.toml"
+        if pyproject.is_file() and "[tool.uv.workspace]" in pyproject.read_text(encoding="utf-8"):
+            return candidate
+    return None
 
 
 @dataclass
@@ -42,7 +63,7 @@ class PackageInfo:
 @dataclass
 class DriverInfo:
     name: str  # e.g. "levylab.lockin"
-    package: str  # e.g. "flex-drivers-levylab"
+    package: str  # e.g. "flex-drivers"
     available: bool  # parent package installed
     enabled: bool  # listed in [drivers] enabled
 
@@ -52,6 +73,11 @@ def installed_version(package: str) -> str | None:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
         return None
+
+
+def _base_name(name: str) -> str:
+    """Strip a `[extra]` suffix, e.g. "flex-db[postgres]" -> "flex-db"."""
+    return re.sub(r"\[.*\]$", "", name)
 
 
 class PackageManager:
@@ -79,15 +105,32 @@ class PackageManager:
         ]
 
     def install(self, *packages: str) -> None:
-        missing = [p for p in packages if installed_version(p) is None]
+        # A name with extras always installs: the base package being present
+        # says nothing about the extra's dependencies.
+        missing = [p for p in packages if p != _base_name(p) or installed_version(p) is None]
         if not missing:
             log.info("Nothing to install: %s already present", ", ".join(packages))
             return
         log.info("Installing: %s", ", ".join(missing))
-        self._run(self._installer_command("install", missing))
+        args = [arg for p in missing for arg in self._install_args(p)]
+        self._run(self._installer_command("install", args))
+
+    @staticmethod
+    def _install_args(name: str) -> list[str]:
+        """Args for installing ``name`` (may carry a ``[extra]`` suffix): an
+        editable workspace path in a dev checkout, else GitHub source."""
+        base = _base_name(name)
+        extras = name[len(base):]
+        root = _workspace_root()
+        if root and (root / "packages" / base / "pyproject.toml").is_file():
+            return ["-e", f"{root / 'packages' / base}{extras}"]
+        return [
+            f"{name} @ git+https://github.com/{SOURCE_REPO}.git"
+            f"@{SOURCE_BRANCH}#subdirectory=packages/{base}"
+        ]
 
     def remove(self, *packages: str) -> None:
-        present = [p for p in packages if installed_version(p) is not None]
+        present = [_base_name(p) for p in packages if installed_version(_base_name(p)) is not None]
         if not present:
             return
         log.info("Removing: %s", ", ".join(present))
@@ -131,34 +174,34 @@ class PackageManager:
 
     def resolve_driver(self, name: str) -> type:
         """Load the instrument class for a driver name like ``"levylab.lockin"``."""
-        for registry in components.available("drivers").values():
-            reg = registry.load()
-            if name in reg:
-                return components.load_ref(reg[name]) if isinstance(reg[name], str) else reg[name]
+        try:
+            return components.resolve("drivers", name)
+        except components.ComponentError:
+            pass
         info = self._find_driver(name, missing_ok=True)
         hint = f" Install it with: flex install {info.package}" if info else ""
         raise components.ComponentError(f"Driver '{name}' is not installed.{hint}")
 
     # -- internals ---------------------------------------------------------
 
-    def _find_driver(self, name: str, *, missing_ok: bool = False) -> DriverInfo:
+    def _find_driver(self, name: str, *, missing_ok: bool = False) -> DriverInfo | None:
         for info in self.list_drivers():
             if info.name == name:
                 return info
         if missing_ok:
-            return None  # type: ignore[return-value]
+            return None
         known = ", ".join(d.name for d in self.list_drivers()) or "none"
         raise components.ComponentError(f"Unknown driver '{name}'. Known drivers: {known}")
 
     def _package_registry(self, package: str) -> dict | None:
-        module = package.replace("-", "_")
-        for registry in components.available("drivers").values():
-            if registry.module.startswith(module):
-                try:
-                    return registry.load()
-                except Exception as e:
-                    log.warning("Driver registry of %s failed to load: %s", package, e)
-        return None
+        ref = load_catalog().get(package, {}).get("registries", {}).get("drivers")
+        if not ref:
+            return None
+        try:
+            return components.load_ref(ref)
+        except components.ComponentError as e:
+            log.warning("Driver registry of %s failed to load: %s", package, e)
+            return None
 
     def _active_config_file(self) -> Path:
         if self._config_path:

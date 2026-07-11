@@ -1,14 +1,19 @@
 # FLEX — Framework for Laboratory EXperiments
 
-![](/docs/flex-logo-v1.png)
+![](/docs/flex-logo-v2.png)
 
 FLEX is a modular Python platform for running laboratory experiments: instrument
 control, autonomous sweeps, data files, experiment records, and lab-specific
 integrations — with one-command setup for new users.
 
+```powershell
+irm flex.levylab.org/install.ps1 | iex
 ```
-pip install flex
-```
+
+(Windows; see [`install.ps1`](install.ps1). Already have Python + a venv you
+manage yourself? `pip install -e packages/flex-core -e packages/flex-protocols[visa]
+-e packages/flex-db -e packages/flex-datatypes -e packages/flex-exp -e packages/flex`
+from a clone works too — see [Development](#development).)
 
 ```python
 from flex import Experiment, Scan, sweep, SimulatedInstrument
@@ -32,31 +37,32 @@ needed. Swap `SimulatedInstrument` for a real one to run it on hardware.
 
 ## Packages
 
-FLEX is a collection of small packages; `pip install flex` gives you the four
-core ones. Everything else is opt-in via the package manager.
+FLEX is a collection of small packages; the installer gives you the five
+default ones. Everything else is opt-in via the package manager.
 
 | Package | What it is | Installed by default |
 |---|---|---|
-| `flex-core` | Instrument model, data & metadata services, package manager, ecosystem configuration, CLI | ✅ |
+| `flex-core` | Instrument model, data & metadata services, package manager, dashboard, CLI | ✅ |
 | `flex-protocols` | `VISAInstrument`, `TCPInstrument`, `SerialInstrument`, `ZMQInstrument` base classes | ✅ |
 | `flex-db` | Metadata database backends: SQLite (default), PostgreSQL | ✅ |
 | `flex-exp` | `Experiment`, `Measurement`, `Scan`, lab sessions (`CESession`) | ✅ |
-| `flex-drivers` | General instrument drivers, by vendor | opt-in |
-| `flex-drivers-levylab` | Drivers for LevyLab Instrument-Framework apps (ZMQ) | opt-in |
-| `flex-tdms` | TDMS (LabVIEW-compatible) data files | opt-in |
+| `flex-datatypes` | HDF5 (default format) and TDMS (LabVIEW-compatible) data writers | ✅ |
+| `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | opt-in |
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
 | `flex-asana` | Asana notifications via n8n | opt-in |
-| `flex-dashboard` | Local web UI: package manager, configurator, experiment browser | opt-in |
 
 ## Ecosystems
 
 An **ecosystem** is a lab's complete FLEX setup in one TOML manifest: which
 packages to install and how everything is configured (database, storage, data
-format, hooks, stations, enabled drivers). Manifests live in
-[`ecosystems/`](ecosystems/).
+format, hooks, stations, enabled drivers). `default` (generic, no config
+needed) ships with `flex-core`; lab-specific ones like `levylab` live in this
+repo's own [`ecosystems/`](ecosystems/) folder — forks are free to delete or
+replace them without touching `flex-core` at all. Activate one by name, or
+point at your own manifest file.
 
 ```
-flex ecosystem use ecosystems/levylab.toml
+flex ecosystem use levylab
 ```
 
 installs the LevyLab stack (Instrument-Framework drivers, PostgreSQL, TDMS,
@@ -67,7 +73,7 @@ productive in one command; a new lab writes one file.
 
 ```
 flex list [--drivers]        # what's available / installed / enabled
-flex install flex-tdms       # add a package
+flex install flex-datatypes  # add a package
 flex enable levylab.lockin   # enable one driver (auto-installs its package)
 flex ecosystem show          # the active configuration
 flex experiments             # browse recorded experiments

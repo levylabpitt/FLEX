@@ -8,10 +8,10 @@ through n8n.
 
 ## Setup (once per machine)
 
-```
-pip install flex
-flex ecosystem use ecosystems/levylab.toml
-set NEXTCLOUD_PASSWORD=...        # or add to the machine environment
+```powershell
+irm flex.levylab.org/install.ps1 | iex
+flex ecosystem use levylab
+$env:NEXTCLOUD_PASSWORD = '...'   # or add to the machine environment
 ```
 
 ## CESession
@@ -45,7 +45,7 @@ Every IF driver is a `ZMQInstrument`; drivers are thin, and raw access is
 always available:
 
 ```python
-from flex_drivers_levylab.lockin import Lockin
+from flex_drivers.levylab.lockin import Lockin
 
 with Lockin("lockin", "tcp://localhost:29170") as li:
     li.set_ao_amplitude(1, 0.1)         # sends setAO_Amplitude

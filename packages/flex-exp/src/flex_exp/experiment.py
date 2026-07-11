@@ -200,6 +200,12 @@ class Experiment:
                 self.db.close()
             except Exception:
                 pass
+        close = getattr(self.storage, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
         remove_log_handler(self._log_handler)
 
     def __enter__(self):

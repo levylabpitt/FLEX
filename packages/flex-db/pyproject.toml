@@ -13,9 +13,5 @@ dependencies = ["flex-core"]
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.1"]
 
-[project.entry-points."flex.db_backends"]
-sqlite = "flex_db.sqlite:SQLiteStore"
-postgres = "flex_db.postgres:PostgresStore"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_db"]

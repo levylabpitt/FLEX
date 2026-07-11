@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLEX Dashboard</title>
+<style>
+  :root {
+    --bg: #0d0f13;
+    --panel: #14171d;
+    --panel-2: #191c23;
+    --border: #262a33;
+    --border-soft: #1d2029;
+    --text: #e4e6ea;
+    --text-dim: #9198a3;
+    --text-faint: #565c68;
+    --accent: #6e9bff;
+    --accent-soft: rgba(110, 155, 255, .12);
+    --danger: #ef5a5a;
+    --danger-soft: rgba(239, 90, 90, .12);
+    --success: #3fbf7f;
+    --success-soft: rgba(63, 191, 127, .12);
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; gap: 32px;
+    padding: 0 28px; height: 56px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  header .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  header .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  nav { display: flex; gap: 2px; height: 100%; }
+  nav button {
+    background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim);
+    font: inherit; font-size: 13px; padding: 0 14px; height: 100%; cursor: pointer;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--text); border-color: var(--accent); }
+  .spacer { flex: 1; }
+  main { padding: 28px; max-width: 1180px; margin: 0 auto; }
+  section + section { margin-top: 32px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  h2 {
+    font-size: 11px; letter-spacing: .06em; color: var(--text-faint); text-transform: uppercase;
+    font-weight: 600; margin: 0;
+  }
+  .search {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius); padding: 7px 11px; font: inherit; font-size: 13px;
+    width: 260px; outline: none;
+  }
+  .search:focus { border-color: var(--accent); }
+  .search::placeholder { color: var(--text-faint); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 9px 14px; font-size: 10.5px; letter-spacing: .05em;
+    color: var(--text-faint); text-transform: uppercase; font-weight: 600;
+    border-bottom: 1px solid var(--border); background: var(--panel-2);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border-soft); color: var(--text-dim); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255, 255, 255, .015); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  code {
+    font: 12px/1 ui-monospace, "SF Mono", Consolas, monospace; color: var(--text-dim);
+    background: var(--panel-2); padding: 2px 6px; border-radius: 4px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px;
+    font-size: 11.5px; font-weight: 500;
+  }
+  .badge.ok { color: var(--success); background: var(--success-soft); }
+  .badge.bad { color: var(--danger); background: var(--danger-soft); }
+  .badge.dim { color: var(--text-faint); background: var(--panel-2); }
+  .empty { color: var(--text-faint); padding: 32px 14px; text-align: center; font-size: 13px; }
+  .hint { color: var(--text-faint); font-size: 12px; margin: 0 0 14px; }
+  button.action {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    font: inherit; font-size: 12px; padding: 5px 12px; border-radius: var(--radius); cursor: pointer;
+    white-space: nowrap;
+  }
+  button.action:hover { border-color: var(--accent); color: var(--accent); }
+  button.action.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button.action:disabled { opacity: .45; cursor: default; }
+  button.link {
+    background: none; border: none; color: var(--accent); font: inherit; font-size: 13px;
+    cursor: pointer; padding: 0; text-decoration: none;
+  }
+  button.link:hover { text-decoration: underline; }
+  textarea {
+    width: 100%; min-height: 300px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+    font: 13px/1.5 ui-monospace, "SF Mono", Consolas, monospace; resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .path { color: var(--text-faint); font-size: 12px; margin: -4px 0 12px; }
+  .actions-row { display: flex; gap: 8px; margin-top: 12px; }
+  .eco-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;
+  }
+  .eco-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .eco-card.active { border-color: var(--accent); }
+  .eco-card-head { display: flex; align-items: center; justify-content: space-between; }
+  .eco-name { font-weight: 600; font-size: 14px; }
+  .eco-packages { margin: 0; color: var(--text-faint); font-size: 12px; flex: 1; }
+  .toast {
+    position: fixed; bottom: 22px; right: 24px; padding: 10px 16px; border-radius: var(--radius);
+    background: var(--panel); border: 1px solid var(--success); display: none; max-width: 420px;
+    font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  }
+  .toast.error { border-color: var(--danger); }
+  .stopped {
+    display: flex; align-items: center; justify-content: center; height: 100vh;
+    flex-direction: column; gap: 10px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>FLEX</div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <button class="action danger" onclick="exitServer()">Exit</button>
+</header>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const TABS = ["Ecosystem", "Integrations", "Drivers", "Experiments"];
+let current = "Ecosystem";
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(message, isError = false) {
+  const t = $("#toast");
+  t.textContent = message;
+  t.className = "toast" + (isError ? " error" : "");
+  t.style.display = "block";
+  setTimeout(() => (t.style.display = "none"), 4000);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json" }, ...options,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || response.statusText);
+  }
+  return response.json();
+}
+
+function nav() {
+  $("#nav").innerHTML = TABS.map(
+    (t) => `<button class="${t === current ? "active" : ""}" onclick="show('${t}')">${t}</button>`
+  ).join("");
+}
+
+async function show(tab) {
+  current = tab;
+  nav();
+  $("#main").innerHTML = '<p class="empty">loading…</p>';
+  try {
+    await ({ Ecosystem: ecosystem, Integrations: integrations, Drivers: driversTab, Experiments: experiments }[tab])();
+  } catch (e) {
+    if (tab !== current) return;  // a later tab switch already owns #main
+    $("#main").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+  }
+}
+
+async function act(button, path, method, refresh) {
+  button.disabled = true;
+  try { await api(path, { method }); toast("Done"); await refresh(); }
+  catch (e) { toast(e.message, true); button.disabled = false; }
+}
+
+function table(headers, rows) {
+  if (!rows.length) return '<div class="card"><p class="empty">Nothing here yet.</p></div>';
+  return `<div class="card"><table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>${rows.join("")}</table></div>`;
+}
+
+async function exitServer() {
+  if (!confirm("Stop the FLEX dashboard server?")) return;
+  try { await api("/api/shutdown", { method: "POST" }); } catch (e) { /* the server going away is expected */ }
+  document.body.innerHTML = `
+    <div class="stopped">
+      <div class="brand"><span class="dot" style="background:var(--text-faint)"></span>FLEX</div>
+      <p class="empty">Dashboard stopped. You can close this tab.</p>
+    </div>`;
+}
+
+// -- Ecosystem (home) ---------------------------------------------------------
+
+let ecoCache = [];
+
+async function ecosystem() {
+  const [eco, raw] = await Promise.all([api("/api/ecosystems"), api("/api/config/raw")]);
+  ecoCache = eco.available;
+  // Bundled manifests are absolute filesystem paths (backslashes on Windows) --
+  // pass the array index through onclick, not the raw path: interpolating a
+  // path straight into an inline onclick="...'...'" handler makes the browser
+  // parse it as a JS string literal, where "\f" etc. are real escape sequences
+  // and silently corrupt the text.
+  const cards = ecoCache.map((e, i) => {
+    const isActive = e.name === eco.active;
+    return `<div class="eco-card${isActive ? " active" : ""}">
+      <div class="eco-card-head">
+        <span class="eco-name">${esc(e.name)}</span>
+        ${isActive ? '<span class="badge ok">active</span>' : ""}
+      </div>
+      <p class="eco-packages">${e.packages.length ? esc(e.packages.join(", ")) : "no extra packages"}</p>
+      ${isActive ? "" : `<button class="action" onclick="activateEcosystem(this,${i})">Activate</button>`}
+    </div>`;
+  }).join("");
+  $("#main").innerHTML = `
+    <section>
+      <div class="section-head"><h2>Ecosystems</h2></div>
+      <p class="hint">Pick a lab's complete setup. Activating installs its packages and applies its configuration.</p>
+      ${ecoCache.length ? `<div class="eco-grid">${cards}</div>` : '<div class="card"><p class="empty">No bundled ecosystems found.</p></div>'}
+    </section>
+    <section>
+      <div class="section-head">
+        <h2>Advanced: raw configuration</h2>
+        <button class="action" onclick="useManifest()">Activate manifest…</button>
+      </div>
+      <p class="path">${esc(raw.path)}</p>
+      <textarea id="cfg" spellcheck="false">${esc(raw.text)}</textarea>
+      <div class="actions-row">
+        <button class="action" onclick="saveConfig()">Save</button>
+      </div>
+    </section>`;
+}
+
+async function activateEcosystem(button, index) {
+  button.disabled = true;
+  const file = ecoCache[index].file;
+  try {
+    const result = await api("/api/ecosystem/use", { method: "POST", body: JSON.stringify({ path: file }) });
+    toast(`Ecosystem '${result.ecosystem}' activated`);
+    ecosystem();
+  } catch (e) { toast(e.message, true); button.disabled = false; }
+}
+
+async function saveConfig() {
+  try {
+    await api("/api/config/raw", { method: "PUT", body: JSON.stringify({ text: $("#cfg").value }) });
+    toast("Configuration saved");
+  } catch (e) { toast(e.message, true); }
+}
+
+async function useManifest() {
+  const path = prompt("Path to ecosystem manifest (.toml):");
+  if (!path) return;
+  try {
+    const result = await api("/api/ecosystem/use", { method: "POST", body: JSON.stringify({ path }) });
+    toast(`Ecosystem '${result.ecosystem}' activated`);
+    ecosystem();
+  } catch (e) { toast(e.message, true); }
+}
+
+// -- Integrations --------------------------------------------------------------
+
+async function integrations() {
+  const pkgs = (await api("/api/packages")).filter((p) => p.group === "Integrations");
+  const rows = pkgs.map((p) => {
+    const status = p.installed
+      ? `<span class="badge ok">${esc(p.installed)}</span>`
+      : '<span class="badge dim">not installed</span>';
+    const name = encodeURIComponent(p.name);
+    const button = p.installed
+      ? `<button class="action danger" onclick="act(this,'/api/packages/${name}/remove','POST',integrations)">Remove</button>`
+      : `<button class="action" onclick="act(this,'/api/packages/${name}/install','POST',integrations)">Install</button>`;
+    return `<tr><td>${esc(p.name)}</td><td>${status}</td><td>${esc(p.summary)}</td><td>${button}</td></tr>`;
+  });
+  $("#main").innerHTML = `<section><div class="section-head"><h2>Integrations</h2></div>${table(["Package", "Status", "Summary", ""], rows)}</section>`;
+}
+
+// -- Drivers ---------------------------------------------------------------
+
+let driverCache = [];
+
+async function driversTab() {
+  driverCache = await api("/api/drivers");
+  $("#main").innerHTML = `
+    <section>
+      <div class="section-head">
+        <h2>Drivers</h2>
+        <input class="search" id="driver-search" placeholder="Search drivers…" oninput="renderDrivers()">
+      </div>
+      <div id="driver-table"></div>
+    </section>`;
+  renderDrivers();
+}
+
+function renderDrivers() {
+  const q = ($("#driver-search")?.value || "").trim().toLowerCase();
+  const filtered = driverCache.filter((d) => !q || d.name.toLowerCase().includes(q) || d.package.toLowerCase().includes(q));
+  const rows = filtered.map((d) => {
+    const status = d.enabled
+      ? '<span class="badge ok">enabled</span>'
+      : d.available ? '<span class="badge dim">available</span>' : '<span class="badge dim">not installed</span>';
+    const name = encodeURIComponent(d.name);
+    const actions = d.enabled
+      ? `<button class="action" onclick="act(this,'/api/drivers/${name}/disable','POST',driversTab)">Disable</button>
+         <button class="action" onclick="probeDriver(this,'${esc(d.name)}')">Probe</button>
+         <span id="probe-${esc(d.name)}"></span>`
+      : `<button class="action" onclick="act(this,'/api/drivers/${name}/enable','POST',driversTab)">Enable</button>`;
+    return `<tr><td>${esc(d.name)}</td><td>${status}</td><td>${actions}</td></tr>`;
+  });
+  $("#driver-table").innerHTML = table(["Driver", "Status", ""], rows);
+}
+
+async function probeDriver(button, name) {
+  button.disabled = true;
+  const cell = $(`#probe-${CSS.escape(name)}`);
+  cell.innerHTML = '<span class="badge dim">connecting…</span>';
+  try {
+    const result = await api(`/api/drivers/${encodeURIComponent(name)}/probe`, { method: "POST" });
+    cell.innerHTML = result.ok
+      ? `<span class="badge ok">${esc(result.idn.model || "ok")}</span>`
+      : `<span class="badge bad">${esc(result.error)}</span>`;
+  } catch (e) { cell.innerHTML = `<span class="badge bad">${esc(e.message)}</span>`; }
+  button.disabled = false;
+}
+
+// -- Experiments -------------------------------------------------------------
+
+async function experiments() {
+  const list = await api("/api/experiments");
+  const rows = list.map((e) => `
+    <tr><td><button class="link" onclick="detail('${esc(e.id)}')">${esc(e.id)}</button></td><td>${esc(e.user)}</td>
+    <td>${esc(e.name || "—")}</td><td>${esc(e.start_time || "—")}</td>
+    <td>${e.end_time ? esc(e.end_time) : '<span class="badge ok">running</span>'}</td></tr>`);
+  $("#main").innerHTML = `
+    <section><div class="section-head"><h2>Recent experiments</h2></div>
+    ${table(["ID", "User", "Name", "Start", "End"], rows)}</section>
+    <div id="detail"></div>`;
+}
+
+async function detail(id) {
+  const d = await api(`/api/experiments/${encodeURIComponent(id)}`);
+  const rows = d.measurements.map((m) => `
+    <tr><td>${esc(m.id)}</td><td>${esc(m.name || "—")}</td><td>${esc(m.start_time || "—")}</td>
+    <td>${m.aborted ? '<span class="badge bad">yes</span>' : '<span class="badge dim">no</span>'}</td>
+    <td>${esc(m.file ? m.file.uri : "—")}</td></tr>`);
+  let html = `<section><div class="section-head"><h2>Measurements — ${esc(id)}</h2></div>${table(["ID", "Name", "Start", "Aborted", "File"], rows)}</section>`;
+  if (d.notes.length) {
+    const noteRows = d.notes.map((n) => `<tr><td>${esc(n.time || "—")}</td><td>${esc(n.kind)}</td><td>${esc(n.text)}</td></tr>`);
+    html += `<section><div class="section-head"><h2>Notes</h2></div>${table(["Time", "Kind", "Text"], noteRows)}</section>`;
+  }
+  $("#detail").innerHTML = html;
+}
+
+nav();
+show(current);
+</script>
+</body>
+</html>

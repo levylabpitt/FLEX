@@ -1,0 +1,20 @@
+# The FLEX default ecosystem — works out of the box, everything local.
+# Activate with: flex ecosystem use default
+# (Running with no configuration at all behaves the same.)
+
+[ecosystem]
+name = "default"
+packages = []
+
+[db]
+backend = "sqlite"
+
+[storage]
+backend = "local"
+
+[data]
+writer = "hdf5"
+# root = "D:/data"          # defaults to the per-user FLEX data directory
+
+[exp]
+handler = "default"

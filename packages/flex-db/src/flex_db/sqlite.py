@@ -75,8 +75,9 @@ class SQLiteStore(MetadataStore):
 
     def record_experiment_start(self, record: ExperimentRecord, **extra: Any) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO experiments (id, user, name, start_time, end_time, instruments, config)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO experiments (id, user, name, start_time, end_time, instruments, config)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET user = excluded.user, name = excluded.name",
             (
                 record.id,
                 record.user,
@@ -100,8 +101,8 @@ class SQLiteStore(MetadataStore):
 
     def record_measurement_start(self, record: MeasurementRecord, **extra: Any) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO measurements (id, experiment_id, name, start_time, end_time, aborted)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO measurements (id, experiment_id, name, start_time, end_time, aborted)"
+            " VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
             (
                 record.id,
                 record.experiment_id,

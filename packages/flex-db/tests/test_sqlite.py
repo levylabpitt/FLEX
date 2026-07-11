@@ -51,6 +51,30 @@ def test_measurements_and_notes(tmp_path):
     store.close()
 
 
+def test_replayed_starts_do_not_clobber_ends(tmp_path):
+    store = make_store(tmp_path)
+    store.record_experiment_start(ExperimentRecord(id="e1", user="u", start_time=T0))
+    store.record_measurement_start(
+        MeasurementRecord(id="m1", experiment_id="e1", name="IV", start_time=T0)
+    )
+    store.record_experiment_end("e1", T1, ["lockin"])
+    store.record_measurement_end("m1", T1, FilePointer(uri="C:/data/m1.h5", backend="local"))
+
+    store.record_experiment_start(ExperimentRecord(id="e1", user="u2", start_time=T0))
+    store.record_measurement_start(
+        MeasurementRecord(id="m1", experiment_id="e1", name="IV", start_time=T0)
+    )
+
+    exp = store.get_experiment("e1")
+    assert exp.user == "u2"
+    assert exp.end_time == T1
+    assert exp.instruments == ["lockin"]
+    (meas,) = store.list_measurements("e1")
+    assert meas.end_time == T1
+    assert meas.file.uri == "C:/data/m1.h5"
+    store.close()
+
+
 def test_list_experiments_filter_and_order(tmp_path):
     store = make_store(tmp_path)
     for i, user in enumerate(["a", "b", "a"]):

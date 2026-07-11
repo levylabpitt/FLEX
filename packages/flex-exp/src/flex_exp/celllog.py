@@ -28,13 +28,11 @@ class CellLogger:
     def __init__(self, experiment: Experiment, shell):
         self.experiment = experiment
         self.shell = shell
-        self.counter = 0
         shell.events.register("post_run_cell", self._log_cell)
 
     def _log_cell(self, result) -> None:
         try:
             code = result.info.raw_cell
-            self.counter += 1
             self.experiment._record(
                 lambda db: db.record_note(
                     NoteRecord(

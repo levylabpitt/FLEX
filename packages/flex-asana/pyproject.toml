@@ -10,8 +10,5 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["flex-core", "requests>=2.31"]
 
-[project.entry-points."flex.hooks"]
-asana = "flex_asana.hooks"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_asana"]

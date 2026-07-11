@@ -7,6 +7,7 @@ set and read" — with names and units recorded automatically in data files.
 from __future__ import annotations
 
 import math
+import numbers
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +22,8 @@ class Numbers:
         self.min, self.max = min, max
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, int | float) or isinstance(value, bool):
+        # numbers.Real admits numpy scalars (np.int64, np.float32) too
+        if not isinstance(value, numbers.Real) or isinstance(value, bool):
             raise TypeError(f"expected a number, got {value!r}")
         if not (self.min <= value <= self.max):
             raise ValueError(f"{value} is outside [{self.min}, {self.max}]")

@@ -12,7 +12,7 @@ flex ecosystem use mylab.toml
 ```toml
 [ecosystem]
 name = "mylab"
-packages = ["flex-tdms", "flex-drivers"]   # installed on activation
+packages = ["flex-datatypes", "flex-drivers"]   # installed on activation
 
 [lab]
 name = "mylab"
@@ -63,8 +63,7 @@ with Experiment("jane") as exp:
     exp.lockin.x()                 # ready to use
 ```
 
-`flex instruments --probe` test-connects everything from the shell, and the
-dashboard's Instruments page does the same with a button.
+`flex instruments --probe` test-connects everything from the shell.
 
 ## Extending FLEX itself
 
@@ -74,12 +73,24 @@ Labs add their own components as normal Python packages:
   fill drivers in, list them in its `CATALOG`, and they appear in
   `flex list --drivers`;
 - a **DB backend / data writer / storage backend**: subclass `MetadataStore`,
-  `DataWriter`, or `StorageBackend` from `flex-core` and register it under the
-  matching entry-point group (`flex.db_backends`, `flex.writers`,
-  `flex.storage`) — the name you register is what goes in the manifest;
+  `DataWriter`, or `StorageBackend` from `flex-core` and export a
+  `{name: "module:Class"}` registry dict from your package — the name you
+  register is what goes in the manifest;
 - **hooks**: any function `fn(event, experiment, **payload)`, referenced from
   `[hooks]`.
 
+To make a component discoverable by `flex install`/`flex list` without
+editing an installed package, add it to a `catalog.local.json` next to your
+active ecosystem config, e.g.
+`{"flex-drivers-mylab": {"registries": {"drivers": "flex_drivers_mylab:CATALOG"}}}`.
+
 The FLEX repo hosts official packages in `packages/`; PRs welcome — the
-LevyLab stack (`flex-drivers-levylab`, `flex-tdms`, `flex-nextcloud`,
-`flex-asana`) is the reference implementation.
+LevyLab drivers (`flex_drivers.levylab`) alongside `flex-datatypes`,
+`flex-nextcloud`, `flex-asana` are the reference implementation.
+
+To make your own lab's manifest activatable by bare name (`flex ecosystem use
+mylab`) rather than a full path, drop it in this repo's own `ecosystems/`
+folder (not inside any package — see `flex.pkgmanager.ecosystems`). Only
+`default.toml` ships inside `flex-core` itself; everything else here is this
+repo's own content, so a fork can add, remove, or replace manifests without
+touching core at all.

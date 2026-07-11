@@ -11,7 +11,6 @@ def test_namespaced_loggers():
 def test_root_logger_untouched():
     before = list(logging.getLogger().handlers)
     enable_console()
-    add_and_remove = add_file_log.__name__  # noqa: F841 - just exercising imports
     assert logging.getLogger().handlers == before
 
 

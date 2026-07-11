@@ -73,11 +73,7 @@ class RowBuffer:
 
     def drain(self) -> dict[str, np.ndarray]:
         """Return and clear the buffered block as {column: array}."""
-        block = {
-            name: np.asarray(values)
-            for name, values in self._pending.items()
-            if values
-        }
+        block = {name: np.asarray(values) for name, values in self._pending.items()}
         for values in self._pending.values():
             values.clear()
         return block

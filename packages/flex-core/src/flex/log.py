@@ -26,13 +26,9 @@ def enable_console(level: int = logging.INFO) -> logging.Handler:
     logger = get_logger()
     logger.setLevel(logging.DEBUG)
     if _console_handler is None:
-        try:
-            from rich.logging import RichHandler
+        from rich.logging import RichHandler
 
-            _console_handler = RichHandler(show_path=False, rich_tracebacks=False)
-        except ImportError:  # rich is a hard dependency, but stay safe
-            _console_handler = logging.StreamHandler()
-            _console_handler.setFormatter(logging.Formatter(_FILE_FORMAT))
+        _console_handler = RichHandler(show_path=False, rich_tracebacks=False)
         logger.addHandler(_console_handler)
     _console_handler.setLevel(level)
     return _console_handler

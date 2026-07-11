@@ -5,13 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "flex-nextcloud"
 version = "2.0.0a1"
-description = "FLEX storage backend for Nextcloud (WebDAV upload + share links)"
+description = "FLEX storage backend for Nextcloud (WebDAV upload)"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["flex-core", "requests>=2.31"]
-
-[project.entry-points."flex.storage"]
-nextcloud = "flex_nextcloud:NextcloudStorage"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_nextcloud"]

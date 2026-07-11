@@ -150,12 +150,13 @@ class Measurement:
         self.end_time = datetime.now()
         try:
             self._writer.close()
-        finally:
-            try:
-                self.file = exp.storage.finalize(self._path)
-            except Exception as e:
-                exp.log.error("Storage finalize failed (%s); file remains at %s", e, self._path)
-                self.file = FilePointer(uri=str(self._path), backend="local")
+        except Exception as e:
+            exp.log.error("Writer close failed (%s); file may be incomplete: %s", e, self._path)
+        try:
+            self.file = exp.storage.finalize(self._path)
+        except Exception as e:
+            exp.log.error("Storage finalize failed (%s); file remains at %s", e, self._path)
+            self.file = FilePointer(uri=str(self._path), backend="local")
         exp._record(
             lambda db: db.record_measurement_end(self.id, self.end_time, self.file, aborted)
         )

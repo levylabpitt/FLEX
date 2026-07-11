@@ -9,16 +9,16 @@
         .on_abort(lambda: gate(0))\\
         .run(exp, name="gate sweep")
 
-Nested axes iterate as a grid (first axis outermost). Ctrl-C is safe: the data
-file is finalized, the measurement is marked aborted, and cleanup callbacks
-run before the interrupt propagates.
+Nested axes iterate as a grid (first axis outermost). Ctrl-C is safe: cleanup
+callbacks run, then the data file is finalized and the measurement marked
+aborted, before the interrupt propagates.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import prod
 from typing import TYPE_CHECKING, Any
 
@@ -68,24 +68,20 @@ def sweep(
 ) -> SweepAxis:
     """Describe a sweep of ``target`` (a Parameter or one-argument callable)
     over ``values``, waiting ``delay`` seconds after each set."""
-    return SweepAxis(target, list(values), delay=delay, name=name, unit=unit, before=before, after=after)
+    return SweepAxis(target, values, delay=delay, name=name, unit=unit, before=before, after=after)
 
 
-@dataclass
 class Scan:
     """Sweep one or more axes and measure at every point."""
-
-    axes: tuple[SweepAxis, ...]
-    _params: list[Parameter] = field(default_factory=list)
-    _named: dict[str, Any] = field(default_factory=dict)
-    _each: list[Callable[[dict], None]] = field(default_factory=list)
-    _on_abort: list[Callable[[], None]] = field(default_factory=list)
 
     def __init__(self, *axes: SweepAxis):
         if not axes:
             raise ValueError("Scan needs at least one sweep axis")
         self.axes = axes
-        self._params, self._named, self._each, self._on_abort = [], {}, [], []
+        self._params: list[Parameter] = []
+        self._named: dict[str, Any] = {}
+        self._each: list[Callable[[dict], None]] = []
+        self._on_abort: list[Callable[[], None]] = []
 
     def measure(self, *parameters: Parameter, **named: Parameter | Callable[[], Any]) -> Scan:
         """What to record at every point (Parameters, or named callables)."""

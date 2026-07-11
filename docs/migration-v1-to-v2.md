@@ -8,8 +8,8 @@ home.
 
 | v1 | v2 |
 |---|---|
-| clone repo + `pip install -e .` (one big package) | `pip install flex`, then `flex ecosystem use levylab` for the lab stack |
-| hardcoded DB / Nextcloud / n8n endpoints in code | one manifest: [`ecosystems/levylab.toml`](../ecosystems/levylab.toml) |
+| clone repo + `pip install -e .` (one big package) | `irm flex.levylab.org/install.ps1 \| iex`, then `flex ecosystem use levylab` for the lab stack |
+| hardcoded DB / Nextcloud / n8n endpoints in code | one manifest in the repo's `ecosystems/` folder: `flex ecosystem show` after activating `levylab` |
 | secrets in source | environment variables (`NEXTCLOUD_PASSWORD`, `FLEX_N8N_WEBHOOK`) |
 
 ## Imports and classes
@@ -17,10 +17,10 @@ home.
 | v1 | v2 |
 |---|---|
 | `from flex.inst.base import Instrument` (ZMQ baked in) | `from flex_protocols import ZMQInstrument` (also `VISAInstrument`, `TCPInstrument`, `SerialInstrument`) |
-| `from flex.inst.levylab.Lockin import Lockin` | `from flex_drivers_levylab.lockin import Lockin` |
+| `from flex.inst.levylab.Lockin import Lockin` | `from flex_drivers.levylab.lockin import Lockin` |
 | `inst._send_command(cmd, params)['result']` | `inst.call(cmd, params)` — errors now **raise** instead of returning `None` |
-| `_LABVIEW_CLASS_NAME` module constant | `lv_class` class attribute + `LVCLASS_REGISTRY` |
-| `flex.inst.levylab.insttypes.*` empty mixins | `flex.instrument.capabilities` protocols (real methods; `exp.get(Temperature)`) |
+| `_LABVIEW_CLASS_NAME` module constant | `lv_class` class attribute; `flex_drivers.levylab.lvclass_registry()` derives the CESession lookup from it |
+| `flex.inst.levylab.insttypes.*` empty mixins | `flex_drivers.levylab.capabilities` protocols (real methods; `exp.get(Temperature)`) |
 | `from flex.exp.experiment import Experiment` | `from flex import Experiment` |
 | `from flex.exp.CESession import CESession` | `from flex import CESession` |
 | `flex.db.FLEXDB` (raw SQL, hardcoded host) | metadata store from config: SQLite default, `[db] backend = "postgres"` for the lab DB |
@@ -56,7 +56,7 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 - `flex.lv` LabVIEW call helpers, `exp/pund.py` (experiment logic, not
   framework — rewrite as a `Scan` script), `exp/experiment_bak`.
 - Newport/Ophir/Sphere drivers that require .NET or COM — tracked in
-  [`packages/flex-drivers/DEFERRED.md`](../packages/flex-drivers/DEFERRED.md).
+  [`packages/flex-drivers/DEFERRED.md`](https://github.com/levylabpitt/flex/blob/v2/packages/flex-drivers/DEFERRED.md).
 
 ## Postgres note
 

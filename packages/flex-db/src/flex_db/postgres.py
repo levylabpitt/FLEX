@@ -61,6 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_exp ON notes(experiment_id);
 
 class PostgresStore(MetadataStore):
     def __init__(self, *, dsn: str, data_root: str | Path | None = None, **_options: Any):
+        self._dsn = dsn
         self._conn = psycopg.connect(dsn, autocommit=True)
         with self._conn.cursor() as cur:
             cur.execute(_SCHEMA)
@@ -188,8 +189,13 @@ class PostgresStore(MetadataStore):
     # -- internals ---------------------------------------------------------
 
     def _execute(self, sql: str, params: tuple) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(sql, params)
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(sql, params)
+        except psycopg.OperationalError:
+            self._conn = psycopg.connect(self._dsn, autocommit=True)
+            with self._conn.cursor() as cur:
+                cur.execute(sql, params)
 
     def _query(self, sql: str, params: tuple) -> list[tuple]:
         with self._conn.cursor() as cur:

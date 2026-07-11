@@ -43,5 +43,5 @@ See [Write a driver](../tutorials/write-a-driver.md) for both in context.
 
 | Command | Does |
 |---|---|
-| `flex dashboard` | Launch the [web dashboard](../concepts/dashboard.md). `--host` (default `127.0.0.1`), `--port` (default `8756`). |
+| `python -m flex dashboard` | Launch the [web dashboard](../concepts/dashboard.md). `--host` (default `127.0.0.1`), `--port` (default `8756`). Use the module form, not `flex dashboard` — see the dashboard page for why. |
 | `flex version` | Show the version of every installed FLEX package. |

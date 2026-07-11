@@ -19,6 +19,14 @@ def test_version():
     assert "flex-core" in result.output
 
 
+def test_module_entry_point_exposes_same_app():
+    """`python -m flex` must reach flex.cli:app, so it's usable in place of
+    the flex.exe console script (which self-locks on Windows while running)."""
+    import flex.__main__ as main
+
+    assert main.app is app
+
+
 def test_ecosystem_show_defaults(monkeypatch, tmp_path):
     monkeypatch.delenv("FLEX_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)

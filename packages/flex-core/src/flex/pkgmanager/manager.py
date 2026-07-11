@@ -237,6 +237,12 @@ class PackageManager:
     def _run_installer(command: Sequence[str]) -> None:
         result = subprocess.run(command, capture_output=True, text=True)
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Installer failed ({' '.join(command)}):\n{result.stderr or result.stdout}"
-            )
+            output = result.stderr or result.stdout
+            if "flex.exe" in output and "being used by another process" in output:
+                raise RuntimeError(
+                    "Can't modify this environment while it's running as flex.exe "
+                    "(e.g. a `flex dashboard` launched that way holds its own exe "
+                    "file locked on Windows). Restart with `python -m flex dashboard` "
+                    "instead, then retry."
+                )
+            raise RuntimeError(f"Installer failed ({' '.join(command)}):\n{output}")

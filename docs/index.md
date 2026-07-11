@@ -50,4 +50,4 @@ a real one to run it on hardware.
 | run a sweep safely | `Scan` + `sweep`: Ctrl-C finalizes the file, marks the measurement aborted, runs your cleanup |
 | keep records | every experiment and measurement is recorded (SQLite by default, PostgreSQL for labs) |
 | share a lab setup | an [ecosystem](concepts/ecosystems.md): one TOML manifest, one `flex ecosystem use` command |
-| manage it all visually | `flex dashboard` — packages, drivers, ecosystems, and experiment browsing in the browser |
+| manage it all visually | `python -m flex dashboard` — packages, drivers, ecosystems, and experiment browsing in the browser |

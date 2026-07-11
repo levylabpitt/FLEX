@@ -87,4 +87,5 @@ with exp.measurement("noise vs time") as m:
 - [Build an ecosystem](build-an-ecosystem.md) — configure your lab's database,
   storage, data format, and hooks in one file.
 - [LevyLab guide](levylab.md) — `CESession` and the Instrument Framework.
-- `flex dashboard` — manage packages and browse experiments in the browser.
+- [Dashboard](concepts/dashboard.md) — manage packages and browse experiments
+  in the browser (`python -m flex dashboard`).

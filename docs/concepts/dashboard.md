@@ -5,11 +5,19 @@ served by a small FastAPI app in `flex-core`. All logic lives in the core
 services; the dashboard only exposes them.
 
 ```
-flex dashboard            # http://127.0.0.1:8756
+python -m flex dashboard            # http://127.0.0.1:8756
 ```
 
 `--host` and `--port` override the defaults. The **Exit** button in the
 header stops the server (you can also Ctrl-C the terminal).
+
+!!! note
+    Use `python -m flex dashboard`, not the bare `flex dashboard` console
+    script. On Windows, `flex.exe` stays open for the life of the server and
+    holds a file lock on itself; installing or enabling anything through the
+    Integrations/Drivers tabs then fails because the installer can't rewrite
+    its own locked launcher. `python -m flex` runs the same CLI without that
+    lock.
 
 ## Tabs
 

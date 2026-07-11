@@ -26,7 +26,7 @@ box before switching production work to v2.
 - [ ] n8n webhook fires on experiment start/end (check Asana)
 
 ## UX
-- [ ] `flex dashboard`: Drivers tab installs/enables a driver; Experiments
+- [ ] `python -m flex dashboard`: Drivers tab installs/enables a driver; Experiments
       tab shows the runs from today
 - [ ] Jupyter: `CESession()` renders the summary card; cells are logged as notes
 

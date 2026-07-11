@@ -79,7 +79,7 @@ flex ecosystem show          # the active configuration
 flex experiments             # browse recorded experiments
 flex instruments --probe     # test-connect every configured instrument
 flex new driver Keithley2400 # scaffold a driver
-flex dashboard               # all of the above, in the browser
+python -m flex dashboard     # all of the above, in the browser
 ```
 
 ## Writing a driver

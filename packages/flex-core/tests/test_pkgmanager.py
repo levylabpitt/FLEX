@@ -81,6 +81,26 @@ def test_list_drivers_from_catalog(manager, monkeypatch):
     assert not drivers["levylab.lockin"].enabled
 
 
+def test_run_installer_explains_self_locked_exe(monkeypatch):
+    """A `flex dashboard` launched via flex.exe holds its own launcher file
+    locked on Windows; translate that specific uv failure into a fix, not a
+    raw stack trace."""
+    import subprocess
+
+    from flex.pkgmanager.manager import PackageManager
+
+    locked = subprocess.CompletedProcess(
+        args=["uv"],
+        returncode=2,
+        stdout="",
+        stderr="error: failed to remove file `...Scripts/flex.exe`: "
+        "The process cannot access the file because it is being used by another process.",
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: locked)
+    with pytest.raises(RuntimeError, match="python -m flex dashboard"):
+        PackageManager._run_installer(["uv", "pip", "install"])
+
+
 def test_enable_disable_driver_roundtrip(manager, tmp_path):
     info = manager.enable_driver("levylab.lockin")
     assert info.enabled

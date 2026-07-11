@@ -34,6 +34,7 @@
   "flex-drivers": {
     "group": "Drivers",
     "summary": "Instrument drivers, organized by vendor (including LevyLab)",
+    "default": true,
     "drivers": [
       "srs.sr7270",
       "colby.pdl",

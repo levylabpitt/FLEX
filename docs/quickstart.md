@@ -6,9 +6,10 @@
 irm flex.levylab.org/install.ps1 | iex
 ```
 
-This brings in the five default packages (`flex-core`, `flex-protocols`,
-`flex-db`, `flex-datatypes`, `flex-exp`). No configuration is needed — data
-goes to HDF5 files and a SQLite database under your user data directory.
+This brings in the six default packages (`flex-core`, `flex-protocols`,
+`flex-db`, `flex-datatypes`, `flex-exp`, `flex-drivers`). No configuration is
+needed — data goes to HDF5 files and a SQLite database under your user data
+directory.
 (Developing FLEX itself, or on another OS? Install editable from a clone —
 see the README's Development section.)
 

@@ -76,7 +76,9 @@ class ZMQInstrument(Instrument):
             "jsonrpc": "2.0",
             "method": method,
             "params": {} if params is None else params,
-            "id": next(self._ids),
+            # string, not int: the LabVIEW IF app's JSON unflatten is strict
+            # about the id's type and silently fails to answer an int id.
+            "id": str(next(self._ids)),
         }
         payload = json.dumps(request)
         self.log.debug("-> %s", payload)

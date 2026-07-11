@@ -12,8 +12,8 @@ irm flex.levylab.org/install.ps1 | iex
 
 (Windows; see [`install.ps1`](install.ps1). Already have Python + a venv you
 manage yourself? `pip install -e packages/flex-core -e packages/flex-protocols[visa]
--e packages/flex-db -e packages/flex-datatypes -e packages/flex-exp -e packages/flex`
-from a clone works too — see [Development](#development).)
+-e packages/flex-db -e packages/flex-datatypes -e packages/flex-exp -e packages/flex-drivers
+-e packages/flex` from a clone works too — see [Development](#development).)
 
 ```python
 from flex import Experiment, Scan, sweep, SimulatedInstrument
@@ -37,7 +37,7 @@ needed. Swap `SimulatedInstrument` for a real one to run it on hardware.
 
 ## Packages
 
-FLEX is a collection of small packages; the installer gives you the five
+FLEX is a collection of small packages; the installer gives you the six
 default ones. Everything else is opt-in via the package manager.
 
 | Package | What it is | Installed by default |
@@ -47,7 +47,7 @@ default ones. Everything else is opt-in via the package manager.
 | `flex-db` | Metadata database backends: SQLite (default), PostgreSQL | ✅ |
 | `flex-exp` | `Experiment`, `Measurement`, `Scan`, lab sessions (`CESession`) | ✅ |
 | `flex-datatypes` | HDF5 (default format) and TDMS (LabVIEW-compatible) data writers | ✅ |
-| `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | opt-in |
+| `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | ✅ |
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
 | `flex-asana` | Asana notifications via n8n | opt-in |
 

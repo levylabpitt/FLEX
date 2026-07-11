@@ -16,6 +16,7 @@ dependencies = [
     "flex-db",
     "flex-exp",
     "flex-datatypes",
+    "flex-drivers",
 ]
 
 [tool.setuptools]

@@ -101,6 +101,48 @@ def test_run_installer_explains_self_locked_exe(monkeypatch):
         PackageManager._run_installer(["uv", "pip", "install"])
 
 
+def test_run_installer_removes_regenerated_exe_on_windows(monkeypatch, tmp_path):
+    """install.ps1 replaces Scripts/flex.exe with a flex.cmd shim so `flex`
+    never self-locks; every subsequent install regenerates flex.exe anyway
+    (uv reconciles all console scripts), so it must be deleted again each time
+    so PATHEXT keeps preferring the .cmd."""
+    import subprocess
+
+    from flex.pkgmanager import manager as manager_module
+    from flex.pkgmanager.manager import PackageManager
+
+    (tmp_path / "flex.cmd").write_text("@echo off\r\n")
+    (tmp_path / "flex.exe").write_bytes(b"stub")
+    ok = subprocess.CompletedProcess(args=["uv"], returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ok)
+    monkeypatch.setattr(manager_module.sys, "platform", "win32")
+    monkeypatch.setattr(manager_module.sys, "executable", str(tmp_path / "python.exe"))
+
+    PackageManager._run_installer(["uv", "pip", "install"])
+
+    assert not (tmp_path / "flex.exe").exists()
+    assert (tmp_path / "flex.cmd").exists()
+
+
+def test_run_installer_leaves_exe_alone_without_shim(monkeypatch, tmp_path):
+    """No flex.cmd (dev workspace / non-Windows-installer setups) -> don't
+    touch flex.exe at all."""
+    import subprocess
+
+    from flex.pkgmanager import manager as manager_module
+    from flex.pkgmanager.manager import PackageManager
+
+    (tmp_path / "flex.exe").write_bytes(b"stub")
+    ok = subprocess.CompletedProcess(args=["uv"], returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ok)
+    monkeypatch.setattr(manager_module.sys, "platform", "win32")
+    monkeypatch.setattr(manager_module.sys, "executable", str(tmp_path / "python.exe"))
+
+    PackageManager._run_installer(["uv", "pip", "install"])
+
+    assert (tmp_path / "flex.exe").exists()
+
+
 def test_enable_disable_driver_roundtrip(manager, tmp_path):
     info = manager.enable_driver("levylab.lockin")
     assert info.enabled

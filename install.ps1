@@ -54,7 +54,12 @@
         param([string]$FilePath, [string[]]$Arguments = @())
         try {
             $global:LASTEXITCODE = 0
-            & $FilePath @Arguments
+            # Pipe through Out-Host: without it, since the caller captures our
+            # return value (`$code = Invoke-ExeLive ...`), PowerShell buffers
+            # every line the child prints into THAT capture instead of the
+            # console -- silent output, and a $code that's an array of text
+            # (always "-ne 0") instead of the exit code we return below.
+            & $FilePath @Arguments | Out-Host
             return $LASTEXITCODE
         } catch {
             Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
@@ -263,6 +268,23 @@
         Fail "FLEX imported but could not be verified.`n$($verify.Output)"
         return
     }
+
+    # --- 8. `flex` command without the self-lock --------------------------------
+    # pip's own console-script launcher (Scripts\flex.exe) stays open for the
+    # life of any long-running command like `dashboard`, and Windows locks a
+    # running exe against being rewritten -- so installing anything *through*
+    # the dashboard fails the moment uv/pip tries to touch its own launcher.
+    # A flex.cmd shim isn't managed by pip, so nothing ever needs to lock or
+    # rewrite it; it just hands off to `python -m flex`, which never self-locks.
+    # PackageManager deletes flex.exe again after every future install so this
+    # sticks (see flex.pkgmanager.manager._remove_shadowed_console_script).
+    $scriptsDir = Split-Path $py -Parent
+    $flexCmd = Join-Path $scriptsDir 'flex.cmd'
+    @"
+@echo off
+"%~dp0python.exe" -m flex %*
+"@ | Set-Content -Path $flexCmd -Encoding ascii
+    Remove-Item (Join-Path $scriptsDir 'flex.exe') -ErrorAction SilentlyContinue
 
     Write-Host ""
     Write-Host "  ===============================================" -ForegroundColor Green

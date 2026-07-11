@@ -246,3 +246,19 @@ class PackageManager:
                     "instead, then retry."
                 )
             raise RuntimeError(f"Installer failed ({' '.join(command)}):\n{output}")
+        _remove_shadowed_console_script()
+
+
+def _remove_shadowed_console_script() -> None:
+    """Every install/uninstall in this environment regenerates Scripts/flex.exe
+    on Windows, even when flex-core itself isn't part of the change. install.ps1
+    replaces that exe with a flex.cmd shim (`python -m flex`) so `flex ...` never
+    self-locks its own launcher while a long-running command like the dashboard
+    is up. Delete the regenerated exe again here so PATHEXT keeps resolving
+    `flex` to the .cmd, not the .exe uv/pip just brought back."""
+    if sys.platform != "win32":
+        return
+    scripts_dir = Path(sys.executable).parent
+    exe = scripts_dir / "flex.exe"
+    if exe.exists() and (scripts_dir / "flex.cmd").exists():
+        exe.unlink(missing_ok=True)

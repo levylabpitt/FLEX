@@ -32,12 +32,27 @@ class CellLogger:
 
     def _log_cell(self, result) -> None:
         try:
+            info = result.info
+            raw_cell = info.raw_cell
+            # Tools built on the kernel (VS Code's Jupyter extension, variable
+            # viewers, debugger support) run synthetic code -- e.g. wrapped in
+            # `async def __jupyter_exec_background__(): ...` -- via the same
+            # post_run_cell event. Those runs set store_history=False (or are
+            # silent) and aren't a cell the user actually wrote; skip them, as
+            # well as no-op blank cells.
+            if not getattr(info, "store_history", True) or getattr(info, "silent", False):
+                return
+            if not raw_cell or not raw_cell.strip():
+                return
+            if "__jupyter_exec_background__" in raw_cell:
+                return
+
             error = str(result.error_in_exec) if result.error_in_exec else None
             self.experiment._record(
                 lambda db: db.record_cell(
                     CellRecord(
                         experiment_id=self.experiment.id,
-                        source=result.info.raw_cell,
+                        source=raw_cell,
                         time=datetime.now(),
                         execution_count=result.execution_count,
                         success=result.success,

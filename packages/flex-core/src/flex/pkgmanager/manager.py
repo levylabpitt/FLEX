@@ -173,7 +173,19 @@ class PackageManager:
             self._write_enabled([d for d in enabled if d != name])
 
     def resolve_driver(self, name: str) -> type:
-        """Load the instrument class for a driver name like ``"levylab.lockin"``."""
+        """Load the instrument class for a driver name like ``"levylab.lockin"``.
+
+        Used by explicit, config-driven instrument construction
+        (``load_station()``, ``flex instruments --probe``, the dashboard's
+        probe button) -- a driver must be enabled first, even if its package
+        happens to already be installed. ``CESession`` is exempt: it connects
+        whatever the Configure Experiments file says is physically wired up,
+        which is its own form of access control.
+        """
+        if name not in self._enabled_drivers():
+            raise components.ComponentError(
+                f"Driver '{name}' is not enabled. Enable it with: flex enable {name}"
+            )
         try:
             return components.resolve("drivers", name)
         except components.ComponentError:

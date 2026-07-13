@@ -99,11 +99,15 @@ Two ways to get a driver class:
   enablement, nothing gates imports.
 - **By name**, through the catalog: station configs (`driver =
   "srs.sr7270"`), `flex instruments --probe`, and the dashboard resolve
-  driver names via `CATALOG`.
+  driver names via `CATALOG` — and require the name to be enabled first.
 
-`flex enable <name>` is bookkeeping for the name-based path: it adds the name
-to `[drivers] enabled` in the active config (installing the parent package
-first if needed). It does not affect what you can import.
+`flex enable <name>` adds the name to `[drivers] enabled` in the active
+config (installing the parent package first if needed). Every name-based
+resolution (`load_station()`, `--probe`, the dashboard) refuses a driver
+that isn't enabled, even if its package is installed — a deliberate gate on
+the config-driven path, not on imports: direct imports and `CESession` (which
+only ever connects instruments the Configure Experiments file says are
+physically wired up) are unaffected either way.
 
 ## LevyLab drivers and lv_class
 

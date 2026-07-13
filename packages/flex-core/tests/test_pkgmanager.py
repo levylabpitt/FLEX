@@ -169,3 +169,16 @@ def test_unknown_driver_message(manager):
 
     with pytest.raises(ComponentError, match="Unknown driver"):
         manager.enable_driver("acme.widget")
+
+
+def test_resolve_driver_requires_enabled(manager):
+    from flex.components import ComponentError
+
+    with pytest.raises(ComponentError, match="not enabled"):
+        manager.resolve_driver("levylab.lockin")
+
+
+def test_resolve_driver_succeeds_once_enabled(manager, monkeypatch):
+    manager.enable_driver("levylab.lockin")
+    monkeypatch.setattr("flex.pkgmanager.manager.components.resolve", lambda group, name: object)
+    assert manager.resolve_driver("levylab.lockin") is object

@@ -75,9 +75,11 @@ catalog — see [Architecture](architecture.md#name-resolution).
 
 `exp.load_station("cryo1")` instantiates every instrument in the block —
 resolving each `driver` name by catalog, passing the address and extra keys —
-and registers them on the experiment. With `[lab] station` set (or only one
-station defined), the name argument is optional. `flex instruments --probe`
-test-connects the same entries from the shell.
+and registers them on the experiment. Each `driver` must be enabled first
+(`flex enable <driver>`) — see [Instruments &
+drivers](instruments.md#driver-packages-and-the-catalog). With `[lab] station` set (or
+only one station defined), the name argument is optional. `flex instruments
+--probe` test-connects the same entries from the shell.
 
 The LevyLab ecosystem replaces station config with the Configure Experiments
 VI: see [CESession](experiments.md#cesession).

@@ -28,7 +28,7 @@ home.
 | `flex.nextcloud` | `[storage] backend = "nextcloud"` — files upload on measurement finish |
 | `flex.exp.dbexptoAsana.trigger_n8n_dbexptoAsana()` (n8n) / `flex.asana.Asana` (hardcoded-token stub) | `[comms] backend = "asana"` — `flex-asana` talks to the Asana API directly, token from `ASANA_ACCESS_TOKEN` |
 | `flex.exp.users` hardcoded `Literal` list | any user string; lab-side validation can hook `experiment.start` |
-| `flex.exp.script_to_db.CellLogger` | built into `Experiment` (`cell_log=True`), stored as notes with `kind="cell"` |
+| `flex.exp.script_to_db.CellLogger` | built into `Experiment` (`cell_log=True`), stored in `flex_cells` |
 
 ## Method names
 
@@ -61,7 +61,9 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 
 ## Postgres note
 
-`PostgresStore` creates the v2 core schema (`experiments`, `measurements`,
-`notes`) and does not touch the v1 `exp` / `meas` / `cell_log` tables.
-Migrating that historical data (or pointing v2 at the same tables) is a
-coordinated one-off step — plan it with the lab before switching production.
+`PostgresStore` creates the v2 core schema as `flex_`-prefixed tables
+(`flex_experiments`, `flex_measurements`, `flex_notes`, `flex_cells`,
+`flex_logs`, `flex_instruments`) and does not touch the v1 `exp` / `meas` /
+`cell_log` tables. Migrating that historical data (or pointing v2 at the same
+tables) is a coordinated one-off step — plan it with the lab before switching
+production.

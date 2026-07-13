@@ -30,8 +30,10 @@ Everything other packages build on:
   (see [Instruments & drivers](instruments.md)).
 - **Data interfaces** — `DataWriter` (file formats) and `StorageBackend`
   (where finished files live), plus the built-in `LocalStorage`.
-- **Metadata interface** — the `MetadataStore` ABC and the record dataclasses
-  (`ExperimentRecord`, `MeasurementRecord`, `NoteRecord`).
+- **Metadata interface** — the `MetadataStore` ABC and its record dataclasses
+  (`ExperimentRecord`, `MeasurementRecord`, `NoteRecord`, `CellRecord`,
+  `LogEntryRecord`, `InstrumentRecord` — see
+  [Metadata records](experiments.md#metadata-records)).
 - **EventBus** — small synchronous pub/sub for lifecycle hooks
   (see [Experiments & data](experiments.md#hooks-and-events)).
 - **Ecosystem configuration** — the `FlexConfig` model and its

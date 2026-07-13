@@ -169,6 +169,9 @@ def create_app() -> FastAPI:
                     for m in store.list_measurements(experiment_id)
                 ],
                 "notes": [vars(n) for n in store.list_notes(experiment_id)],
+                "cells": [vars(c) for c in store.list_cells(experiment_id)],
+                "logs": [vars(entry) for entry in store.list_logs(experiment_id)],
+                "instruments": [vars(i) for i in store.list_instruments(experiment_id)],
             }
         finally:
             store.close()

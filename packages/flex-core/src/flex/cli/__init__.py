@@ -166,10 +166,11 @@ def experiments(
     try:
         table = Table(Column("ID", no_wrap=True), "User", "Name", "Start", "End", "Instruments")
         for e in store.list_experiments(user=user or None, limit=last):
+            names = [i.name for i in store.list_instruments(e.id)]
             table.add_row(
                 e.id, e.user, e.name or "-",
                 str(e.start_time or "-"), str(e.end_time or "[running]"),
-                ", ".join(e.instruments) or "-",
+                ", ".join(names) or "-",
             )
         console.print(table)
     finally:
@@ -191,9 +192,15 @@ def measurements(experiment_id: str):
             )
         console.print(table)
         notes = store.list_notes(experiment_id)
-        if notes:
-            console.print(f"[dim]{len(notes)} note(s); kinds: "
-                          f"{', '.join(sorted({n.kind for n in notes}))}[/]")
+        cells = store.list_cells(experiment_id)
+        logs = store.list_logs(experiment_id)
+        summary = ", ".join(
+            f"{len(items)} {label}"
+            for items, label in [(notes, "note(s)"), (cells, "cell(s)"), (logs, "log(s)")]
+            if items
+        )
+        if summary:
+            console.print(f"[dim]{summary}[/]")
     finally:
         store.close()
 

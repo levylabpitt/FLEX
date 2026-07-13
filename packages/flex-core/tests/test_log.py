@@ -1,6 +1,13 @@
 import logging
 
-from flex.log import add_file_log, enable_console, get_logger, is_interactive, remove_log_handler
+from flex.log import (
+    add_db_log_handler,
+    add_file_log,
+    enable_console,
+    get_logger,
+    is_interactive,
+    remove_log_handler,
+)
 
 
 def test_namespaced_loggers():
@@ -47,3 +54,26 @@ def test_file_log_roundtrip(tmp_path):
     # detached: further messages are not written
     get_logger("test").debug("after detach")
     assert "after detach" not in logfile.read_text(encoding="utf-8")
+
+
+def test_db_log_handler_filters_by_level():
+    sunk = []
+    handler = add_db_log_handler(
+        lambda level, name, msg, exc: sunk.append((level, name, msg, exc)), level="WARNING"
+    )
+    logger = get_logger("test.db")
+    logger.info("quiet info")
+    logger.warning("loud warning")
+    remove_log_handler(handler)
+    assert sunk == [("WARNING", "flex.test.db", "loud warning", None)]
+
+
+def test_db_log_handler_captures_exception_text():
+    sunk = []
+    handler = add_db_log_handler(lambda level, name, msg, exc: sunk.append(exc), level="ERROR")
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        get_logger("test.db").exception("failed")
+    remove_log_handler(handler)
+    assert sunk and "ValueError: boom" in sunk[0]

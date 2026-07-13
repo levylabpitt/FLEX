@@ -7,6 +7,7 @@ never configured here, so FLEX coexists cleanly with any application logging.
 from __future__ import annotations
 
 import logging
+import traceback
 from pathlib import Path
 
 _ROOT = "flex"
@@ -71,3 +72,36 @@ def remove_log_handler(handler: logging.Handler) -> None:
     """Detach and close a handler previously returned by :func:`add_file_log`."""
     get_logger().removeHandler(handler)
     handler.close()
+
+
+class DBLogHandler(logging.Handler):
+    """Mirrors emitted records into a metadata store via a callback.
+
+    Kept generic (no ``flex.metadata``/``flex_db`` import here) -- the caller
+    supplies ``sink(level, logger_name, message, exc_text)``; ``Experiment``
+    wires it to ``self.db.record_log``.
+    """
+
+    def __init__(self, sink, level: int = logging.WARNING):
+        super().__init__(level)
+        self._sink = sink
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            exc_text = (
+                "".join(traceback.format_exception(*record.exc_info)) if record.exc_info else None
+            )
+            self._sink(record.levelname, record.name, record.getMessage(), exc_text)
+        except Exception:
+            self.handleError(record)
+
+
+def add_db_log_handler(sink, level: int | str = logging.WARNING) -> logging.Handler:
+    """Attach a :class:`DBLogHandler` to the ``flex`` logger. Idempotent per call site."""
+    if isinstance(level, str):
+        level = logging.getLevelName(level)
+    handler = DBLogHandler(sink, level=level)
+    logger = get_logger()
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    return handler

@@ -44,6 +44,8 @@ def test_defaults_without_config(monkeypatch, tmp_path):
     assert cfg.storage.backend == "local"
     assert cfg.exp.handler == "default"
     assert cfg.comms.backend == "none"
+    assert cfg.logs.mirror_to_db is False
+    assert cfg.logs.level == "WARNING"
     assert cfg.data.root == default_data_root()
 
 

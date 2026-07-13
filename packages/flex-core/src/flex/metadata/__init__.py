@@ -6,10 +6,21 @@ and PostgreSQL implementations. Actual measurement data lives in files (see
 """
 
 from flex.metadata.store import (
+    CellRecord,
     ExperimentRecord,
+    InstrumentRecord,
+    LogEntryRecord,
     MeasurementRecord,
     MetadataStore,
     NoteRecord,
 )
 
-__all__ = ["ExperimentRecord", "MeasurementRecord", "MetadataStore", "NoteRecord"]
+__all__ = [
+    "CellRecord",
+    "ExperimentRecord",
+    "InstrumentRecord",
+    "LogEntryRecord",
+    "MeasurementRecord",
+    "MetadataStore",
+    "NoteRecord",
+]

@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import getpass
 import secrets
+import socket
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
 from flex.display import auto_display, refresh_display
 from flex.ecosystem import FlexConfig, load_config
 from flex.instrument import Instrument
-from flex.log import add_file_log, enable_console, get_logger, remove_log_handler
-from flex.metadata import ExperimentRecord, NoteRecord
+from flex.log import (
+    add_db_log_handler,
+    add_file_log,
+    enable_console,
+    get_logger,
+    remove_log_handler,
+)
+from flex.metadata import ExperimentRecord, InstrumentRecord, NoteRecord
 
 try:
     # A Literal of known Asana handles once generated (see flex_asana.users),
@@ -26,6 +34,13 @@ except ImportError:
 def new_id() -> str:
     """Sortable, collision-safe id: timestamp + 4 hex chars."""
     return datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(2)
+
+
+def _flex_version() -> str | None:
+    try:
+        return version("flex-core")
+    except PackageNotFoundError:
+        return None
 
 
 class Experiment:
@@ -98,6 +113,10 @@ class Experiment:
                     user=self.user,
                     name=self.name,
                     start_time=self.start_time,
+                    ecosystem=self.config.ecosystem.name,
+                    station=self.config.lab.station or None,
+                    host=socket.gethostname(),
+                    flex_version=_flex_version(),
                     config=self.config.model_dump(mode="json"),
                 )
             )
@@ -106,6 +125,10 @@ class Experiment:
         self.log.info("Experiment %s started (user: %s)", self.id, self.user)
         if notes:
             self.note(notes)
+
+        self._db_log_handler = None
+        if self.db is not None and self.config.logs.mirror_to_db:
+            self._db_log_handler = add_db_log_handler(self._sink_log, self.config.logs.level)
 
         self._comms_state = None
         if self.comms is not None:
@@ -130,6 +153,19 @@ class Experiment:
         if name in self.instruments:
             raise ValueError(f"An instrument named '{name}' is already registered")
         self.instruments[name] = instrument
+        snapshot = instrument.snapshot(read=False)
+        self._record(
+            lambda db: db.record_instrument(
+                InstrumentRecord(
+                    experiment_id=self.id,
+                    name=name,
+                    driver=snapshot["class"],
+                    address=snapshot["address"],
+                    options=snapshot["metadata"],
+                    connected_at=datetime.now(),
+                )
+            )
+        )
         self.events.emit("instrument.added", experiment=self, instrument=instrument)
         self.log.info("Instrument added: %s (%s)", name, type(instrument).__name__)
         refresh_display(self, self._display_id)
@@ -205,6 +241,27 @@ class Experiment:
         self.events.emit("note.added", experiment=self, note=record)
         self.log.info("Note: %s", text)
 
+    def _sink_log(self, level: str, logger_name: str, message: str, exc_text: str | None) -> None:
+        """Write a log record to the DB. Never itself logs -- routing failures
+        through ``self.log`` would re-enter this same handler."""
+        from flex.metadata import LogEntryRecord
+
+        if self.db is None:
+            return
+        try:
+            self.db.record_log(
+                LogEntryRecord(
+                    experiment_id=self.id,
+                    level=level,
+                    logger_name=logger_name,
+                    message=message,
+                    time=datetime.now(),
+                    exc_text=exc_text,
+                )
+            )
+        except Exception:
+            pass
+
     def snapshot(self, *, read: bool = True) -> dict[str, Any]:
         return {
             "experiment_id": self.id,
@@ -223,9 +280,9 @@ class Experiment:
         self.end_time = datetime.now()
         if self._cell_logger:
             self._cell_logger.detach()
-        self._record(
-            lambda db: db.record_experiment_end(self.id, self.end_time, list(self.instruments))
-        )
+        if self._db_log_handler is not None:
+            remove_log_handler(self._db_log_handler)
+        self._record(lambda db: db.record_experiment_end(self.id, self.end_time))
         self.events.emit("experiment.end", experiment=self)
         self.log.info("Experiment %s ended", self.id)
         if self.comms is not None:

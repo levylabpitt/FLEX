@@ -25,9 +25,9 @@ with Experiment("jane") as exp:
 
 IDs are sortable and collision-safe: `YYYYMMDDHHMMSS-<4 hex chars>`.
 
-Inside Jupyter, every executed cell is recorded as a note with
-`kind="cell"` (disable with `cell_log=False`), so the code that produced a
-dataset is always recoverable.
+Inside Jupyter, every executed cell is recorded as a row in `flex_cells`
+(disable with `cell_log=False`), so the code that produced a dataset is
+always recoverable — including its execution count and whether it raised.
 
 Instruments can also come from configuration: `exp.load_station("cryo1")`
 instantiates everything in the config's `[stations.cryo1]` block — see
@@ -108,12 +108,26 @@ holds the canonical `FilePointer`.
 
 ## Metadata records
 
-The metadata store (from `[db] backend`; SQLite by default) keeps three
-tables: **experiments** (id, user, name, start/end, instruments, config),
-**measurements** (id, experiment, name, start/end, file pointer, aborted),
-and **notes** (free text, `kind` = `note` | `cell` | `log`). Browse them with
-`flex experiments` / `flex measurements <id>` or the
-[dashboard](dashboard.md).
+The metadata store (from `[db] backend`; SQLite by default) keeps six
+`flex_`-prefixed tables, normalized one entity per table:
+
+- **flex_experiments** — id, user, name, start/end, ecosystem, station, host,
+  flex version, full config snapshot.
+- **flex_measurements** — id, experiment, name, start/end, aborted, writer
+  format, row count, file pointer (uri/backend/size).
+- **flex_instruments** — one row per `exp.add()`/`add_instrument()` call:
+  name, driver class, address, options.
+- **flex_notes** — free-text notes (`exp.note(...)`).
+- **flex_cells** — one row per executed Jupyter cell (source, execution
+  count, success/error) — see `cell_log` above.
+- **flex_logs** — an opt-in mirror of the `flex` logger namespace; empty
+  unless `[logs] mirror_to_db = true` (default level `"WARNING"`, override
+  with `[logs] level`). Kept separate from `flex_notes`/`flex_cells` since
+  it's off by default and can be high-volume.
+
+The `flex_` prefix keeps this schema unambiguous in a database that may also
+hold unrelated or legacy tables. Browse the tables with `flex experiments` /
+`flex measurements <id>` or the [dashboard](dashboard.md).
 
 Store failures never kill a run: if the store is unavailable or a write
 fails, it is logged and the experiment continues. Opt into hard failures with

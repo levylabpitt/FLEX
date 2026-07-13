@@ -1,12 +1,12 @@
-"""Jupyter cell logging: every executed cell becomes a note on the experiment,
-so the exact code that produced a dataset is always recoverable."""
+"""Jupyter cell logging: every executed cell becomes a `flex_cells` row, so
+the exact code that produced a dataset is always recoverable."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from flex.metadata import NoteRecord
+from flex.metadata import CellRecord
 
 if TYPE_CHECKING:
     from flex_exp.experiment import Experiment
@@ -32,14 +32,16 @@ class CellLogger:
 
     def _log_cell(self, result) -> None:
         try:
-            code = result.info.raw_cell
+            error = str(result.error_in_exec) if result.error_in_exec else None
             self.experiment._record(
-                lambda db: db.record_note(
-                    NoteRecord(
+                lambda db: db.record_cell(
+                    CellRecord(
                         experiment_id=self.experiment.id,
-                        text=code,
+                        source=result.info.raw_cell,
                         time=datetime.now(),
-                        kind="cell",
+                        execution_count=result.execution_count,
+                        success=result.success,
+                        error=error,
                     )
                 )
             )

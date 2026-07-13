@@ -1,16 +1,18 @@
 """PostgreSQL metadata store (psycopg 3).
 
-Creates the FLEX core schema (``experiments``, ``measurements``, ``notes``)
-in the configured database. Configuration::
+Creates the FLEX core schema (``flex_experiments``, ``flex_measurements``,
+``flex_notes``, ``flex_cells``, ``flex_logs``, ``flex_instruments``) in the
+configured database. Configuration::
 
     [db]
     backend = "postgres"
     dsn = "postgresql://user@db.example.org/lab"
 
 .. note::
-    Migration of the pre-v2 LevyLab tables (``exp``, ``meas``, ``cell_log``)
-    into this schema is a coordinated, one-off step to plan with the lab —
-    this store intentionally does not touch those tables.
+    The pre-v2 LevyLab tables (``exp``, ``meas``, ``cell_log``) are a
+    separate, coordinated migration to plan with the lab if ever needed —
+    this store's ``flex_``-prefixed tables never touch them, so both can
+    coexist in the same database.
 """
 
 from __future__ import annotations
@@ -24,38 +26,81 @@ import psycopg
 
 from flex.data.storage import FilePointer
 from flex.log import get_logger
-from flex.metadata import ExperimentRecord, MeasurementRecord, MetadataStore, NoteRecord
+from flex.metadata import (
+    CellRecord,
+    ExperimentRecord,
+    InstrumentRecord,
+    LogEntryRecord,
+    MeasurementRecord,
+    MetadataStore,
+    NoteRecord,
+)
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS experiments (
-    id          TEXT PRIMARY KEY,
-    "user"      TEXT NOT NULL,
-    name        TEXT DEFAULT '',
-    start_time  TIMESTAMP,
-    end_time    TIMESTAMP,
-    instruments JSONB DEFAULT '[]',
-    config      JSONB DEFAULT '{}'
+CREATE TABLE IF NOT EXISTS flex_experiments (
+    id           TEXT PRIMARY KEY,
+    "user"       TEXT NOT NULL,
+    name         TEXT DEFAULT '',
+    start_time   TIMESTAMP,
+    end_time     TIMESTAMP,
+    ecosystem    TEXT,
+    station      TEXT,
+    host         TEXT,
+    flex_version TEXT,
+    config       JSONB DEFAULT '{}'
 );
-CREATE TABLE IF NOT EXISTS measurements (
+CREATE TABLE IF NOT EXISTS flex_measurements (
     id            TEXT PRIMARY KEY,
-    experiment_id TEXT NOT NULL REFERENCES experiments(id),
+    experiment_id TEXT NOT NULL REFERENCES flex_experiments(id),
     name          TEXT DEFAULT '',
     start_time    TIMESTAMP,
     end_time      TIMESTAMP,
+    aborted       BOOLEAN DEFAULT FALSE,
+    writer        TEXT,
+    rows          INTEGER,
     file_uri      TEXT,
     file_backend  TEXT,
-    aborted       BOOLEAN DEFAULT FALSE
+    file_size     BIGINT
 );
-CREATE TABLE IF NOT EXISTS notes (
-    id            BIGSERIAL PRIMARY KEY,
-    experiment_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS flex_notes (
+    id             BIGSERIAL PRIMARY KEY,
+    experiment_id  TEXT NOT NULL REFERENCES flex_experiments(id),
     measurement_id TEXT,
-    time          TIMESTAMP,
-    kind          TEXT DEFAULT 'note',
-    text          TEXT
+    time           TIMESTAMP,
+    text           TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_meas_exp ON measurements(experiment_id);
-CREATE INDEX IF NOT EXISTS idx_notes_exp ON notes(experiment_id);
+CREATE TABLE IF NOT EXISTS flex_cells (
+    id              BIGSERIAL PRIMARY KEY,
+    experiment_id   TEXT NOT NULL REFERENCES flex_experiments(id),
+    time            TIMESTAMP,
+    execution_count INTEGER,
+    source          TEXT,
+    success         BOOLEAN DEFAULT TRUE,
+    error           TEXT
+);
+CREATE TABLE IF NOT EXISTS flex_logs (
+    id            BIGSERIAL PRIMARY KEY,
+    experiment_id TEXT NOT NULL REFERENCES flex_experiments(id),
+    time          TIMESTAMP,
+    level         TEXT,
+    logger_name   TEXT,
+    message       TEXT,
+    exc_text      TEXT
+);
+CREATE TABLE IF NOT EXISTS flex_instruments (
+    id            BIGSERIAL PRIMARY KEY,
+    experiment_id TEXT NOT NULL REFERENCES flex_experiments(id),
+    name          TEXT,
+    driver        TEXT,
+    address       TEXT,
+    options       JSONB DEFAULT '{}',
+    connected_at  TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_flex_meas_exp ON flex_measurements(experiment_id);
+CREATE INDEX IF NOT EXISTS idx_flex_notes_exp ON flex_notes(experiment_id);
+CREATE INDEX IF NOT EXISTS idx_flex_cells_exp ON flex_cells(experiment_id);
+CREATE INDEX IF NOT EXISTS idx_flex_logs_exp ON flex_logs(experiment_id);
+CREATE INDEX IF NOT EXISTS idx_flex_instruments_exp ON flex_instruments(experiment_id);
 """
 
 
@@ -71,8 +116,9 @@ class PostgresStore(MetadataStore):
 
     def record_experiment_start(self, record: ExperimentRecord, **extra: Any) -> None:
         self._execute(
-            """INSERT INTO experiments (id, "user", name, start_time, end_time, instruments, config)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """INSERT INTO flex_experiments
+                   (id, "user", name, start_time, end_time, ecosystem, station, host, flex_version, config)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (id) DO UPDATE SET "user" = EXCLUDED."user", name = EXCLUDED.name""",
             (
                 record.id,
@@ -80,22 +126,22 @@ class PostgresStore(MetadataStore):
                 record.name,
                 record.start_time,
                 record.end_time,
-                json.dumps(record.instruments),
+                record.ecosystem,
+                record.station,
+                record.host,
+                record.flex_version,
                 json.dumps(record.config, default=str),
             ),
         )
 
-    def record_experiment_end(
-        self, experiment_id: str, end_time: datetime, instruments: list[str], **extra: Any
-    ) -> None:
+    def record_experiment_end(self, experiment_id: str, end_time: datetime, **extra: Any) -> None:
         self._execute(
-            "UPDATE experiments SET end_time = %s, instruments = %s WHERE id = %s",
-            (end_time, json.dumps(instruments), experiment_id),
+            "UPDATE flex_experiments SET end_time = %s WHERE id = %s", (end_time, experiment_id)
         )
 
     def record_measurement_start(self, record: MeasurementRecord, **extra: Any) -> None:
         self._execute(
-            """INSERT INTO measurements (id, experiment_id, name, start_time, end_time, aborted)
+            """INSERT INTO flex_measurements (id, experiment_id, name, start_time, end_time, aborted)
                VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
             (
                 record.id,
@@ -113,39 +159,84 @@ class PostgresStore(MetadataStore):
         end_time: datetime,
         file: FilePointer | None,
         aborted: bool = False,
+        *,
+        writer: str | None = None,
+        rows: int | None = None,
         **extra: Any,
     ) -> None:
         self._execute(
-            "UPDATE measurements SET end_time = %s, file_uri = %s, file_backend = %s, aborted = %s"
+            "UPDATE flex_measurements"
+            " SET end_time = %s, file_uri = %s, file_backend = %s, file_size = %s, aborted = %s,"
+            "     writer = %s, rows = %s"
             " WHERE id = %s",
             (
                 end_time,
                 file.uri if file else None,
                 file.backend if file else None,
+                file.size if file else None,
                 aborted,
+                writer,
+                rows,
                 measurement_id,
             ),
         )
 
     def record_note(self, record: NoteRecord, **extra: Any) -> None:
         self._execute(
-            "INSERT INTO notes (experiment_id, measurement_id, time, kind, text)"
-            " VALUES (%s, %s, %s, %s, %s)",
-            (record.experiment_id, record.measurement_id, record.time, record.kind, record.text),
+            "INSERT INTO flex_notes (experiment_id, measurement_id, time, text) VALUES (%s, %s, %s, %s)",
+            (record.experiment_id, record.measurement_id, record.time, record.text),
+        )
+
+    def record_cell(self, record: CellRecord, **extra: Any) -> None:
+        self._execute(
+            "INSERT INTO flex_cells (experiment_id, time, execution_count, source, success, error)"
+            " VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                record.experiment_id,
+                record.time,
+                record.execution_count,
+                record.source,
+                record.success,
+                record.error,
+            ),
+        )
+
+    def record_log(self, record: LogEntryRecord, **extra: Any) -> None:
+        self._execute(
+            "INSERT INTO flex_logs (experiment_id, time, level, logger_name, message, exc_text)"
+            " VALUES (%s, %s, %s, %s, %s, %s)",
+            (record.experiment_id, record.time, record.level, record.logger_name, record.message, record.exc_text),
+        )
+
+    def record_instrument(self, record: InstrumentRecord, **extra: Any) -> None:
+        self._execute(
+            "INSERT INTO flex_instruments (experiment_id, name, driver, address, options, connected_at)"
+            " VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                record.experiment_id,
+                record.name,
+                record.driver,
+                record.address,
+                json.dumps(record.options, default=str),
+                record.connected_at,
+            ),
         )
 
     # -- reading ----------------------------------------------------------
 
     def get_experiment(self, experiment_id: str) -> ExperimentRecord | None:
         rows = self._query(
-            'SELECT id, "user", name, start_time, end_time, instruments, config'
-            " FROM experiments WHERE id = %s",
+            'SELECT id, "user", name, start_time, end_time, ecosystem, station, host, flex_version, config'
+            " FROM flex_experiments WHERE id = %s",
             (experiment_id,),
         )
         return self._experiment(rows[0]) if rows else None
 
     def list_experiments(self, *, user: str | None = None, limit: int = 50) -> list[ExperimentRecord]:
-        sql = 'SELECT id, "user", name, start_time, end_time, instruments, config FROM experiments'
+        sql = (
+            'SELECT id, "user", name, start_time, end_time, ecosystem, station, host, flex_version, config'
+            " FROM flex_experiments"
+        )
         params: tuple = ()
         if user:
             sql += ' WHERE "user" = %s'
@@ -155,8 +246,9 @@ class PostgresStore(MetadataStore):
 
     def list_measurements(self, experiment_id: str) -> list[MeasurementRecord]:
         rows = self._query(
-            "SELECT id, experiment_id, name, start_time, end_time, file_uri, file_backend, aborted"
-            " FROM measurements WHERE experiment_id = %s ORDER BY start_time",
+            "SELECT id, experiment_id, name, start_time, end_time, aborted, writer, rows,"
+            "        file_uri, file_backend, file_size"
+            " FROM flex_measurements WHERE experiment_id = %s ORDER BY start_time",
             (experiment_id,),
         )
         return [
@@ -166,20 +258,75 @@ class PostgresStore(MetadataStore):
                 name=r[2],
                 start_time=r[3],
                 end_time=r[4],
-                file=FilePointer(uri=r[5], backend=r[6] or "local") if r[5] else None,
-                aborted=bool(r[7]),
+                aborted=bool(r[5]),
+                writer=r[6],
+                rows=r[7],
+                file=FilePointer(uri=r[8], backend=r[9] or "local", size=r[10]) if r[8] else None,
             )
             for r in rows
         ]
 
     def list_notes(self, experiment_id: str) -> list[NoteRecord]:
         rows = self._query(
-            "SELECT experiment_id, measurement_id, time, kind, text FROM notes"
+            "SELECT experiment_id, measurement_id, time, text FROM flex_notes"
             " WHERE experiment_id = %s ORDER BY id",
             (experiment_id,),
         )
         return [
-            NoteRecord(experiment_id=r[0], measurement_id=r[1], time=r[2], kind=r[3], text=r[4])
+            NoteRecord(experiment_id=r[0], measurement_id=r[1], time=r[2], text=r[3]) for r in rows
+        ]
+
+    def list_cells(self, experiment_id: str) -> list[CellRecord]:
+        rows = self._query(
+            "SELECT experiment_id, time, execution_count, source, success, error FROM flex_cells"
+            " WHERE experiment_id = %s ORDER BY id",
+            (experiment_id,),
+        )
+        return [
+            CellRecord(
+                experiment_id=r[0],
+                time=r[1],
+                execution_count=r[2],
+                source=r[3],
+                success=bool(r[4]),
+                error=r[5],
+            )
+            for r in rows
+        ]
+
+    def list_logs(self, experiment_id: str, *, level: str | None = None) -> list[LogEntryRecord]:
+        sql = (
+            "SELECT experiment_id, time, level, logger_name, message, exc_text FROM flex_logs"
+            " WHERE experiment_id = %s"
+        )
+        params: tuple = (experiment_id,)
+        if level:
+            sql += " AND level = %s"
+            params = (*params, level)
+        sql += " ORDER BY id"
+        rows = self._query(sql, params)
+        return [
+            LogEntryRecord(
+                experiment_id=r[0], time=r[1], level=r[2], logger_name=r[3], message=r[4], exc_text=r[5]
+            )
+            for r in rows
+        ]
+
+    def list_instruments(self, experiment_id: str) -> list[InstrumentRecord]:
+        rows = self._query(
+            "SELECT experiment_id, name, driver, address, options, connected_at FROM flex_instruments"
+            " WHERE experiment_id = %s ORDER BY id",
+            (experiment_id,),
+        )
+        return [
+            InstrumentRecord(
+                experiment_id=r[0],
+                name=r[1],
+                driver=r[2],
+                address=r[3],
+                options=r[4] if isinstance(r[4], dict) else json.loads(r[4] or "{}"),
+                connected_at=r[5],
+            )
             for r in rows
         ]
 
@@ -204,14 +351,16 @@ class PostgresStore(MetadataStore):
 
     @staticmethod
     def _experiment(row: tuple) -> ExperimentRecord:
-        instruments = row[5] if isinstance(row[5], list) else json.loads(row[5] or "[]")
-        config = row[6] if isinstance(row[6], dict) else json.loads(row[6] or "{}")
+        config = row[9] if isinstance(row[9], dict) else json.loads(row[9] or "{}")
         return ExperimentRecord(
             id=row[0],
             user=row[1],
             name=row[2],
             start_time=row[3],
             end_time=row[4],
-            instruments=instruments,
+            ecosystem=row[5],
+            station=row[6],
+            host=row[7],
+            flex_version=row[8],
             config=config,
         )

@@ -82,11 +82,13 @@ def test_end_to_end_measurement(config, tmp_path):
     record = store.get_experiment(exp.id)
     assert record.user == "jane"
     assert record.end_time is not None
-    assert record.instruments == ["lockin"]
+    (inst,) = store.list_instruments(exp.id)
+    assert inst.name == "lockin"
     (meas,) = store.list_measurements(exp.id)
     assert meas.name == "IV"
     assert not meas.aborted
     assert meas.file.uri == m.file.uri
+    assert meas.rows == 5
     store.close()
 
     # experiment log file exists and mentions the measurement
@@ -223,6 +225,29 @@ def test_comms_notify_failure_does_not_break_experiment(config, monkeypatch):
     monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: BrokenComms())
     with Experiment("u", config=config):  # must not raise, either at start or end
         pass
+
+
+def test_logs_mirror_to_db_when_opted_in(config, tmp_path):
+    config.logs.mirror_to_db = True
+    config.logs.level = "WARNING"
+    with Experiment("u", config=config) as exp:
+        exp.log.info("quiet info, not mirrored")
+        exp.log.warning("loud warning, mirrored")
+
+    store = SQLiteStore(path=tmp_path / "flex.db")
+    (entry,) = store.list_logs(exp.id)
+    assert entry.level == "WARNING"
+    assert entry.message == "loud warning, mirrored"
+    store.close()
+
+
+def test_logs_not_mirrored_by_default(config, tmp_path):
+    with Experiment("u", config=config) as exp:
+        exp.log.warning("not mirrored by default")
+
+    store = SQLiteStore(path=tmp_path / "flex.db")
+    assert store.list_logs(exp.id) == []
+    store.close()
 
 
 def test_notify_false_skips_comms_entirely(config, monkeypatch):

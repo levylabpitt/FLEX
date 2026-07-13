@@ -81,6 +81,11 @@ class CommsConfig(_Section):
     backend: str = "none"
 
 
+class LogsConfig(_Section):
+    mirror_to_db: bool = False
+    level: str = "WARNING"
+
+
 class DriversConfig(_Section):
     enabled: list[str] = Field(default_factory=list)
 
@@ -104,6 +109,7 @@ class FlexConfig(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     exp: ExpConfig = Field(default_factory=ExpConfig)
     comms: CommsConfig = Field(default_factory=CommsConfig)
+    logs: LogsConfig = Field(default_factory=LogsConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     drivers: DriversConfig = Field(default_factory=DriversConfig)
     stations: dict[str, StationConfig] = Field(default_factory=dict)

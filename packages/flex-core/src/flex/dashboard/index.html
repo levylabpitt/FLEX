@@ -357,9 +357,26 @@ async function detail(id) {
     <td>${m.aborted ? '<span class="badge bad">yes</span>' : '<span class="badge dim">no</span>'}</td>
     <td>${esc(m.file ? m.file.uri : "—")}</td></tr>`);
   let html = `<section><div class="section-head"><h2>Measurements — ${esc(id)}</h2></div>${table(["ID", "Name", "Start", "Aborted", "File"], rows)}</section>`;
+  if (d.instruments.length) {
+    const instRows = d.instruments.map((i) => `
+      <tr><td>${esc(i.name)}</td><td>${esc(i.driver)}</td><td>${esc(i.address || "—")}</td></tr>`);
+    html += `<section><div class="section-head"><h2>Instruments</h2></div>${table(["Name", "Driver", "Address"], instRows)}</section>`;
+  }
   if (d.notes.length) {
-    const noteRows = d.notes.map((n) => `<tr><td>${esc(n.time || "—")}</td><td>${esc(n.kind)}</td><td>${esc(n.text)}</td></tr>`);
-    html += `<section><div class="section-head"><h2>Notes</h2></div>${table(["Time", "Kind", "Text"], noteRows)}</section>`;
+    const noteRows = d.notes.map((n) => `<tr><td>${esc(n.time || "—")}</td><td>${esc(n.text)}</td></tr>`);
+    html += `<section><div class="section-head"><h2>Notes</h2></div>${table(["Time", "Text"], noteRows)}</section>`;
+  }
+  if (d.cells.length) {
+    const cellRows = d.cells.map((c) => `
+      <tr><td>${esc(c.time || "—")}</td><td>${c.execution_count ?? "—"}</td>
+      <td>${c.success ? '<span class="badge ok">ok</span>' : '<span class="badge bad">error</span>'}</td>
+      <td><code>${esc(c.source)}</code></td></tr>`);
+    html += `<section><div class="section-head"><h2>Cells</h2></div>${table(["Time", "#", "Status", "Source"], cellRows)}</section>`;
+  }
+  if (d.logs.length) {
+    const logRows = d.logs.map((l) => `
+      <tr><td>${esc(l.time || "—")}</td><td>${esc(l.level)}</td><td>${esc(l.logger_name)}</td><td>${esc(l.message)}</td></tr>`);
+    html += `<section><div class="section-head"><h2>Logs</h2></div>${table(["Time", "Level", "Logger", "Message"], logRows)}</section>`;
   }
   $("#detail").innerHTML = html;
 }

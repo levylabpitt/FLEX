@@ -55,6 +55,7 @@ class Measurement:
         self.start_time: datetime | None = None
         self.end_time: datetime | None = None
         self._notes_pending = notes
+        self._writer_name = writer or experiment.config.data.writer
         self._writer = experiment.config.build_writer(writer)
         self._specs: list[tuple[str, Callable[[], Any] | None, str]] = []
         self._declared = False
@@ -158,7 +159,10 @@ class Measurement:
             exp.log.error("Storage finalize failed (%s); file remains at %s", e, self._path)
             self.file = FilePointer(uri=str(self._path), backend="local")
         exp._record(
-            lambda db: db.record_measurement_end(self.id, self.end_time, self.file, aborted)
+            lambda db: db.record_measurement_end(
+                self.id, self.end_time, self.file, aborted,
+                writer=self._writer_name, rows=self.rows,
+            )
         )
         exp.events.emit(
             "measurement.abort" if aborted else "measurement.end", experiment=exp, measurement=self

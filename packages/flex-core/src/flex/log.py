@@ -20,11 +20,28 @@ def get_logger(name: str = "") -> logging.Logger:
     return logging.getLogger(f"{_ROOT}.{name}" if name else _ROOT)
 
 
-def enable_console(level: int = logging.INFO) -> logging.Handler:
-    """Attach a single rich console handler to the ``flex`` logger. Idempotent."""
+def is_interactive() -> bool:
+    """Running under IPython (Jupyter, or VS Code's Interactive Window)?"""
+    try:
+        from IPython import get_ipython
+    except ImportError:
+        return False
+    return get_ipython() is not None
+
+
+def enable_console(level: int | None = None) -> logging.Handler:
+    """Attach a single rich console handler to the ``flex`` logger. Idempotent.
+
+    Interactive sessions (Jupyter / VS Code Interactive Window) default to
+    WARNING: routine per-instrument INFO chatter reads fine in a terminal but
+    clutters a notebook cell, where the point is one glanceable HTML summary
+    instead (see Experiment._repr_html_ / CESession._repr_html_).
+    """
     global _console_handler
     logger = get_logger()
     logger.setLevel(logging.DEBUG)
+    if level is None:
+        level = logging.WARNING if is_interactive() else logging.INFO
     if _console_handler is None:
         from rich.logging import RichHandler
 

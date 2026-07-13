@@ -139,6 +139,16 @@ entry's LabVIEW class against `lvclass_registry()` (see
 connects a driver per instrument. `exp.update()` re-reads the file and
 connects anything added while running.
 
+In Jupyter or VS Code's Interactive Window, it automatically displays an HTML
+summary card (device, station, wiring, which instruments connected) once
+initialization finishes — since `with CESession() as exp:` never makes the
+object the last expression of a cell, this is pushed to `display()`
+explicitly rather than relying on `_repr_html_` alone. Pass `verbose=True` to
+also print a line as each instrument connects, useful while debugging a new
+station; routine logging (`flex.log.enable_console`) is otherwise quieted to
+WARNING in interactive sessions so the summary card stays the main signal —
+terminal runs keep the full INFO stream either way.
+
 `CESession` and `load_station()` are two independent mechanisms for the same
 job — populating `exp.instruments`. One is driven by the lab's LabVIEW
 tooling, the other by `[stations.*]` config; everything downstream

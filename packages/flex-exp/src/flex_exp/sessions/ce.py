@@ -120,6 +120,11 @@ class CESession(Experiment):
         transport_server: Also connect the (implicit) Transport server app.
         driver_registry: Override the LabVIEW-class -> driver mapping
             (defaults to the flex_drivers.levylab registry).
+        verbose: Print a line as each instrument connects. In a terminal this
+            is on top of the usual logging; in Jupyter/VS Code Interactive
+            (where routine logging is quieted to avoid cluttering the cell,
+            see flex.log.enable_console) it's the only per-instrument
+            progress you'll see before the summary card below.
     """
 
     def __init__(
@@ -130,11 +135,13 @@ class CESession(Experiment):
         timeout: float = 10.0,
         transport_server: bool = True,
         driver_registry: dict[str, str] | None = None,
+        verbose: bool = False,
         **kwargs: Any,
     ):
         self._ce_path = Path(ce_path) if ce_path else _CE_CONFIG
         self.ce = parse_ce_config(self._load_ce())
         self._registry = driver_registry if driver_registry is not None else _levylab_registry()
+        self.verbose = verbose
 
         super().__init__(user or self.ce.user, name=kwargs.pop("name", self.ce.device), **kwargs)
 
@@ -150,6 +157,16 @@ class CESession(Experiment):
             raise
         finally:
             watchdog.cancel()
+
+        # In a `with CESession() as exp:` block (the documented usage), this
+        # object is never the last expression of a cell, so _repr_html_ would
+        # otherwise never render -- display it explicitly instead.
+        from flex.log import is_interactive
+
+        if is_interactive():
+            from IPython.display import HTML, display
+
+            display(HTML(self._repr_html_()))
 
     # -- public API (v1-compatible) ------------------------------------------
 
@@ -192,6 +209,8 @@ class CESession(Experiment):
     def _connect_instruments(self, instruments: list[dict]) -> None:
         for inst in instruments:
             lv_class, name, address = inst["LVClass"], inst["Type"], inst["Address"]
+            if self.verbose:
+                print(f"  -> Connecting to {name} @ {address or 'no address'}...")
             ref = self._registry.get(lv_class)
             if ref is None:
                 raise RuntimeError(
@@ -203,6 +222,8 @@ class CESession(Experiment):
             driver = cls(name, address) if address else cls(name)
             inst["FlexClass"] = type(driver).__name__
             self.add_instrument(driver, name)
+            if self.verbose:
+                print(f"     OK ({inst['FlexClass']})")
 
     def _connect_transport_server(self) -> None:
         ref = self._registry.get("__transport_server__")

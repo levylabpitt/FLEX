@@ -91,6 +91,58 @@ def test_missing_driver_is_actionable(servers, config):
     store.close()
 
 
+def test_verbose_prints_connection_progress(servers, config, capsys):
+    ce_path, *_ = servers
+    with CESession(
+        ce_path=ce_path, config=config, driver_registry=REGISTRY, transport_server=False,
+        cell_log=False, verbose=True,
+    ):
+        pass
+    out = capsys.readouterr().out
+    assert "Connecting to DAQ" in out
+    assert "Connecting to Amplifier" in out
+
+
+def test_quiet_by_default(servers, config, capsys):
+    """Without verbose, no per-instrument print() narration -- the usual
+    logging (checked elsewhere) still applies."""
+    ce_path, *_ = servers
+    with CESession(
+        ce_path=ce_path, config=config, driver_registry=REGISTRY, transport_server=False,
+        cell_log=False,
+    ):
+        pass
+    assert "Connecting to" not in capsys.readouterr().out
+
+
+def test_auto_displays_html_when_interactive(servers, config, monkeypatch):
+    """In a `with CESession() as exp:` block this object is never the last
+    expression of a cell, so _repr_html_ alone would never render -- it must
+    be pushed to display() explicitly when running interactively."""
+    import sys
+    import types
+
+    ce_path, *_ = servers
+    monkeypatch.setattr("flex.log.is_interactive", lambda: True)
+    displayed = []
+    fake_display = types.ModuleType("IPython.display")
+    fake_display.display = lambda html: displayed.append(html)
+    fake_display.HTML = lambda s: s
+    fake_ipython = types.ModuleType("IPython")
+    fake_ipython.display = fake_display
+    monkeypatch.setitem(sys.modules, "IPython", fake_ipython)
+    monkeypatch.setitem(sys.modules, "IPython.display", fake_display)
+
+    with CESession(
+        ce_path=ce_path, config=config, driver_registry=REGISTRY, transport_server=False,
+        cell_log=False,
+    ):
+        pass
+
+    assert len(displayed) == 1
+    assert "DAQ" in displayed[0]
+
+
 def test_missing_ce_file_is_actionable(tmp_path, config):
     with pytest.raises(FileNotFoundError, match="Configure Experiments"):
         CESession(ce_path=tmp_path / "nope.json", config=config, driver_registry=REGISTRY)

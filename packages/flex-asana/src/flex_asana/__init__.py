@@ -6,15 +6,26 @@ Enable it in an ecosystem manifest::
     [comms]
     backend = "asana"
 
-Configuration is read from the environment (never the manifest, since these
-aren't secrets so much as per-account specifics that don't belong committed
-to a shared repo):
+Configuration defaults to the environment:
 
     ASANA_ACCESS_TOKEN            # personal access token (required)
     ASANA_WORKSPACE_GID           # optional if the account has one workspace
     ASANA_EXPERIMENTS_PROJECT_GID # project experiment tasks are created in (required)
     ASANA_START_FIELD             # custom field name, default "Start Time"
     ASANA_END_FIELD               # custom field name, default "End Time"
+
+Any of these can instead be set directly in the manifest's ``[comms]``
+section, under these (different, ``AsanaComms.__init__``-matching) key
+names — useful if you'd rather not touch machine env vars, but only do this
+in a manifest you don't commit/share, since it's a plaintext secret there::
+
+    [comms]
+    backend = "asana"
+    access_token = "2/1234567890/abcdefg..."
+    project_gid = "123456789"
+    workspace_gid = "987654321"   # optional
+    start_field = "Start Time"    # optional
+    end_field = "End Time"        # optional
 
 A missing token or project gid is logged as a warning and the experiment
 continues without Asana sync — see flex_exp.Experiment, which builds and

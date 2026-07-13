@@ -35,9 +35,20 @@ handler = "ce"   # CESession: bootstrapped from the Configure Experiments VI
 
 [comms]
 backend = "asana"
-# ASANA_ACCESS_TOKEN, ASANA_EXPERIMENTS_PROJECT_GID (required) and
-# ASANA_WORKSPACE_GID (optional, single-workspace accounts) are environment
-# variables, not manifest keys -- see flex_asana's package docstring.
+# By default this reads the ASANA_ACCESS_TOKEN, ASANA_EXPERIMENTS_PROJECT_GID
+# (both required) and ASANA_WORKSPACE_GID (optional, single-workspace
+# accounts only) environment variables. If you'd rather not set those on
+# this machine, you can instead add them right here as manifest keys --
+# any key besides "backend" is passed straight to the backend, e.g.:
+#
+# access_token = "2/1234567890/abcdefg..."
+# project_gid = "123456789"
+# workspace_gid = "987654321"
+#
+# Only do this in a manifest you don't commit/share (e.g. your own
+# %LOCALAPPDATA%/flex/config.toml) -- this file is shared, so a real token
+# here would be a plaintext secret in git history, same problem the removed
+# n8n webhook URL was.
 
 # This ecosystem only sets up shared lab-wide software (packages, DB, storage,
 # hooks). Which drivers are enabled and which instruments live at your bench

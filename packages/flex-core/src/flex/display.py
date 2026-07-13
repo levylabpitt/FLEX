@@ -107,6 +107,37 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
     return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
+def auto_display(obj: Any) -> str | None:
+    """Push ``obj._repr_html_()`` to a live Jupyter/VS Code Interactive
+    display, returning a display id to keep it updated with
+    :func:`refresh_display`. Outside an interactive session (plain scripts,
+    terminals) this is a no-op returning ``None``.
+
+    An object's own ``_repr_html_`` only renders automatically when it's the
+    *last expression* of a cell -- useless for ``with Experiment(...) as exp:``,
+    where the object is never that. This pushes it explicitly instead.
+    """
+    from flex.log import is_interactive
+
+    if not is_interactive():
+        return None
+    from IPython.display import HTML, display
+
+    handle = display(HTML(obj._repr_html_()), display_id=True)
+    return handle.display_id
+
+
+def refresh_display(obj: Any, display_id: str | None) -> None:
+    """Re-render ``obj._repr_html_()`` into a display started by
+    :func:`auto_display`. No-op if ``display_id`` is ``None`` (non-interactive,
+    or auto_display was never called)."""
+    if display_id is None:
+        return
+    from IPython.display import HTML, update_display
+
+    update_display(HTML(obj._repr_html_()), display_id=display_id)
+
+
 def instrument_html(instrument: Instrument) -> str:
     rows = []
     for name, p in instrument.parameters.items():

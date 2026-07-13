@@ -124,7 +124,9 @@ class CESession(Experiment):
             is on top of the usual logging; in Jupyter/VS Code Interactive
             (where routine logging is quieted to avoid cluttering the cell,
             see flex.log.enable_console) it's the only per-instrument
-            progress you'll see before the summary card below.
+            progress you'll see, alongside the live-updating summary card
+            (from Experiment's flex.display.auto_display) every instrument
+            connect refreshes.
     """
 
     def __init__(
@@ -157,16 +159,6 @@ class CESession(Experiment):
             raise
         finally:
             watchdog.cancel()
-
-        # In a `with CESession() as exp:` block (the documented usage), this
-        # object is never the last expression of a cell, so _repr_html_ would
-        # otherwise never render -- display it explicitly instead.
-        from flex.log import is_interactive
-
-        if is_interactive():
-            from IPython.display import HTML, display
-
-            display(HTML(self._repr_html_()))
 
     # -- public API (v1-compatible) ------------------------------------------
 

@@ -17,6 +17,46 @@ class Temperature(Protocol):
     def set_temperature(self, setpoint: float, *, rate: float | None = None) -> None: ...
 
 
+def test_auto_display_live_updates_as_instruments_are_added(config, monkeypatch):
+    """Any Experiment (not just CESession) gets a live-updating summary card
+    in interactive sessions -- `with Experiment(...) as exp:` never makes
+    exp the last expression of a cell, so this can't rely on _repr_html_
+    alone."""
+    import sys
+    import types
+
+    monkeypatch.setattr("flex.log.is_interactive", lambda: True)
+
+    class Handle:
+        display_id = "xyz"
+
+    displayed, updated = [], []
+    fake_display = types.ModuleType("IPython.display")
+    fake_display.display = lambda html, display_id=None: displayed.append(html) or Handle()
+    fake_display.update_display = lambda html, display_id: updated.append((html, display_id))
+    fake_display.HTML = lambda s: s
+    fake_ipython = types.ModuleType("IPython")
+    fake_ipython.display = fake_display
+    monkeypatch.setitem(sys.modules, "IPython", fake_ipython)
+    monkeypatch.setitem(sys.modules, "IPython.display", fake_display)
+
+    with Experiment("jane", config=config, cell_log=False) as exp:
+        assert len(displayed) == 1  # shown immediately, before any instruments
+        exp.add(SimulatedInstrument, "bench")
+        assert len(updated) == 1
+        assert "bench" in updated[0][0]
+    assert len(updated) == 2  # end() refreshes once more (shows "Ended")
+    assert "Ended" in updated[1][0]
+
+
+def test_no_display_calls_outside_interactive(config):
+    """Outside IPython, auto_display/refresh_display are no-ops -- no
+    IPython import is attempted, and no error either way."""
+    with Experiment("jane", config=config, cell_log=False) as exp:
+        exp.add(SimulatedInstrument, "bench")
+    assert exp._display_id is None
+
+
 def test_end_to_end_measurement(config, tmp_path):
     with Experiment("jane", name="demo", config=config) as exp:
         sim = exp.add(SimulatedInstrument, "lockin")

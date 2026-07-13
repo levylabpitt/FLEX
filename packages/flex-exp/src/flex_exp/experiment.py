@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from flex.display import auto_display, refresh_display
 from flex.ecosystem import FlexConfig, load_config
 from flex.instrument import Instrument
 from flex.log import add_file_log, enable_console, get_logger, remove_log_handler
@@ -90,6 +91,8 @@ class Experiment:
 
             self._cell_logger = CellLogger.attach(self)
 
+        self._display_id = auto_display(self)
+
     # -- instruments -----------------------------------------------------
 
     def add_instrument(self, instrument: Instrument, name: str | None = None) -> Instrument:
@@ -100,6 +103,7 @@ class Experiment:
         self.instruments[name] = instrument
         self.events.emit("instrument.added", experiment=self, instrument=instrument)
         self.log.info("Instrument added: %s (%s)", name, type(instrument).__name__)
+        refresh_display(self, self._display_id)
         return instrument
 
     def add(self, cls: type, /, *args: Any, name: str | None = None, **kwargs: Any) -> Any:
@@ -207,6 +211,7 @@ class Experiment:
             except Exception:
                 pass
         remove_log_handler(self._log_handler)
+        refresh_display(self, self._display_id)
 
     def __enter__(self):
         return self
@@ -242,13 +247,12 @@ class Experiment:
             [n, type(i).__name__, i.address or "—"] for n, i in self.instruments.items()
         ]
         sections = [("Instruments", table(["Name", "Driver", "Address"], rows))] if rows else []
-        return card(
-            "Experiment",
-            {
-                "ID": self.id,
-                "User": self.user,
-                "Name": self.name or "—",
-                "Started": self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-            },
-            sections,
-        )
+        meta = {
+            "ID": self.id,
+            "User": self.user,
+            "Name": self.name or "—",
+            "Started": self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if self.end_time is not None:
+            meta["Ended"] = self.end_time.strftime("%Y-%m-%d %H:%M:%S")
+        return card("Experiment", meta, sections)

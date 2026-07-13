@@ -118,15 +118,21 @@ def test_quiet_by_default(servers, config, capsys):
 def test_auto_displays_html_when_interactive(servers, config, monkeypatch):
     """In a `with CESession() as exp:` block this object is never the last
     expression of a cell, so _repr_html_ alone would never render -- it must
-    be pushed to display() explicitly when running interactively."""
+    be pushed to display() explicitly when running interactively, then kept
+    live as each instrument connects."""
     import sys
     import types
 
     ce_path, *_ = servers
     monkeypatch.setattr("flex.log.is_interactive", lambda: True)
-    displayed = []
+
+    class Handle:
+        display_id = "abc123"
+
+    displayed, updated = [], []
     fake_display = types.ModuleType("IPython.display")
-    fake_display.display = lambda html: displayed.append(html)
+    fake_display.display = lambda html, display_id=None: displayed.append(html) or Handle()
+    fake_display.update_display = lambda html, display_id: updated.append((html, display_id))
     fake_display.HTML = lambda s: s
     fake_ipython = types.ModuleType("IPython")
     fake_ipython.display = fake_display
@@ -139,8 +145,11 @@ def test_auto_displays_html_when_interactive(servers, config, monkeypatch):
     ):
         pass
 
-    assert len(displayed) == 1
-    assert "DAQ" in displayed[0]
+    assert len(displayed) == 1  # the initial card, at construction
+    # one live refresh per instrument connected, plus one at end()
+    assert len(updated) == 3
+    assert all(display_id == "abc123" for _, display_id in updated)
+    assert "DAQ" in updated[0][0]
 
 
 def test_missing_ce_file_is_actionable(tmp_path, config):

@@ -33,6 +33,16 @@ Instruments can also come from configuration: `exp.load_station("cryo1")`
 instantiates everything in the config's `[stations.cryo1]` block — see
 [Ecosystems & stations](ecosystems.md#stations-at-runtime).
 
+In Jupyter or VS Code's Interactive Window, every `Experiment` shows a live
+summary card (id, user, instruments) that updates as instruments are added
+and again when the experiment ends — since `with Experiment(...) as exp:`
+never makes `exp` the last expression of a cell, `_repr_html_` alone would
+never render it, so `flex.display.auto_display`/`refresh_display` push it
+explicitly instead. Routine logging is quieted to WARNING in interactive
+sessions for the same reason (see `flex.log.enable_console`) so the card
+stays the signal, not log lines. `CESession` (below) is just an `Experiment`
+subclass with a richer card — nothing CESession-specific about the mechanism.
+
 ## Measurement
 
 `exp.measurement(name)` returns a `Measurement` context manager owning one
@@ -139,15 +149,9 @@ entry's LabVIEW class against `lvclass_registry()` (see
 connects a driver per instrument. `exp.update()` re-reads the file and
 connects anything added while running.
 
-In Jupyter or VS Code's Interactive Window, it automatically displays an HTML
-summary card (device, station, wiring, which instruments connected) once
-initialization finishes — since `with CESession() as exp:` never makes the
-object the last expression of a cell, this is pushed to `display()`
-explicitly rather than relying on `_repr_html_` alone. Pass `verbose=True` to
-also print a line as each instrument connects, useful while debugging a new
-station; routine logging (`flex.log.enable_console`) is otherwise quieted to
-WARNING in interactive sessions so the summary card stays the main signal —
-terminal runs keep the full INFO stream either way.
+Its card (inherited from `Experiment`, see above) additionally shows device,
+station, and wiring. Pass `verbose=True` to also print a line as each
+instrument connects — useful while debugging a new station.
 
 `CESession` and `load_station()` are two independent mechanisms for the same
 job — populating `exp.instruments`. One is driven by the lab's LabVIEW

@@ -1,5 +1,7 @@
 # FLEX
 
+![FLEX](flex-logo-v2.png){ .flex-cover }
+
 **Framework for Laboratory EXperiments** — a modular Python platform for
 running laboratory experiments: instrument control, autonomous sweeps, data
 files, experiment records, and lab-specific integrations, with one-command

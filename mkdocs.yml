@@ -7,7 +7,7 @@ edit_uri: edit/v2/docs/
 
 theme:
   name: material
-  logo: flex-logo-v2.png
+  logo: flex-logo-header.png
   favicon: flex-logo-v2.png
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -47,7 +47,11 @@ plugins:
             docstring_style: google
             filters: ["!^_"]
 
+extra_css:
+  - stylesheets/extra.css
+
 markdown_extensions:
+  - attr_list
   - admonition
   - tables
   - toc:

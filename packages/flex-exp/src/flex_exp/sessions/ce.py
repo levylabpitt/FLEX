@@ -269,6 +269,7 @@ class CESession(Experiment):
             "CE Session",
             {
                 "User": self.user,
+                "Host": self.host,
                 "Device": self.ce.device,
                 "Station": self.ce.station,
                 "Last Update": self.ce.timestamp.strftime("%Y-%m-%d %H:%M:%S")

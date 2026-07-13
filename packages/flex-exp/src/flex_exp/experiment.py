@@ -82,6 +82,7 @@ class Experiment:
         self.start_time = datetime.now()
         self.end_time: datetime | None = None
         self.instruments: dict[str, Instrument] = {}
+        self.host = socket.gethostname()
         self._ended = False
 
         enable_console()
@@ -115,7 +116,7 @@ class Experiment:
                     start_time=self.start_time,
                     ecosystem=self.config.ecosystem.name,
                     station=self.config.lab.station or None,
-                    host=socket.gethostname(),
+                    host=self.host,
                     flex_version=_flex_version(),
                     config=self.config.model_dump(mode="json"),
                 )
@@ -346,6 +347,7 @@ class Experiment:
             "ID": self.id,
             "User": self.user,
             "Name": self.name or "—",
+            "Host": self.host,
             "Started": self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         if self.end_time is not None:

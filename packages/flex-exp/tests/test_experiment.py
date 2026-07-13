@@ -57,6 +57,18 @@ def test_no_display_calls_outside_interactive(config):
     assert exp._display_id is None
 
 
+def test_host_recorded_and_shown_on_card(config, tmp_path):
+    import socket
+
+    with Experiment("jane", config=config, cell_log=False) as exp:
+        assert exp.host == socket.gethostname()
+        assert exp.host in exp._repr_html_()
+
+    store = SQLiteStore(path=tmp_path / "flex.db")
+    assert store.get_experiment(exp.id).host == socket.gethostname()
+    store.close()
+
+
 def test_end_to_end_measurement(config, tmp_path):
     with Experiment("jane", name="demo", config=config) as exp:
         sim = exp.add(SimulatedInstrument, "lockin")

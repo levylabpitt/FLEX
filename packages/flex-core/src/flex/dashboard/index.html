@@ -342,11 +342,11 @@ async function experiments() {
   const list = await api("/api/experiments");
   const rows = list.map((e) => `
     <tr><td><button class="link" onclick="detail('${esc(e.id)}')">${esc(e.id)}</button></td><td>${esc(e.user)}</td>
-    <td>${esc(e.name || "—")}</td><td>${esc(e.start_time || "—")}</td>
+    <td>${esc(e.host || "—")}</td><td>${esc(e.name || "—")}</td><td>${esc(e.start_time || "—")}</td>
     <td>${e.end_time ? esc(e.end_time) : '<span class="badge ok">running</span>'}</td></tr>`);
   $("#main").innerHTML = `
     <section><div class="section-head"><h2>Recent experiments</h2></div>
-    ${table(["ID", "User", "Name", "Start", "End"], rows)}</section>
+    ${table(["ID", "User", "Host", "Name", "Start", "End"], rows)}</section>
     <div id="detail"></div>`;
 }
 

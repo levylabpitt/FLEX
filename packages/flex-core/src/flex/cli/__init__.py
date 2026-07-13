@@ -164,11 +164,11 @@ def experiments(
 
     store = load_config().build_db()
     try:
-        table = Table(Column("ID", no_wrap=True), "User", "Name", "Start", "End", "Instruments")
+        table = Table(Column("ID", no_wrap=True), "User", "Host", "Name", "Start", "End", "Instruments")
         for e in store.list_experiments(user=user or None, limit=last):
             names = [i.name for i in store.list_instruments(e.id)]
             table.add_row(
-                e.id, e.user, e.name or "-",
+                e.id, e.user, e.host or "-", e.name or "-",
                 str(e.start_time or "-"), str(e.end_time or "[running]"),
                 ", ".join(names) or "-",
             )

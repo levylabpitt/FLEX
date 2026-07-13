@@ -77,9 +77,16 @@ class ExperimentSync:
         return self._user_map
 
     def resolve_user_gid(self, handle: str) -> str | None:
-        gid = self._users().get(handle.lower())
+        """The Asana user gid for a FLEX handle, or None -- never raises.
+        A task is still created unassigned rather than not at all if the
+        handle is unknown or the workspace member list can't be fetched."""
+        try:
+            gid = self._users().get(handle.lower())
+        except Exception as e:
+            log.warning("Could not resolve Asana user for '%s' (%s); creating unassigned.", handle, e)
+            return None
         if gid is None:
-            log.warning("No Asana user found for handle '%s'.", handle)
+            log.warning("No Asana user found for handle '%s'; creating unassigned.", handle)
         return gid
 
     def _fields(self) -> dict[str, dict]:

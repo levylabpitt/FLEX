@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from flex_asana.client import AsanaClient
+from flex_asana.client import AsanaClient, AsanaError
 from flex_asana.sync import ExperimentSync, handle_from_user
 
 
@@ -48,6 +48,32 @@ def test_resolve_user_gid_caches_and_warns_on_miss(client, monkeypatch):
     assert len(calls) == 1  # cached, not refetched
 
     assert sync.resolve_user_gid("nobody") is None
+
+
+def test_resolve_user_gid_never_raises_on_lookup_failure(client, monkeypatch):
+    def boom(ws):
+        raise AsanaError("list_users failed: 403")
+
+    monkeypatch.setattr(client, "list_users", boom)
+    sync = ExperimentSync(client=client, workspace_gid="ws1", project_gid="proj1")
+
+    assert sync.resolve_user_gid("jane.doe") is None  # must not raise
+
+
+def test_start_experiment_creates_unassigned_task_when_lookup_fails(client, monkeypatch):
+    monkeypatch.setattr(client, "get_project_custom_field_specs", lambda gid: {})
+    monkeypatch.setattr(client, "list_users", lambda ws: (_ for _ in ()).throw(AsanaError("down")))
+    captured = {}
+    monkeypatch.setattr(
+        client, "create_task",
+        lambda project_gid, name, **kw: captured.update(kw) or {"gid": "task1"},
+    )
+    sync = ExperimentSync(client=client, workspace_gid="ws1", project_gid="proj1")
+
+    gid = sync.start_experiment("jane", "Experiment X", datetime.now())
+
+    assert gid == "task1"  # task still created
+    assert captured["assignee"] is None  # just unassigned
 
 
 def test_custom_field_value_date_type(client, monkeypatch):

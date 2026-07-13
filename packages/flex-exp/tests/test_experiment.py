@@ -225,6 +225,53 @@ def test_comms_notify_failure_does_not_break_experiment(config, monkeypatch):
         pass
 
 
+def test_notify_false_skips_comms_entirely(config, monkeypatch):
+    from flex.comms import CommsBackend
+
+    calls = []
+
+    class RecordingComms(CommsBackend):
+        def notify_start(self, experiment):
+            calls.append("start")
+            return None
+
+        def notify_end(self, experiment, state):
+            calls.append("end")
+
+    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: RecordingComms())
+    with Experiment("u", config=config, notify=False) as exp:
+        assert exp.comms is None
+    assert calls == []
+
+
+def test_user_type_falls_back_to_str_without_flex_asana(monkeypatch):
+    """flex-exp must not hard-depend on flex-asana: block its import and
+    confirm Experiment's `User` type hint degrades to plain str rather than
+    failing to import at all."""
+    import builtins
+    import importlib
+    import sys
+
+    real_import = builtins.__import__
+
+    def blocked(name, *args, **kwargs):
+        if name == "flex_asana" or name.startswith("flex_asana."):
+            raise ImportError("simulated: flex-asana not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked)
+    for mod in [m for m in sys.modules if m == "flex_asana" or m.startswith("flex_asana.")]:
+        monkeypatch.delitem(sys.modules, mod)
+
+    import flex_exp.experiment as experiment_module
+
+    try:
+        importlib.reload(experiment_module)
+        assert experiment_module.User is str
+    finally:
+        importlib.reload(experiment_module)  # restore the real import for later tests
+
+
 def test_load_station(config, monkeypatch):
     config.stations = {}
     cfg = config.model_copy()

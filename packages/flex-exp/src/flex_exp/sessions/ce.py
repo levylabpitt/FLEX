@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from flex.components import load_ref
-from flex_exp.experiment import Experiment
+from flex_exp.experiment import Experiment, User
 
 _CE_CONFIG = (
     Path(os.environ.get("LOCALAPPDATA", ""))
@@ -131,7 +131,7 @@ class CESession(Experiment):
 
     def __init__(
         self,
-        user: str = "",
+        user: User | str = "",
         *,
         ce_path: str | Path | None = None,
         timeout: float = 10.0,

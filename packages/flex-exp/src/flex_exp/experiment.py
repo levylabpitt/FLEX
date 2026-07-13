@@ -14,6 +14,14 @@ from flex.instrument import Instrument
 from flex.log import add_file_log, enable_console, get_logger, remove_log_handler
 from flex.metadata import ExperimentRecord, NoteRecord
 
+try:
+    # A Literal of known Asana handles once generated (see flex_asana.users),
+    # purely for `user=` autocomplete -- falls back to plain str if
+    # flex-asana isn't installed, or hasn't generated one yet.
+    from flex_asana.users import User
+except ImportError:
+    User = str
+
 
 def new_id() -> str:
     """Sortable, collision-safe id: timestamp + 4 hex chars."""
@@ -35,16 +43,22 @@ class Experiment:
             lockin = exp.add(SR7270, "lockin", "USB0::...")
             with exp.measurement("IV curve") as m:
                 m.add_row(voltage=0.1, current=2.5e-9)
+
+    Args:
+        notify: Build and call the configured `[comms] backend` (e.g. Asana).
+            Set False to skip it for one run without changing the ecosystem
+            config — a scratch script that shouldn't create a task, say.
     """
 
     def __init__(
         self,
-        user: str = "",
+        user: User | str = "",
         *,
         name: str = "",
         notes: str = "",
         config: FlexConfig | str | Path | None = None,
         cell_log: bool = True,
+        notify: bool = True,
     ):
         self.config = config if isinstance(config, FlexConfig) else load_config(config)
         self.id = new_id()
@@ -71,10 +85,11 @@ class Experiment:
             self.log.warning("Metadata store unavailable (%s) - continuing without it", e)
 
         self.comms = None
-        try:
-            self.comms = self.config.build_comms()
-        except Exception as e:
-            self.log.warning("Comms backend unavailable (%s) - continuing without it", e)
+        if notify:
+            try:
+                self.comms = self.config.build_comms()
+            except Exception as e:
+                self.log.warning("Comms backend unavailable (%s) - continuing without it", e)
 
         self._record(
             lambda db: db.record_experiment_start(

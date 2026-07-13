@@ -123,12 +123,20 @@ fails, it is logged and the experiment continues. Opt into hard failures with
 
 `[comms] backend` (`"none"` by default) notifies an external system of the
 experiment lifecycle — currently just `flex-asana`'s `"asana"` (one Asana
-task per experiment, stamped with the start time and assigned to the user;
-the end time fills in when the experiment ends — see its package docstring
-for the environment variables it reads). `Experiment` builds the backend and
-calls it wrapped in try/except, same as the metadata store: a missing token,
+task per experiment, stamped with the start time and assigned to the user —
+unassigned if the handle can't be resolved, never a hard failure; the end
+time fills in when the experiment ends — see its package docstring for the
+environment variables it reads). `Experiment` builds the backend and calls it
+wrapped in try/except, same as the metadata store: a missing token,
 unreachable API, or misconfigured project never breaks a run, only logs a
-warning.
+warning. Pass `Experiment(..., notify=False)` to skip it for one run without
+touching the ecosystem config.
+
+If `flex-asana` is installed and `python -m flex_asana.update_users` has been
+run at least once (regenerates a `Literal` of workspace handles from Asana —
+rerun it when people join/leave), `Experiment(user=...)` and
+`CESession(user=...)` get IDE autocomplete for known handles; otherwise
+`user` is (and always accepts) a plain string.
 
 ## Hooks and events
 

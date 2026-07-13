@@ -19,11 +19,17 @@ to a shared repo):
 A missing token or project gid is logged as a warning and the experiment
 continues without Asana sync — see flex_exp.Experiment, which builds and
 calls this backend wrapped in try/except.
+
+``User`` (from ``flex_asana.users``) is a `Literal` of workspace handles once
+generated (``python -m flex_asana.update_users``); flex-exp uses it for
+``Experiment(user=...)`` autocomplete, falling back to plain ``str`` before
+first generation or if flex-asana isn't installed at all.
 """
 
 from flex_asana.client import Asana, AsanaClient, AsanaError
 from flex_asana.comms import AsanaComms
 from flex_asana.sync import ExperimentSync, handle_from_user
+from flex_asana.users import User
 
 __version__ = "2.0.0a1"
 
@@ -37,5 +43,6 @@ __all__ = [
     "AsanaComms",
     "AsanaError",
     "ExperimentSync",
+    "User",
     "handle_from_user",
 ]

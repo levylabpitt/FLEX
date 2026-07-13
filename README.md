@@ -49,7 +49,7 @@ default ones. Everything else is opt-in via the package manager.
 | `flex-datatypes` | HDF5 (default format) and TDMS (LabVIEW-compatible) data writers | ✅ |
 | `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | ✅ |
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
-| `flex-asana` | Asana notifications via n8n | opt-in |
+| `flex-asana` | Asana comms backend: a task per experiment | opt-in |
 
 ## Ecosystems
 
@@ -66,8 +66,8 @@ flex ecosystem use levylab
 ```
 
 installs the LevyLab stack (Instrument-Framework drivers, PostgreSQL, TDMS,
-Nextcloud, Asana hooks) and activates its configuration. A new lab member is
-productive in one command; a new lab writes one file.
+Nextcloud, Asana task tracking) and activates its configuration. A new lab
+member is productive in one command; a new lab writes one file.
 
 ## The CLI and the dashboard
 

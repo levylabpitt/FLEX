@@ -3,15 +3,17 @@
 The LevyLab ecosystem connects FLEX to the lab's LabVIEW **Instrument
 Framework** (IF): each instrument runs as an IF app exposing a JSON-RPC API
 over ZMQ, experiments are configured in the **Configure Experiments VI**, data
-goes to TDMS + Nextcloud, metadata to the lab PostgreSQL, and Asana is updated
-through n8n.
+goes to TDMS + Nextcloud, metadata to the lab PostgreSQL, and Asana gets a
+task per experiment via `flex-asana` — the Asana API directly, no n8n.
 
 ## Setup (once per machine)
 
 ```powershell
 irm flex.levylab.org/install.ps1 | iex
 flex ecosystem use levylab
-$env:NEXTCLOUD_PASSWORD = '...'   # or add to the machine environment
+$env:NEXTCLOUD_PASSWORD = '...'              # or add to the machine environment
+$env:ASANA_ACCESS_TOKEN = '...'
+$env:ASANA_EXPERIMENTS_PROJECT_GID = '...'
 ```
 
 ## CESession
@@ -37,7 +39,8 @@ with CESession() as exp:                       # user/device/wiring from the VI
 
 Everything from the base `Experiment` applies: measurements write TDMS files
 (per the levylab config), records land in PostgreSQL, `exp.update()` picks up
-instruments added in the VI while running, and n8n fires on start/end.
+instruments added in the VI while running, and an Asana task tracks the run
+from start to end (see [Experiments & data](concepts/experiments.md#comms)).
 
 ## Talking to IF apps directly
 

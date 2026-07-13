@@ -119,6 +119,17 @@ Store failures never kill a run: if the store is unavailable or a write
 fails, it is logged and the experiment continues. Opt into hard failures with
 `[exp] strict_metadata = true`.
 
+## Comms
+
+`[comms] backend` (`"none"` by default) notifies an external system of the
+experiment lifecycle — currently just `flex-asana`'s `"asana"` (one Asana
+task per experiment, stamped with the start time and assigned to the user;
+the end time fills in when the experiment ends — see its package docstring
+for the environment variables it reads). `Experiment` builds the backend and
+calls it wrapped in try/except, same as the metadata store: a missing token,
+unreachable API, or misconfigured project never breaks a run, only logs a
+warning.
+
 ## Hooks and events
 
 Every lifecycle transition is emitted on the experiment's `EventBus`:
@@ -131,13 +142,15 @@ string:
 
 ```toml
 [hooks]
-on_experiment_end = ["flex_asana.hooks:notify_n8n"]
+on_experiment_end = ["some_package.hooks:notify"]
 ```
 
 Keys may use the `on_<event with _>` form shown or the bare event name.
 Subscriber exceptions are logged and swallowed: a broken webhook must never
 break a running experiment. A hook that fails to *load* is also only a
-warning.
+warning. This is the general-purpose extension point; official integrations
+like Asana use the more specific `[comms]` layer instead (above), matching
+how `[db]`/`[data]`/`[storage]` work rather than requiring hand-wired hooks.
 
 ## CESession
 

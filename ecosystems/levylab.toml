@@ -1,5 +1,5 @@
 # The LevyLab ecosystem: Instrument-Framework drivers over ZMQ, PostgreSQL
-# metadata, TDMS data files, Nextcloud storage, Asana notifications via n8n.
+# metadata, TDMS data files, Nextcloud storage, an Asana task per experiment.
 # Activate with: flex ecosystem use ecosystems/levylab.toml
 
 [ecosystem]
@@ -33,12 +33,11 @@ writer = "tdms"
 [exp]
 handler = "ce"   # CESession: bootstrapped from the Configure Experiments VI
 
-[asana]
-webhook_url = "https://n8n.levylab.org/webhook/32be1239-a29b-4e69-bfec-74d312301c9b"
-
-[hooks]
-on_experiment_start = ["flex_asana.hooks:notify_n8n"]
-on_experiment_end = ["flex_asana.hooks:notify_n8n"]
+[comms]
+backend = "asana"
+# ASANA_ACCESS_TOKEN, ASANA_EXPERIMENTS_PROJECT_GID (required) and
+# ASANA_WORKSPACE_GID (optional, single-workspace accounts) are environment
+# variables, not manifest keys -- see flex_asana's package docstring.
 
 # This ecosystem only sets up shared lab-wide software (packages, DB, storage,
 # hooks). Which drivers are enabled and which instruments live at your bench

@@ -77,6 +77,10 @@ class ExpConfig(_Section):
     strict_metadata: bool = False
 
 
+class CommsConfig(_Section):
+    backend: str = "none"
+
+
 class DriversConfig(_Section):
     enabled: list[str] = Field(default_factory=list)
 
@@ -99,6 +103,7 @@ class FlexConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     data: DataConfig = Field(default_factory=DataConfig)
     exp: ExpConfig = Field(default_factory=ExpConfig)
+    comms: CommsConfig = Field(default_factory=CommsConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     drivers: DriversConfig = Field(default_factory=DriversConfig)
     stations: dict[str, StationConfig] = Field(default_factory=dict)
@@ -123,6 +128,11 @@ class FlexConfig(BaseModel):
         opts = self.storage.options()
         root = opts.pop("root", self.data.root)  # explicit [storage] root wins
         return cls(root=root, **opts)
+
+    def build_comms(self):
+        """Instantiate the configured comms backend (none by default)."""
+        cls = components.resolve("comms", self.comms.backend)
+        return cls(**self.comms.options())
 
     def build_bus(self) -> EventBus:
         """Create an EventBus with all configured hooks subscribed."""

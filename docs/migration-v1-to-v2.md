@@ -10,7 +10,7 @@ home.
 |---|---|
 | clone repo + `pip install -e .` (one big package) | `irm flex.levylab.org/install.ps1 \| iex`, then `flex ecosystem use levylab` for the lab stack |
 | hardcoded DB / Nextcloud / n8n endpoints in code | one manifest in the repo's `ecosystems/` folder: `flex ecosystem show` after activating `levylab` |
-| secrets in source | environment variables (`NEXTCLOUD_PASSWORD`, `FLEX_N8N_WEBHOOK`) |
+| secrets in source | environment variables (`NEXTCLOUD_PASSWORD`, `ASANA_ACCESS_TOKEN`) |
 
 ## Imports and classes
 
@@ -26,7 +26,7 @@ home.
 | `flex.db.FLEXDB` (raw SQL, hardcoded host) | metadata store from config: SQLite default, `[db] backend = "postgres"` for the lab DB |
 | `flex.tdms.flexTDMS.write_tdms` | `[data] writer = "tdms"` — every measurement writes TDMS automatically |
 | `flex.nextcloud` | `[storage] backend = "nextcloud"` — files upload on measurement finish |
-| `flex.exp.dbexptoAsana.trigger_n8n_dbexptoAsana()` | `[hooks] on_experiment_end = ["flex_asana.hooks:notify_n8n"]` |
+| `flex.exp.dbexptoAsana.trigger_n8n_dbexptoAsana()` (n8n) / `flex.asana.Asana` (hardcoded-token stub) | `[comms] backend = "asana"` — `flex-asana` talks to the Asana API directly, token from `ASANA_ACCESS_TOKEN` |
 | `flex.exp.users` hardcoded `Literal` list | any user string; lab-side validation can hook `experiment.start` |
 | `flex.exp.script_to_db.CellLogger` | built into `Experiment` (`cell_log=True`), stored as notes with `kind="cell"` |
 
@@ -51,8 +51,9 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 
 ## Not carried over (deliberately)
 
-- `flex.asana` direct-API module (superseded by the n8n hook). **The v1 file
-  contains a live Asana token — revoke it.**
+- **The v1 `flex.asana.Asana` file contains a live, hardcoded Asana token —
+  revoke it** (its v2 replacement reads `ASANA_ACCESS_TOKEN` from the
+  environment instead; see the row above).
 - `flex.lv` LabVIEW call helpers, `exp/pund.py` (experiment logic, not
   framework — rewrite as a `Scan` script), `exp/experiment_bak`.
 - Newport/Ophir/Sphere drivers that require .NET or COM — tracked in

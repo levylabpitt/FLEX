@@ -6,7 +6,8 @@ box before switching production work to v2.
 ## Setup
 - [ ] Fresh venv: `pip install -e` the workspace packages (or `uv sync`)
 - [ ] `flex ecosystem use levylab` completes; `flex ecosystem show` looks right
-- [ ] `NEXTCLOUD_PASSWORD` set; `flex ecosystem validate levylab` all green
+- [ ] `NEXTCLOUD_PASSWORD`, `ASANA_ACCESS_TOKEN`, `ASANA_EXPERIMENTS_PROJECT_GID`
+      set; `flex ecosystem validate levylab` all green
 
 ## Instruments
 - [ ] `flex instruments --probe` reaches every configured IF app
@@ -23,7 +24,8 @@ box before switching production work to v2.
 - [ ] Experiment + measurement rows appear in PostgreSQL
 - [ ] Ctrl-C mid-sweep: file finalized, `aborted` flag set, `on_abort` ramps
       the gate down, instruments still responsive afterwards
-- [ ] n8n webhook fires on experiment start/end (check Asana)
+- [ ] An Asana task is created on experiment start and its end time fills in
+      on end (check the configured project directly)
 
 ## UX
 - [ ] `python -m flex dashboard`: Drivers tab installs/enables a driver; Experiments

@@ -4,10 +4,12 @@
     "summary": "Instrument model, data & metadata services, package manager, dashboard, CLI",
     "default": true,
     "provides": {
-      "storage": ["local"]
+      "storage": ["local"],
+      "comms": ["none"]
     },
     "registries": {
-      "storage": "flex.data:STORAGE"
+      "storage": "flex.data:STORAGE",
+      "comms": "flex.comms:COMMS"
     }
   },
   "flex-protocols": {
@@ -78,6 +80,12 @@
   },
   "flex-asana": {
     "group": "Integrations",
-    "summary": "Asana project-tracking hooks (via n8n webhooks)"
+    "summary": "Asana comms backend: an experiment task per run, via the Asana API directly",
+    "provides": {
+      "comms": ["asana"]
+    },
+    "registries": {
+      "comms": "flex_asana:COMMS"
+    }
   }
 }

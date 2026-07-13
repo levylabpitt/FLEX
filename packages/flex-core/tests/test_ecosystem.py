@@ -43,6 +43,7 @@ def test_defaults_without_config(monkeypatch, tmp_path):
     assert cfg.data.writer == "hdf5"
     assert cfg.storage.backend == "local"
     assert cfg.exp.handler == "default"
+    assert cfg.comms.backend == "none"
     assert cfg.data.root == default_data_root()
 
 

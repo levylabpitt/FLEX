@@ -16,7 +16,7 @@ side effects — a "plugin" is a plain dict a package exports.
 | `flex-datatypes` | HDF5 (default) and TDMS (LabVIEW-compatible) data writers | yes |
 | `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | yes |
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
-| `flex-asana` | Asana notifications via n8n | opt-in |
+| `flex-asana` | Asana comms backend: a task per experiment | opt-in |
 
 The installer gives you the six default packages. Opt-in packages arrive via
 `flex install`, `flex enable <driver>`, or activating an

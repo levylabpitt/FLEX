@@ -28,8 +28,11 @@ backend = "local"             # or "nextcloud" with url/user (+ NEXTCLOUD_PASSWO
 writer = "hdf5"               # or "tdms"
 root = "D:/data"
 
+[comms]
+backend = "none"              # or "asana" (flex-asana) -- see its package docstring for config
+
 [hooks]                       # dotted refs, subscribed to experiment events
-on_experiment_end = ["flex_asana.hooks:notify_n8n"]
+on_experiment_end = ["some_package.hooks:notify"]
 
 [drivers]
 enabled = ["srs.sr7270"]
@@ -72,10 +75,10 @@ Labs add their own components as normal Python packages:
 - a **driver package**: `flex new package flex-drivers-mylab` scaffolds one —
   fill drivers in, list them in its `CATALOG`, and they appear in
   `flex list --drivers`;
-- a **DB backend / data writer / storage backend**: subclass `MetadataStore`,
-  `DataWriter`, or `StorageBackend` from `flex-core` and export a
-  `{name: "module:Class"}` registry dict from your package — the name you
-  register is what goes in the manifest;
+- a **DB backend / data writer / storage backend / comms backend**: subclass
+  `MetadataStore`, `DataWriter`, `StorageBackend`, or `CommsBackend` from
+  `flex-core` and export a `{name: "module:Class"}` registry dict from your
+  package — the name you register is what goes in the manifest;
 - **hooks**: any function `fn(event, experiment, **payload)`, referenced from
   `[hooks]`.
 

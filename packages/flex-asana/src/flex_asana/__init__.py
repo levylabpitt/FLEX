@@ -1,16 +1,41 @@
-"""FLEX hooks for Asana project tracking, via the lab's n8n automation.
+"""Asana comms backend: one Asana task per experiment, via the Asana API
+directly (no n8n or other middleman).
 
-Configuration (in the ecosystem manifest)::
+Enable it in an ecosystem manifest::
 
-    [asana]
-    webhook_url = "https://n8n.example.org/webhook/<id>"
+    [comms]
+    backend = "asana"
 
-    [hooks]
-    on_experiment_start = ["flex_asana.hooks:notify_n8n"]
-    on_experiment_end   = ["flex_asana.hooks:notify_n8n"]
+Configuration is read from the environment (never the manifest, since these
+aren't secrets so much as per-account specifics that don't belong committed
+to a shared repo):
 
-The webhook URL may also be set via the ``FLEX_N8N_WEBHOOK`` environment
-variable. Credentials are never stored in code.
+    ASANA_ACCESS_TOKEN            # personal access token (required)
+    ASANA_WORKSPACE_GID           # optional if the account has one workspace
+    ASANA_EXPERIMENTS_PROJECT_GID # project experiment tasks are created in (required)
+    ASANA_START_FIELD             # custom field name, default "Start Time"
+    ASANA_END_FIELD               # custom field name, default "End Time"
+
+A missing token or project gid is logged as a warning and the experiment
+continues without Asana sync — see flex_exp.Experiment, which builds and
+calls this backend wrapped in try/except.
 """
 
+from flex_asana.client import Asana, AsanaClient, AsanaError
+from flex_asana.comms import AsanaComms
+from flex_asana.sync import ExperimentSync, handle_from_user
+
 __version__ = "2.0.0a1"
+
+#: Comms backend name -> "module:Class" reference.
+COMMS: dict[str, str] = {"asana": "flex_asana.comms:AsanaComms"}
+
+__all__ = [
+    "COMMS",
+    "Asana",
+    "AsanaClient",
+    "AsanaComms",
+    "AsanaError",
+    "ExperimentSync",
+    "handle_from_user",
+]

@@ -53,7 +53,7 @@ def resolve(group: str, name: str) -> Any:
 
 
 def load_ref(ref: str) -> Any:
-    """Load a dotted reference like ``"flex_asana.hooks:notify_n8n"``."""
+    """Load a dotted reference like ``"flex_asana.comms:AsanaComms"``."""
     module, _, attr = ref.partition(":")
     try:
         obj = import_module(module)

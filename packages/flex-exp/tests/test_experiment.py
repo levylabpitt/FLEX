@@ -175,6 +175,56 @@ def test_metadata_store_failure_does_not_break_experiment(config, monkeypatch):
     assert m.file is not None
 
 
+def test_comms_defaults_to_none(config):
+    with Experiment("u", config=config) as exp:
+        from flex.comms import NoComms
+
+        assert isinstance(exp.comms, NoComms)
+
+
+def test_comms_notify_start_and_end(config, monkeypatch):
+    from flex.comms import CommsBackend
+
+    calls = []
+
+    class RecordingComms(CommsBackend):
+        def notify_start(self, experiment):
+            calls.append(("start", experiment.id))
+            return "task-42"
+
+        def notify_end(self, experiment, state):
+            calls.append(("end", experiment.id, state))
+
+    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: RecordingComms())
+    with Experiment("u", config=config) as exp:
+        assert calls == [("start", exp.id)]
+    assert calls == [("start", exp.id), ("end", exp.id, "task-42")]
+
+
+def test_comms_build_failure_does_not_break_experiment(config, monkeypatch):
+    monkeypatch.setattr(
+        "flex.ecosystem.FlexConfig.build_comms",
+        lambda self: (_ for _ in ()).throw(RuntimeError("no token")),
+    )
+    with Experiment("u", config=config) as exp:  # must not raise
+        assert exp.comms is None
+
+
+def test_comms_notify_failure_does_not_break_experiment(config, monkeypatch):
+    from flex.comms import CommsBackend
+
+    class BrokenComms(CommsBackend):
+        def notify_start(self, experiment):
+            raise RuntimeError("start boom")
+
+        def notify_end(self, experiment, state):
+            raise RuntimeError("end boom")
+
+    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: BrokenComms())
+    with Experiment("u", config=config):  # must not raise, either at start or end
+        pass
+
+
 def test_load_station(config, monkeypatch):
     config.stations = {}
     cfg = config.model_copy()

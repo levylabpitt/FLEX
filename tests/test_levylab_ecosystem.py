@@ -82,10 +82,11 @@ print(f"Demo config   -- db.backend={config.db.backend}  storage.backend={config
       f"  (overridden for this demo; data.writer/exp.handler unchanged)")
 print(f"Data root on this machine: {default_data_root()}")
 print(
-    "Note: [hooks] is untouched, so the real Asana/n8n webhooks still fire on\n"
-    "every experiment start/end below. n8n.levylab.org won't resolve from this\n"
-    "machine -- you'll see a WARNING, not a crash: EventBus swallows hook\n"
-    "failures so a broken/unreachable integration never breaks an experiment."
+    "Note: [comms] is untouched (backend = \"asana\"), so every Experiment below\n"
+    "tries to build flex_asana's AsanaComms. This machine has no\n"
+    "ASANA_ACCESS_TOKEN -- you'll see a WARNING, not a crash: Experiment builds\n"
+    "the comms backend wrapped in try/except, so a missing/misconfigured\n"
+    "integration never breaks an experiment."
 )
 
 

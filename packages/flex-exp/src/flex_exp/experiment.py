@@ -24,9 +24,10 @@ class Experiment:
     """An experiment session: instruments, measurements, notes, and records.
 
     Works with any FLEX instrument (VISA, TCP, serial, ZMQ, simulated) and
-    builds its services — metadata store, storage backend, data writer, hooks —
-    from the active ecosystem configuration. With no configuration, everything
-    lands in SQLite + HDF5 files under the user data directory.
+    builds its services — metadata store, storage backend, data writer, comms
+    backend, hooks — from the active ecosystem configuration. With no
+    configuration, everything lands in SQLite + HDF5 files under the user
+    data directory, and no external notifications are sent.
 
     Usage::
 
@@ -69,6 +70,12 @@ class Experiment:
                 raise
             self.log.warning("Metadata store unavailable (%s) - continuing without it", e)
 
+        self.comms = None
+        try:
+            self.comms = self.config.build_comms()
+        except Exception as e:
+            self.log.warning("Comms backend unavailable (%s) - continuing without it", e)
+
         self._record(
             lambda db: db.record_experiment_start(
                 ExperimentRecord(
@@ -84,6 +91,13 @@ class Experiment:
         self.log.info("Experiment %s started (user: %s)", self.id, self.user)
         if notes:
             self.note(notes)
+
+        self._comms_state = None
+        if self.comms is not None:
+            try:
+                self._comms_state = self.comms.notify_start(self)
+            except Exception as e:
+                self.log.warning("Comms notify_start failed (%s) - continuing", e)
 
         self._cell_logger = None
         if cell_log:
@@ -199,6 +213,15 @@ class Experiment:
         )
         self.events.emit("experiment.end", experiment=self)
         self.log.info("Experiment %s ended", self.id)
+        if self.comms is not None:
+            try:
+                self.comms.notify_end(self, self._comms_state)
+            except Exception as e:
+                self.log.warning("Comms notify_end failed (%s) - continuing", e)
+            try:
+                self.comms.close()
+            except Exception:
+                pass
         if self.db is not None:
             try:
                 self.db.close()

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flex-drivers"
-version = "2.0.0a1"
+version = "3.0.0a1"
 description = "FLEX instrument drivers, organized by vendor (including LevyLab)"
 license = "MIT"
 requires-python = ">=3.11"

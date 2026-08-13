@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flex-nextcloud"
-version = "2.0.0a1"
+version = "3.0.0a1"
 description = "FLEX storage backend for Nextcloud (WebDAV upload)"
 license = "MIT"
 requires-python = ">=3.11"

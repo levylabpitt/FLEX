@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flex-core"
-version = "2.0.0a1"
+version = "3.0.0a1"
 description = "FLEX core: instrument model, protocol bases, data & metadata services, station configuration, CLI"
 license = "MIT"
 requires-python = ">=3.11"

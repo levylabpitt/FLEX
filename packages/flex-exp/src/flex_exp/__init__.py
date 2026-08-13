@@ -9,7 +9,7 @@ from flex_exp.experiment import Experiment
 from flex_exp.measurement import Measurement
 from flex_exp.sweep import Scan, SweepAxis, sweep
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 __all__ = ["CESession", "Experiment", "Measurement", "Scan", "SweepAxis", "sweep"]
 

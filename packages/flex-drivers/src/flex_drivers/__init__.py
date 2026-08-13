@@ -10,7 +10,7 @@ whose values are ``"module:Class"`` references resolvable with
 
 from flex_drivers.levylab import CATALOG as _LEVYLAB_CATALOG
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 #: Driver name -> "module:Class" reference.
 CATALOG: dict[str, str] = {

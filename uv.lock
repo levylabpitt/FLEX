@@ -305,7 +305,7 @@ wheels = [
 
 [[package]]
 name = "flex"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex" }
 dependencies = [
     { name = "flex-core", extra = ["visa"] },
@@ -322,7 +322,7 @@ requires-dist = [
 
 [[package]]
 name = "flex-asana"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex-asana" }
 dependencies = [
     { name = "asana" },
@@ -337,7 +337,7 @@ requires-dist = [
 
 [[package]]
 name = "flex-core"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex-core" }
 dependencies = [
     { name = "fastapi" },
@@ -404,7 +404,7 @@ provides-extras = ["visa", "zmq", "serial", "postgres", "tdms", "all"]
 
 [[package]]
 name = "flex-drivers"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex-drivers" }
 dependencies = [
     { name = "flex-core", extra = ["serial", "visa", "zmq"] },
@@ -415,7 +415,7 @@ requires-dist = [{ name = "flex-core", extras = ["visa", "zmq", "serial"], edita
 
 [[package]]
 name = "flex-exp"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex-exp" }
 dependencies = [
     { name = "flex-core" },
@@ -426,7 +426,7 @@ requires-dist = [{ name = "flex-core", editable = "packages/flex-core" }]
 
 [[package]]
 name = "flex-nextcloud"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { editable = "packages/flex-nextcloud" }
 dependencies = [
     { name = "flex-core" },
@@ -441,7 +441,7 @@ requires-dist = [
 
 [[package]]
 name = "flex-workspace"
-version = "2.0.0a1"
+version = "3.0.0a1"
 source = { virtual = "." }
 dependencies = [
     { name = "flex" },

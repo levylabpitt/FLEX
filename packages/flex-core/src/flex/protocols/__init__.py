@@ -19,7 +19,7 @@ the protocols you use need to be installed.
 
 from importlib import import_module
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 _LAZY = {
     "VISAInstrument": ("flex.protocols.visa", "pyvisa", "visa"),

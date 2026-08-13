@@ -6,7 +6,7 @@ Ports of the FLEX v1 ``flex.inst.levylab`` drivers onto
 module.
 """
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 #: Driver name -> "module:Class" reference (resolved with flex.components.load_ref).
 CATALOG: dict[str, str] = {

@@ -42,7 +42,7 @@ from flex_asana.comms import AsanaComms
 from flex_asana.sync import ExperimentSync, handle_from_user
 from flex_asana.users import User
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 #: Comms backend name -> "module:Class" reference.
 COMMS: dict[str, str] = {"asana": "flex_asana.comms:AsanaComms"}

@@ -24,7 +24,7 @@ def test_experiment_lifecycle(tmp_path):
     store.record_experiment_start(
         ExperimentRecord(
             id="e1", user="pubudu", name="gate sweep", start_time=T0,
-            station="cryo1", host="bench-pc", flex_version="2.0.0a1",
+            station="cryo1", host="bench-pc", flex_version="3.0.0a1",
             config={"db": "sqlite"},
         )
     )
@@ -37,7 +37,7 @@ def test_experiment_lifecycle(tmp_path):
     assert exp.end_time == T1
     assert exp.station == "cryo1"
     assert exp.host == "bench-pc"
-    assert exp.flex_version == "2.0.0a1"
+    assert exp.flex_version == "3.0.0a1"
     assert exp.config == {"db": "sqlite"}
     store.close()
 

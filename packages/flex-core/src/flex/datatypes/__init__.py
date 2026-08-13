@@ -8,7 +8,7 @@ and ``npTDMS``) are installed with the package.
 
 from __future__ import annotations
 
-__version__ = "2.0.0a1"
+__version__ = "3.0.0a1"
 
 #: Writer name -> "module:Class" reference (resolved with flex.components.load_ref).
 WRITERS: dict[str, str] = {

@@ -87,6 +87,8 @@ class InstrumentConfig(_Section):
     driver: str = ""
     address: str = ""
     simulate: bool = False
+    log: list[str] = Field(default_factory=list)  # parameters flex serve logs to the DB
+    log_interval: float = 60.0  # seconds between logged reads
 
     def build(self, name: str):
         """Instantiate this entry: the driver class, or — with

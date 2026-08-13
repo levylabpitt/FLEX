@@ -25,6 +25,7 @@ from typing import Any
 import psycopg
 
 from flex.data.storage import FilePointer
+from flex.db.sqlite import _dump_value
 from flex.log import get_logger
 from flex.metadata import (
     CellRecord,
@@ -33,6 +34,7 @@ from flex.metadata import (
     LogEntryRecord,
     MeasurementRecord,
     MetadataStore,
+    MonitorRecord,
     NoteRecord,
 )
 
@@ -95,6 +97,15 @@ CREATE TABLE IF NOT EXISTS flex_instruments (
     options       JSONB DEFAULT '{}',
     connected_at  TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS flex_monitor (
+    id        BIGSERIAL PRIMARY KEY,
+    time      TIMESTAMP,
+    station   TEXT,
+    parameter TEXT,
+    value     JSONB,
+    unit      TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_flex_monitor ON flex_monitor(parameter, time);
 CREATE INDEX IF NOT EXISTS idx_flex_meas_exp ON flex_measurements(experiment_id);
 CREATE INDEX IF NOT EXISTS idx_flex_notes_exp ON flex_notes(experiment_id);
 CREATE INDEX IF NOT EXISTS idx_flex_cells_exp ON flex_cells(experiment_id);
@@ -220,6 +231,12 @@ class PostgresStore(MetadataStore):
             ),
         )
 
+    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
+        self._execute(
+            "INSERT INTO flex_monitor (time, station, parameter, value, unit) VALUES (%s, %s, %s, %s, %s)",
+            (record.time, record.station, record.parameter, _dump_value(record.value), record.unit),
+        )
+
     # -- reading ----------------------------------------------------------
 
     def get_experiment(self, experiment_id: str) -> ExperimentRecord | None:
@@ -324,6 +341,34 @@ class PostgresStore(MetadataStore):
                 address=r[3],
                 options=r[4] if isinstance(r[4], dict) else json.loads(r[4] or "{}"),
                 connected_at=r[5],
+            )
+            for r in rows
+        ]
+
+    def list_monitor(
+        self,
+        parameter: str | None = None,
+        *,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[MonitorRecord]:
+        sql = "SELECT time, station, parameter, value, unit FROM flex_monitor"
+        clauses, params = [], []
+        if parameter:
+            clauses.append("parameter = %s")
+            params.append(parameter)
+        if since:
+            clauses.append("time >= %s")
+            params.append(since)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY id DESC LIMIT %s"
+        rows = self._query(sql, (*params, limit))
+        return [
+            MonitorRecord(
+                time=r[0], station=r[1], parameter=r[2],
+                value=r[3] if not isinstance(r[3], str) else json.loads(r[3]),
+                unit=r[4] or "",
             )
             for r in rows
         ]

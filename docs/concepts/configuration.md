@@ -77,5 +77,24 @@ standalone station (no experiment), and `flex serve` hosts that station
 over ZMQ — port set by `[server] port` (default 29500). See
 [Architecture](architecture.md#the-station-server).
 
+## Background logging
+
+`flex serve` can log parameters to the database around the clock:
+
+```toml
+[instruments.spectrometer]
+driver = "acme.spec2000:Spec2000"
+address = "tcp://localhost:29200"
+log = ["spectrum", "temperature"]   # parameters to log
+log_interval = 60                   # seconds between reads
+```
+
+The reads go through the instrument's normal command queue, so they never
+collide with a running experiment; every update lands in the `flex_monitor`
+table (and any *set* of a logged parameter is recorded too). Browse history
+with `flex monitor`, or stream live with `flex monitor --follow`. Anything
+loggable must be a parameter — wrap a driver method with
+`add_parameter(..., getter=...)` if needed.
+
 The LevyLab setup replaces instrument config with the Configure Experiments
 VI: see [CESession](experiments.md#cesession).

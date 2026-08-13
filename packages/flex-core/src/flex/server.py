@@ -13,6 +13,12 @@ Every parameter update is published on the PUB socket as
 ``[event-name, json]`` with a sequence number, so subscribers can detect
 gaps. The event stream is monitoring, not the data record — files and the
 metadata store remain authoritative.
+
+Background logging: an ``[instruments.*] log`` list makes the server read
+those parameters every ``log_interval`` seconds and write every update to
+the configured database (``flex_monitor`` table). The reads go through the
+instrument's normal worker queue, so they never collide with commands.
+Browse with ``flex monitor``.
 """
 
 from __future__ import annotations
@@ -21,6 +27,8 @@ import itertools
 import json
 import queue
 import threading
+import time
+from datetime import datetime
 from typing import Any
 
 import zmq
@@ -28,6 +36,7 @@ import zmq
 from flex import __version__ as flex_version
 from flex.events import EVENTS
 from flex.log import get_logger
+from flex.metadata import MonitorRecord
 from flex.station import Station
 
 _METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "listInstruments", "get", "set", "call")
@@ -39,10 +48,26 @@ def _jsonable(obj: Any) -> Any:
     return str(obj)
 
 
+_POLL = object()  # worker queue marker for a scheduled monitor read
+
+
 class StationServer:
-    def __init__(self, station: Station, *, port: int | None = None, bind: str = "tcp://*"):
+    def __init__(self, station: Station, *, port: int | None = None, bind: str = "tcp://*",
+                 monitor: dict[str, tuple[list[str], float]] | None = None):
+        """``monitor`` maps instrument name -> (parameters, interval seconds);
+        by default it is derived from the config's ``log``/``log_interval``."""
         self.station = station
         self.log = get_logger(f"server.{station.name}")
+        if monitor is None:
+            monitor = {
+                name: (spec.log, spec.log_interval)
+                for name, spec in station.config.instruments.items()
+                if spec.log and name in station.instruments
+            }
+        self.monitor = monitor
+        self._logged = {f"{inst}.{p}" for inst, (params, _) in monitor.items() for p in params}
+        self._records: queue.Queue = queue.Queue()
+        self._monitor_threads: list[threading.Thread] = []
         self._context = zmq.Context.instance()
         self._router = self._context.socket(zmq.ROUTER)
         self._pub = self._context.socket(zmq.PUB)
@@ -95,6 +120,8 @@ class StationServer:
             q.put(None)
         for worker, _q in self._workers.values():
             worker.join(timeout=2)
+        for t in self._monitor_threads:
+            t.join(timeout=2)
         self._router.close(linger=0)
         self._pub.close(linger=0)
 
@@ -104,6 +131,14 @@ class StationServer:
             worker = threading.Thread(target=self._work, args=(name, q), daemon=True)
             worker.start()
             self._workers[name] = (worker, q)
+        if self.monitor:
+            self._monitor_threads = [
+                threading.Thread(target=self._schedule, args=(name, params, interval), daemon=True)
+                for name, (params, interval) in self.monitor.items()
+            ]
+            self._monitor_threads.append(threading.Thread(target=self._write_records, daemon=True))
+            for t in self._monitor_threads:
+                t.start()
 
     # -- main loop ---------------------------------------------------------
 
@@ -182,6 +217,7 @@ class StationServer:
             instruments[name] = {
                 "class": f"{type(inst).__module__}.{type(inst).__qualname__}",
                 "address": inst.address,
+                "log": self.monitor.get(name, ([], 0))[0],
                 "parameters": {
                     p.name: {"unit": p.unit, "gettable": p.gettable, "settable": p.settable,
                              "cache": p.cache, "cache_time": p.cache_time}
@@ -196,6 +232,12 @@ class StationServer:
             item = q.get()
             if item is None:
                 return
+            if item[0] is _POLL:
+                try:
+                    inst.parameters[item[1]].get()  # emits parameter.update
+                except Exception as e:
+                    self.log.warning("Monitor read %s.%s failed: %s", name, item[1], e)
+                continue
             identity, request = item
             req_id = request.get("id")
             params = request.get("params") or {}
@@ -220,10 +262,51 @@ class StationServer:
             except Exception as e:
                 self._replies.put((identity, self._error(req_id, -32000, f"{name}: {e}")))
 
+    # -- monitoring --------------------------------------------------------
+
+    def _schedule(self, name: str, params: list[str], interval: float) -> None:
+        q = self._workers[name][1]
+        next_due = time.monotonic()
+        while self._running:
+            if time.monotonic() >= next_due:
+                for p in params:
+                    q.put((_POLL, p))
+                next_due = time.monotonic() + interval
+            time.sleep(min(0.05, interval / 4))
+
+    def _write_records(self) -> None:
+        """Single writer thread: owns the DB connection, drains the record queue."""
+        try:
+            store = self.station.config.build_db()
+        except Exception as e:
+            self.log.warning("Monitor DB unavailable (%s) - background logging disabled", e)
+            return
+        failing = False
+        while self._running or not self._records.empty():
+            try:
+                record = self._records.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                store.record_monitor(record)
+                failing = False
+            except Exception as e:
+                if not failing:
+                    self.log.warning("Monitor write failed (%s) - retrying quietly", e)
+                failing = True
+        store.close()
+
     # -- events ------------------------------------------------------------
 
     def _forward_event(self, *, event: str, **payload) -> None:
-        payload = {k: v for k, v in payload.items() if isinstance(v, (str, int, float, bool, type(None)))}
+        if event == "parameter.update" and payload.get("parameter") in self._logged:
+            self._records.put(MonitorRecord(
+                parameter=payload["parameter"], value=payload["value"],
+                time=datetime.fromtimestamp(payload["ts"]), station=self.station.name,
+                unit=payload.get("unit", ""),
+            ))
+        payload = {k: v for k, v in payload.items()
+                   if isinstance(v, (str, int, float, bool, list, tuple, dict, type(None)))}
         payload.update(seq=next(self._seq), event=event, station=self.station.name)
         self._events.put((event, json.dumps(payload, default=_jsonable).encode()))
 

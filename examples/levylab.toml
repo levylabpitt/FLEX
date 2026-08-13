@@ -49,8 +49,12 @@ backend = "asana"
 # Which instruments are wired to this PC is per-machine, not lab-wide --
 # add your own [instruments.*] entries locally (dashboard "Config" tab, or
 # edit flex.toml directly) instead of inheriting someone else's here.
-# Example (`simulate = true` swaps any entry for a hardware-free stand-in):
+# `simulate = true` swaps any entry for a hardware-free stand-in;
+# `log = [...]` makes `flex serve` record those parameters to the DB.
+# Example:
 #
 # [instruments.lockin]
 # driver = "levylab.lockin"
 # address = "tcp://localhost:29170"
+# log = ["state"]
+# log_interval = 60

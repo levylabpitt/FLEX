@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,17 @@ from flex.metadata import (
     LogEntryRecord,
     MeasurementRecord,
     MetadataStore,
+    MonitorRecord,
     NoteRecord,
 )
+
+
+def _dump_value(value: Any) -> str:
+    """JSON-encode a monitored value; numpy scalars/arrays included."""
+    return json.dumps(
+        value,
+        default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o),
+    )
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS flex_experiments (
@@ -79,6 +89,15 @@ CREATE TABLE IF NOT EXISTS flex_instruments (
     options       TEXT DEFAULT '{}',
     connected_at  TEXT
 );
+CREATE TABLE IF NOT EXISTS flex_monitor (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    time      TEXT,
+    station   TEXT,
+    parameter TEXT,
+    value     TEXT,
+    unit      TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_flex_monitor ON flex_monitor(parameter, time);
 CREATE INDEX IF NOT EXISTS idx_flex_meas_exp ON flex_measurements(experiment_id);
 CREATE INDEX IF NOT EXISTS idx_flex_notes_exp ON flex_notes(experiment_id);
 CREATE INDEX IF NOT EXISTS idx_flex_cells_exp ON flex_cells(experiment_id);
@@ -107,11 +126,20 @@ class SQLiteStore(MetadataStore):
             path = Path(data_root) / "flex.db"
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.path)
+        try:
+            self._open()
+        except sqlite3.DatabaseError:
+            # transient WAL-recovery race when another process writes
+            # concurrently (seen on Windows); one retry clears it
+            time.sleep(0.2)
+            self._open()
+        get_logger("db.sqlite").debug("Open: %s", self.path)
+
+    def _open(self) -> None:
+        self._conn = sqlite3.connect(self.path, timeout=10)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
-        get_logger("db.sqlite").debug("Open: %s", self.path)
 
     # -- writing ----------------------------------------------------------
 
@@ -237,6 +265,13 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
+    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
+        self._conn.execute(
+            "INSERT INTO flex_monitor (time, station, parameter, value, unit) VALUES (?, ?, ?, ?, ?)",
+            (_iso(record.time), record.station, record.parameter, _dump_value(record.value), record.unit),
+        )
+        self._conn.commit()
+
     # -- reading ----------------------------------------------------------
 
     def get_experiment(self, experiment_id: str) -> ExperimentRecord | None:
@@ -343,6 +378,31 @@ class SQLiteStore(MetadataStore):
                 options=json.loads(r[4] or "{}"),
                 connected_at=_dt(r[5]),
             )
+            for r in rows
+        ]
+
+    def list_monitor(
+        self,
+        parameter: str | None = None,
+        *,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[MonitorRecord]:
+        sql = "SELECT time, station, parameter, value, unit FROM flex_monitor"
+        clauses, params = [], []
+        if parameter:
+            clauses.append("parameter = ?")
+            params.append(parameter)
+        if since:
+            clauses.append("time >= ?")
+            params.append(_iso(since))
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY id DESC LIMIT ?"
+        rows = self._conn.execute(sql, (*params, limit)).fetchall()
+        return [
+            MonitorRecord(time=_dt(r[0]), station=r[1], parameter=r[2],
+                          value=json.loads(r[3]), unit=r[4] or "")
             for r in rows
         ]
 

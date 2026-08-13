@@ -100,3 +100,68 @@ def test_station_load_from_config():
     cfg = FlexConfig.model_validate({"instruments": {"bench": {"simulate": True}}})
     with Station.load(cfg) as station:
         assert station.bench.idn()["model"] == "SimulatedInstrument"
+
+
+def test_background_logging(tmp_path):
+    cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("x", initial=1.25, unit="V")
+    station = Station({"bench": sim}, name="logstation", config=cfg)
+    server = StationServer(station, monitor={"bench": (["x"], 0.1)})
+    server.start()
+    try:
+        time.sleep(0.6)
+    finally:
+        server.stop()
+        station.close()
+
+    store = cfg.build_db()
+    try:
+        rows = store.list_monitor("bench.x")
+        assert len(rows) >= 3  # several 0.1s polls landed
+        assert rows[0].value == 1.25
+        assert rows[0].unit == "V"
+        assert rows[0].station == "logstation"
+        assert store.list_monitor("bench.nope") == []
+    finally:
+        store.close()
+
+
+def test_monitor_logs_remote_sets_too(tmp_path):
+    cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("gate", unit="V")
+    station = Station({"bench": sim}, name="logstation", config=cfg)
+    server = StationServer(station, monitor={"bench": (["gate"], 60)})
+    server.start()
+    remote = connect(f"tcp://127.0.0.1:{server.port}", timeout=3.0)
+    try:
+        remote.bench.gate(0.7)
+        time.sleep(0.5)  # let the writer thread land it
+    finally:
+        remote.close()
+        server.stop()
+        station.close()
+
+    store = cfg.build_db()
+    try:
+        values = [r.value for r in store.list_monitor("bench.gate")]
+        assert 0.7 in values
+    finally:
+        store.close()
+
+
+def test_monitor_store_roundtrip_array(tmp_path):
+    import numpy as np
+
+    from flex.metadata import MonitorRecord
+
+    cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
+    store = cfg.build_db()
+    try:
+        store.record_monitor(MonitorRecord(parameter="spec.spectrum",
+                                           value=np.linspace(0, 1, 5), station="s"))
+        (row,) = store.list_monitor("spec.spectrum")
+        assert row.value == [0.0, 0.25, 0.5, 0.75, 1.0]
+    finally:
+        store.close()

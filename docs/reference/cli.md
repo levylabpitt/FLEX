@@ -37,7 +37,8 @@ See [Write a driver](../tutorials/write-a-driver.md) for both in context.
 
 | Command | Does |
 |---|---|
-| `flex serve` | Host this PC's `[instruments.*]` as a station server: JSON-RPC commands on `[server] port` (default 29500), event stream on port+1. `--config` and `--port` override. Connect with `flex.connect("tcp://<host>:29500")`. |
+| `flex serve` | Host this PC's `[instruments.*]` as a station server: JSON-RPC commands on `[server] port` (default 29500), event stream on port+1, background logging of `log = [...]` parameters to the DB. `--config` and `--port` override. Connect with `flex.connect("tcp://<host>:29500")`. |
+| `flex monitor [parameter]` | Browse background-logged values (newest first, `--last <n>`). `--follow` streams live events from a running server instead (`--address` for a remote one). |
 
 ## Dashboard & version
 

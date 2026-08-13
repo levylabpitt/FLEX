@@ -65,6 +65,17 @@ class LogEntryRecord:
 
 
 @dataclass
+class MonitorRecord:
+    """One background-logged parameter value (see ``[instruments.*] log``)."""
+
+    parameter: str  # full name, e.g. "spectrometer.spectrum"
+    value: Any
+    time: datetime | None = None
+    station: str | None = None
+    unit: str = ""
+
+
+@dataclass
 class InstrumentRecord:
     experiment_id: str
     name: str
@@ -118,6 +129,9 @@ class MetadataStore(ABC):
     @abstractmethod
     def record_instrument(self, record: InstrumentRecord, **extra: Any) -> None: ...
 
+    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
+        raise NotImplementedError(f"{type(self).__name__} does not support monitoring")
+
     # -- reading ----------------------------------------------------------
 
     @abstractmethod
@@ -142,6 +156,16 @@ class MetadataStore(ABC):
 
     @abstractmethod
     def list_instruments(self, experiment_id: str) -> list[InstrumentRecord]: ...
+
+    def list_monitor(
+        self,
+        parameter: str | None = None,
+        *,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[MonitorRecord]:
+        """Newest-first background-logged values, optionally for one parameter."""
+        raise NotImplementedError(f"{type(self).__name__} does not support monitoring")
 
     @abstractmethod
     def close(self) -> None: ...

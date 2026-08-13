@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -208,9 +210,11 @@ def serve(
     cfg = load_config(config)
     station = Station.load(cfg)
     server = StationServer(station, port=port if port is not None else cfg.server.port)
-    table = Table("Instrument", "Class", "Address")
+    table = Table("Instrument", "Class", "Address", "Logged")
     for name, inst in station.instruments.items():
-        table.add_row(name, type(inst).__name__, inst.address or "-")
+        params, interval = server.monitor.get(name, ([], 0))
+        logged = f"{', '.join(params)} [dim]@{interval:g}s[/]" if params else "-"
+        table.add_row(name, type(inst).__name__, inst.address or "-", logged)
     console.print(table)
     console.print(f"[green]Serving station '{station.name}'[/] on port {server.port} "
                   f"(events on {server.pub_port}). Ctrl-C to stop.")
@@ -218,6 +222,61 @@ def serve(
         server.run()
     finally:
         station.close()
+
+
+@app.command()
+def monitor(
+    parameter: str = typer.Argument(None, help='Full parameter name, e.g. "spectrometer.spectrum"'),
+    last: int = typer.Option(20, help="Number of rows to show"),
+    follow: bool = typer.Option(False, "--follow", help="Stream live events from a running server"),
+    address: str = typer.Option("", help="Server address for --follow (default: the local server)"),
+):
+    """Browse background-logged parameter values, or stream them live."""
+    from flex.config import load_config
+
+    cfg = load_config()
+    if follow:
+        from flex.client import connect
+
+        target = address or f"tcp://localhost:{cfg.server.port}"
+        station = connect(target, timeout=3.0)
+
+        def show(event: dict) -> None:
+            if parameter and event.get("parameter") != parameter:
+                return
+            when = datetime.fromtimestamp(event["ts"]).strftime("%H:%M:%S")
+            value, unit = _short(event.get("value")), event.get("unit", "")
+            console.print(f"[dim]{when}[/] {event['parameter']} = {value} {unit}".rstrip())
+
+        station.subscribe(show)
+        console.print(f"[green]Following {target}[/] (Ctrl-C to stop)")
+        try:
+            while True:
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            station.close()
+        return
+
+    store = cfg.build_db()
+    try:
+        rows = store.list_monitor(parameter or None, limit=last)
+        if not rows:
+            console.print("Nothing logged yet. Add `log = [...]` to an [instruments.*] "
+                          "entry and run `flex serve`.")
+            return
+        table = Table("Time", "Station", "Parameter", "Value", "Unit")
+        for r in rows:
+            table.add_row(str(r.time or "-"), r.station or "-", r.parameter, _short(r.value), r.unit)
+        console.print(table)
+    finally:
+        store.close()
+
+
+def _short(value, width: int = 60) -> str:
+    text = repr(value)
+    return text if len(text) <= width else f"{text[:width]}… ({len(text)} chars)"
 
 
 @app.command()

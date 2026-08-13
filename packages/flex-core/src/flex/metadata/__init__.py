@@ -12,6 +12,7 @@ from flex.metadata.store import (
     LogEntryRecord,
     MeasurementRecord,
     MetadataStore,
+    MonitorRecord,
     NoteRecord,
 )
 
@@ -22,5 +23,6 @@ __all__ = [
     "LogEntryRecord",
     "MeasurementRecord",
     "MetadataStore",
+    "MonitorRecord",
     "NoteRecord",
 ]

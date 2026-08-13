@@ -18,8 +18,21 @@ the protocols you use need to be installed.
 """
 
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from flex.protocols.serial import SerialInstrument as SerialInstrument
+    from flex.protocols.tcp import TCPInstrument as TCPInstrument
+    from flex.protocols.visa import VISAInstrument as VISAInstrument
+    from flex.protocols.zmq import ZMQInstrument as ZMQInstrument
+    from flex.protocols.zmq import ZMQInstrumentError as ZMQInstrumentError
 
 __version__ = "3.0.0a1"
+
+__all__ = [
+    "SerialInstrument", "TCPInstrument", "VISAInstrument",
+    "ZMQInstrument", "ZMQInstrumentError",
+]
 
 _LAZY = {
     "VISAInstrument": ("flex.protocols.visa", "pyvisa", "visa"),

@@ -5,9 +5,14 @@ LevyLab :class:`CESession`) live under :mod:`flex_exp.sessions` and are
 activated through the FLEX configuration.
 """
 
+from typing import TYPE_CHECKING
+
 from flex_exp.experiment import Experiment
 from flex_exp.measurement import Measurement
 from flex_exp.sweep import Scan, SweepAxis, sweep
+
+if TYPE_CHECKING:
+    from flex_exp.sessions.ce import CESession as CESession
 
 __version__ = "3.0.0a1"
 

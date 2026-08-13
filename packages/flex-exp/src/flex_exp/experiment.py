@@ -8,7 +8,7 @@ import socket
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, overload
 
 from flex.config import FlexConfig, load_config
 from flex.display import auto_display, refresh_display
@@ -29,6 +29,9 @@ try:
     from flex_asana.users import User
 except ImportError:
     User = str
+
+
+InstT = TypeVar("InstT", bound=Instrument)
 
 
 def new_id() -> str:
@@ -171,11 +174,18 @@ class Experiment:
         refresh_display(self, self._display_id)
         return instrument
 
-    def add(self, cls: type, /, *args: Any, name: str | None = None, **kwargs: Any) -> Any:
+    def add(self, cls: type[InstT], /, *args: Any, name: str | None = None, **kwargs: Any) -> InstT:
         """Construct and register an instrument: ``exp.add(SR7270, "lockin", "USB0::...")``."""
-        return self.add_instrument(cls(*args, **kwargs), name)
+        instrument = cls(*args, **kwargs)
+        self.add_instrument(instrument, name)
+        return instrument
 
-    def get(self, key: str | type) -> Instrument:
+    @overload
+    def get(self, key: str) -> Instrument: ...
+    @overload
+    def get(self, key: type[InstT]) -> InstT: ...
+
+    def get(self, key):
         """Look up an instrument by name, class, or capability protocol."""
         if isinstance(key, str):
             if key in self.instruments:
@@ -196,6 +206,10 @@ class Experiment:
         if name in instruments:
             return instruments[name]
         raise AttributeError(f"'{type(self).__name__}' has no attribute or instrument '{name}'")
+
+    def __dir__(self) -> list[str]:
+        # so exp.<tab> offers instrument names in IPython/Jupyter
+        return [*super().__dir__(), *self.__dict__.get("instruments", {})]
 
     def load_instruments(self, *names: str) -> None:
         """Instantiate instruments defined in the config's ``[instruments.*]``

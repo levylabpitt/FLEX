@@ -196,6 +196,31 @@ def new_package(
 
 
 @app.command()
+def serve(
+    config: str = typer.Option(None, help="Config file (default: the active flex.toml)"),
+    port: int = typer.Option(None, help="Command port (events on port+1); default [server] port"),
+):
+    """Host this PC's instruments as a station server."""
+    from flex.config import load_config
+    from flex.server import StationServer
+    from flex.station import Station
+
+    cfg = load_config(config)
+    station = Station.load(cfg)
+    server = StationServer(station, port=port if port is not None else cfg.server.port)
+    table = Table("Instrument", "Class", "Address")
+    for name, inst in station.instruments.items():
+        table.add_row(name, type(inst).__name__, inst.address or "-")
+    console.print(table)
+    console.print(f"[green]Serving station '{station.name}'[/] on port {server.port} "
+                  f"(events on {server.pub_port}). Ctrl-C to stop.")
+    try:
+        server.run()
+    finally:
+        station.close()
+
+
+@app.command()
 def dashboard(
     host: str = typer.Option("127.0.0.1"),
     port: int = typer.Option(8756),

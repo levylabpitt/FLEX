@@ -23,6 +23,7 @@ class Instrument:
         self.metadata = metadata or {}
         self.log = get_logger(f"inst.{name}")
         self.parameters: dict[str, Parameter] = {}
+        self.events = None  # EventBus, attached by Station/Experiment
 
     # -- connection interface (protocol classes override what they support) --
 

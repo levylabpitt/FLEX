@@ -72,5 +72,10 @@ them on the experiment; pass names (`exp.load_instruments("lockin")`) to
 load a subset. `flex instruments --probe` test-connects the same entries
 from the shell.
 
+The same entries have two more consumers: `Station.load()` builds them as a
+standalone station (no experiment), and `flex serve` hosts that station
+over ZMQ — port set by `[server] port` (default 29500). See
+[Architecture](architecture.md#the-station-server).
+
 The LevyLab setup replaces instrument config with the Configure Experiments
 VI: see [CESession](experiments.md#cesession).

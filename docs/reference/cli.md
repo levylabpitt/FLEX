@@ -33,6 +33,12 @@ Every command of the `flex` command-line tool. Global behavior: running
 
 See [Write a driver](../tutorials/write-a-driver.md) for both in context.
 
+## Server
+
+| Command | Does |
+|---|---|
+| `flex serve` | Host this PC's `[instruments.*]` as a station server: JSON-RPC commands on `[server] port` (default 29500), event stream on port+1. `--config` and `--port` override. Connect with `flex.connect("tcp://<host>:29500")`. |
+
 ## Dashboard & version
 
 | Command | Does |

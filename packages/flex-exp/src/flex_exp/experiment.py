@@ -156,6 +156,8 @@ class Experiment:
         if name in self.instruments:
             raise ValueError(f"An instrument named '{name}' is already registered")
         self.instruments[name] = instrument
+        if instrument.events is None:
+            instrument.events = self.events
         snapshot = instrument.snapshot(read=False)
         self._record(
             lambda db: db.record_instrument(

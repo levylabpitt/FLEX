@@ -20,6 +20,7 @@ EVENTS = (
     "measurement.abort",
     "note.added",
     "instrument.added",
+    "parameter.update",
 )
 
 

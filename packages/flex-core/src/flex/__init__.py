@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # static mirror of _LAZY below, so editors and type checkers see the API
+    from flex.client import RemoteStation as RemoteStation
+    from flex.client import connect as connect
     from flex.config import FlexConfig as FlexConfig
     from flex.config import load_config as load_config
     from flex.events import EventBus as EventBus
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
     from flex.protocols import TCPInstrument as TCPInstrument
     from flex.protocols import VISAInstrument as VISAInstrument
     from flex.protocols import ZMQInstrument as ZMQInstrument
+    from flex.station import Station as Station
     from flex_exp import CESession as CESession
     from flex_exp import Experiment as Experiment
     from flex_exp import Measurement as Measurement
@@ -31,9 +34,9 @@ __version__ = "3.0.0a1"
 
 __all__ = [
     "CESession", "EventBus", "Experiment", "FlexConfig", "Instrument",
-    "Measurement", "Parameter", "Scan", "SerialInstrument",
-    "SimulatedInstrument", "TCPInstrument", "VISAInstrument", "ZMQInstrument",
-    "get_logger", "load_config", "sweep",
+    "Measurement", "Parameter", "RemoteStation", "Scan", "SerialInstrument",
+    "SimulatedInstrument", "Station", "TCPInstrument", "VISAInstrument",
+    "ZMQInstrument", "connect", "get_logger", "load_config", "sweep",
 ]
 
 _LAZY = {
@@ -45,6 +48,9 @@ _LAZY = {
     "Instrument": "flex.instrument",
     "Parameter": "flex.instrument",
     "SimulatedInstrument": "flex.instrument",
+    "Station": "flex.station",
+    "connect": "flex.client",
+    "RemoteStation": "flex.client",
     "VISAInstrument": "flex.protocols",
     "TCPInstrument": "flex.protocols",
     "SerialInstrument": "flex.protocols",

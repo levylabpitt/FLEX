@@ -79,6 +79,10 @@ class LogsConfig(_Section):
     level: str = "WARNING"
 
 
+class ServerConfig(_Section):
+    port: int = 29500  # events published on port + 1
+
+
 class InstrumentConfig(_Section):
     driver: str = ""
     address: str = ""
@@ -109,6 +113,7 @@ class FlexConfig(BaseModel):
     exp: ExpConfig = Field(default_factory=ExpConfig)
     comms: CommsConfig = Field(default_factory=CommsConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
 

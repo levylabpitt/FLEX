@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import numbers
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -75,6 +76,8 @@ class Parameter:
         self.__doc__ = doc or f"Parameter {name}" + (f" [{unit}]" if unit else "")
         self._getter = getter
         self._setter = setter
+        self.cache: Any = None
+        self.cache_time: float | None = None
 
     @property
     def full_name(self) -> str:
@@ -91,7 +94,9 @@ class Parameter:
     def get(self) -> Any:
         if self._getter is None:
             raise NotImplementedError(f"Parameter '{self.full_name}' is not readable")
-        return self._getter()
+        value = self._getter()
+        self._record(value, "get")
+        return value
 
     def set(self, value: Any) -> None:
         if self._setter is None:
@@ -99,8 +104,17 @@ class Parameter:
         if self.vals is not None:
             self.vals.validate(value)
         self._setter(value)
+        self._record(value, "set")
         if self.instrument is not None:
             self.instrument.log.debug("%s = %r %s", self.name, value, self.unit)
+
+    def _record(self, value: Any, kind: str) -> None:
+        self.cache = value
+        self.cache_time = time.time()
+        bus = self.instrument.events if self.instrument is not None else None
+        if bus is not None:
+            bus.emit("parameter.update", parameter=self.full_name, value=value,
+                     unit=self.unit, ts=self.cache_time, kind=kind)
 
     def __call__(self, *value: Any) -> Any:
         if not value:

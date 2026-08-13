@@ -95,35 +95,42 @@ packages (`flex_drivers:CATALOG`, `flex_nextcloud:STORAGE`,
 missing component's error message names the package that provides it. There
 is no plugin framework, no entry points, no registration side effects.
 
-## Roadmap: the station server
+## The station server
 
-The layers above all run in-process today: a notebook or script owns the
-instruments directly. The next step makes the same `Station` (the
-`[instruments.*]` set in flex.toml) hostable as a long-running process:
+A `Station` is the `[instruments.*]` set of flex.toml as a live object. It
+runs in-process (`Station.load()` in a notebook) or as a long-running
+server:
 
 ```
-flex.toml ──► Station ──┬── notebook mode:   station.lockin.x()   (today)
-                        └── server mode:     `flex serve`         (planned)
-                                               ├─ ZMQ REP: JSON-RPC commands
-                                               ├─ ZMQ PUB: event stream
-                                               ├─ DB logger (subscriber)
-                                               └─ dashboard (subscriber)
+flex.toml ──► Station ──┬── notebook mode:   station.lockin.gate(0.5)
+                        └── server mode:     `flex serve`
+                                               ├─ ZMQ ROUTER: JSON-RPC commands
+                                               └─ ZMQ PUB:    event stream
 
-other PC:  station = flex.connect("tcp://bench-pc:5555")
-           station.lockin.x()     # RemoteInstrument proxy — identical API
+other PC:  station = flex.connect("tcp://bench-pc:29500")
+           station.lockin.gate(0.5)   # RemoteInstrument proxy — identical API
+           station.subscribe(print)   # live parameter events
 ```
 
 Two ideas carry the design:
 
-1. **One event stream.** Every parameter read/set, log line, and scan point
-   is an event; background DB logging, the live dashboard, and remote
-   monitors are all just subscribers of the same bus.
-2. **Local and remote instruments share one API.** A `RemoteInstrument`
-   proxy mirrors `Instrument`, so `flex-exp` code runs unchanged whether it
-   owns the hardware or connects to a server. The wire protocol is the same
-   JSON-RPC dialect the LevyLab LabVIEW Instrument-Framework speaks, so a
-   FLEX client can't tell (and needn't care) whether the far end is Python
-   or LabVIEW.
+1. **One event stream.** Every parameter read/set is an event
+   `(seq, parameter, value, unit, ts)` on the station bus, published over
+   ZMQ PUB; the DB logger, live dashboard, and remote monitors are all just
+   subscribers. The stream is monitoring, not the data record — data files
+   and the metadata store stay authoritative, so dropped events are
+   harmless.
+2. **Local and remote instruments share one API.** `RemoteInstrument`
+   mirrors `Instrument` (parameters and public methods are built from the
+   server's `describe`), so `flex-exp` code runs unchanged either way. The
+   wire protocol is the same JSON-RPC dialect the LevyLab LabVIEW
+   Instrument-Framework speaks — one protocol for the whole lab, and any
+   IF-compatible client can talk to a FLEX server.
+
+Commands for different instruments run concurrently (a worker per
+instrument); commands for the same instrument are serialized, since
+hardware isn't reentrant. Background DB logging and the live dashboard view
+are the next subscribers to be built on the stream.
 
 ## Installation
 

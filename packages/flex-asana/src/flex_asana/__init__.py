@@ -1,7 +1,7 @@
 """Asana comms backend: one Asana task per experiment, via the Asana API
 directly (no n8n or other middleman).
 
-Enable it in an ecosystem manifest::
+Enable it in your flex.toml::
 
     [comms]
     backend = "asana"

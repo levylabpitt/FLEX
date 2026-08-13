@@ -49,7 +49,7 @@ fixed set. Both raise on `set` before anything reaches the hardware.
 
 ## Protocol base classes
 
-`flex-protocols` provides one base per connection type:
+`flex.protocols` provides one base per connection type:
 
 | Class | Connection | Talk to it with |
 |---|---|---|
@@ -99,15 +99,9 @@ Two ways to get a driver class:
   enablement, nothing gates imports.
 - **By name**, through the catalog: station configs (`driver =
   "srs.sr7270"`), `flex instruments --probe`, and the dashboard resolve
-  driver names via `CATALOG` — and require the name to be enabled first.
-
-`flex enable <name>` adds the name to `[drivers] enabled` in the active
-config (installing the parent package first if needed). Every name-based
-resolution (`load_station()`, `--probe`, the dashboard) refuses a driver
-that isn't enabled, even if its package is installed — a deliberate gate on
-the config-driven path, not on imports: direct imports and `CESession` (which
-only ever connects instruments the Configure Experiments file says are
-physically wired up) are unaffected either way.
+  driver names via `CATALOG` (`flex.components.resolve_driver`). Installing
+  the driver package is all it takes — `flex drivers` lists every name
+  available in this environment.
 
 ## LevyLab drivers and lv_class
 

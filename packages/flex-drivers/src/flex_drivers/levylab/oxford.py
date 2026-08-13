@@ -10,8 +10,8 @@ Both conform to ``flex_drivers.levylab.capabilities.Magnet``.
 
 from __future__ import annotations
 
+from flex.protocols import ZMQInstrument
 from flex_drivers.levylab._commands import IFMagnetCommands
-from flex_protocols import ZMQInstrument
 
 
 class Oxford1820(ZMQInstrument, IFMagnetCommands):

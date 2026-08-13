@@ -13,7 +13,7 @@ _PROTOCOLS = {
 
 _DRIVER = '''"""FLEX driver for {name}."""
 
-from flex_protocols import {base}
+from flex.protocols import {base}
 
 
 class {name}({base}):
@@ -40,7 +40,7 @@ name = "{name}"
 version = "0.1.0"
 description = "FLEX drivers for {label}"
 requires-python = ">=3.11"
-dependencies = ["flex-core", "flex-protocols"]
+dependencies = ["flex-core"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/{module}"]
@@ -48,10 +48,8 @@ packages = ["src/{module}"]
 
 _PKG_INIT = '''"""FLEX drivers for {label}."""
 
-# Driver catalog: {{driver name: "module:Class"}} — `flex enable <name>`
-# activates one individually. To make this package discoverable by name
-# (`flex install {name}`), add it to a catalog.local.json next to your
-# ecosystem config: {{"{name}": {{"registries": {{"drivers": "{module}:CATALOG"}}}}}}.
+# Driver catalog: {{driver name: "module:Class"}}, resolved with
+# flex.components.load_ref when a config names one of these drivers.
 CATALOG: dict[str, str] = {{
     # "{prefix}.mydevice": "{module}.mydevice:MyDevice",
 }}

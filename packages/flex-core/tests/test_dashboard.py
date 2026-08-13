@@ -24,39 +24,13 @@ def test_index_serves_frontend(client):
 
 
 def test_foreign_host_rejected(client):
-    assert client.get("/api/packages", headers={"host": "evil.example"}).status_code == 403
-    assert client.get("/api/packages", headers={"host": "localhost:8756"}).status_code == 200
+    assert client.get("/api/drivers", headers={"host": "evil.example"}).status_code == 403
+    assert client.get("/api/drivers", headers={"host": "localhost:8756"}).status_code == 200
 
 
-def test_unknown_package_install_404(client):
-    assert client.post("/api/packages/not-a-package/install").status_code == 404
-    assert client.post("/api/packages/not-a-package/remove").status_code == 404
-
-
-def test_packages_and_drivers(client):
-    packages = client.get("/api/packages").json()
-    assert any(p["name"] == "flex-core" and p["installed"] for p in packages)
+def test_drivers_listed(client):
     drivers = client.get("/api/drivers").json()
     assert any(d["name"] == "levylab.lockin" for d in drivers)
-
-
-def test_removed_package_stays_listed_for_reinstall(client, monkeypatch):
-    """An uninstalled package stays listed (as not-installed)."""
-    monkeypatch.setattr(
-        "flex.pkgmanager.manager.installed_version",
-        lambda name: None if name == "flex-nextcloud" else "2.0.0a1",
-    )
-    packages = client.get("/api/packages").json()
-    entry = next(p for p in packages if p["name"] == "flex-nextcloud")
-    assert entry["installed"] is None
-    assert entry["group"] == "Integrations"
-
-
-def test_ecosystems_lists_manifests(client):
-    result = client.get("/api/ecosystems").json()
-    names = {e["name"] for e in result["available"]}
-    assert {"default", "levylab"} <= names
-    assert result["active"] == "default"
 
 
 def test_shutdown_signals_process(client, monkeypatch):
@@ -97,9 +71,7 @@ def test_invalid_config_rejected(client):
 def test_probe_driver(client, monkeypatch):
     from flex.instrument import SimulatedInstrument
 
-    monkeypatch.setattr(
-        "flex.pkgmanager.PackageManager.resolve_driver", lambda self, name: SimulatedInstrument
-    )
+    monkeypatch.setattr("flex.components.resolve_driver", lambda name: SimulatedInstrument)
     result = client.post("/api/drivers/levylab.lockin/probe").json()
     assert result["ok"] and result["idn"]["model"] == "SimulatedInstrument"
 
@@ -111,7 +83,7 @@ def test_probe_unresolvable_driver_reports_error(client):
 
 
 def test_experiments_endpoints(client, tmp_path):
-    from flex.ecosystem import FlexConfig
+    from flex.config import FlexConfig
     from flex_exp import Experiment
 
     cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})

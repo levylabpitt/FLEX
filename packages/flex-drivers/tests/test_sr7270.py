@@ -2,7 +2,7 @@
 
 import pytest
 
-import flex_protocols.visa as visa_module
+import flex.protocols.visa as visa_module
 from flex_drivers.srs.sr7270 import SR7270
 
 

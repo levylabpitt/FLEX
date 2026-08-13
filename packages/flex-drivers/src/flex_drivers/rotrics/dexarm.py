@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from flex_protocols import SerialInstrument
+from flex.protocols import SerialInstrument
 
 
 class DexArm(SerialInstrument):

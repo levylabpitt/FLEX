@@ -11,12 +11,9 @@ members = [
     "flex",
     "flex-asana",
     "flex-core",
-    "flex-datatypes",
-    "flex-db",
     "flex-drivers",
     "flex-exp",
     "flex-nextcloud",
-    "flex-protocols",
     "flex-workspace",
 ]
 
@@ -311,22 +308,16 @@ name = "flex"
 version = "2.0.0a1"
 source = { editable = "packages/flex" }
 dependencies = [
-    { name = "flex-core" },
-    { name = "flex-datatypes" },
-    { name = "flex-db" },
+    { name = "flex-core", extra = ["visa"] },
     { name = "flex-drivers" },
     { name = "flex-exp" },
-    { name = "flex-protocols", extra = ["visa"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "flex-datatypes", editable = "packages/flex-datatypes" },
-    { name = "flex-db", editable = "packages/flex-db" },
+    { name = "flex-core", extras = ["visa"], editable = "packages/flex-core" },
     { name = "flex-drivers", editable = "packages/flex-drivers" },
     { name = "flex-exp", editable = "packages/flex-exp" },
-    { name = "flex-protocols", extras = ["visa"], editable = "packages/flex-protocols" },
 ]
 
 [[package]]
@@ -350,6 +341,7 @@ version = "2.0.0a1"
 source = { editable = "packages/flex-core" }
 dependencies = [
     { name = "fastapi" },
+    { name = "h5py" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "platformdirs" },
@@ -361,70 +353,65 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
+[package.optional-dependencies]
+all = [
+    { name = "nptdms" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pyserial" },
+    { name = "pyvisa" },
+    { name = "pyzmq" },
+]
+postgres = [
+    { name = "psycopg", extra = ["binary"] },
+]
+serial = [
+    { name = "pyserial" },
+]
+tdms = [
+    { name = "nptdms" },
+]
+visa = [
+    { name = "pyvisa" },
+]
+zmq = [
+    { name = "pyzmq" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.110" },
+    { name = "h5py", specifier = ">=3.10" },
+    { name = "nptdms", marker = "extra == 'all'", specifier = ">=1.9" },
+    { name = "nptdms", marker = "extra == 'tdms'", specifier = ">=1.9" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "platformdirs", specifier = ">=4" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'all'", specifier = ">=3.1" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "pyserial", marker = "extra == 'all'", specifier = ">=3.5" },
+    { name = "pyserial", marker = "extra == 'serial'", specifier = ">=3.5" },
+    { name = "pyvisa", marker = "extra == 'all'", specifier = ">=1.14" },
+    { name = "pyvisa", marker = "extra == 'visa'", specifier = ">=1.14" },
+    { name = "pyzmq", marker = "extra == 'all'", specifier = ">=25" },
+    { name = "pyzmq", marker = "extra == 'zmq'", specifier = ">=25" },
     { name = "rich", specifier = ">=13" },
     { name = "tomlkit", specifier = ">=0.12" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "typer", specifier = ">=0.12" },
     { name = "uvicorn", specifier = ">=0.29" },
 ]
-
-[[package]]
-name = "flex-datatypes"
-version = "2.0.0a1"
-source = { editable = "packages/flex-datatypes" }
-dependencies = [
-    { name = "flex-core" },
-    { name = "h5py" },
-    { name = "nptdms" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "h5py", specifier = ">=3.10" },
-    { name = "nptdms", specifier = ">=1.9" },
-]
-
-[[package]]
-name = "flex-db"
-version = "2.0.0a1"
-source = { editable = "packages/flex-db" }
-dependencies = [
-    { name = "flex-core" },
-]
-
-[package.optional-dependencies]
-postgres = [
-    { name = "psycopg", extra = ["binary"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
-]
-provides-extras = ["postgres"]
+provides-extras = ["visa", "zmq", "serial", "postgres", "tdms", "all"]
 
 [[package]]
 name = "flex-drivers"
 version = "2.0.0a1"
 source = { editable = "packages/flex-drivers" }
 dependencies = [
-    { name = "flex-core" },
-    { name = "flex-protocols", extra = ["all"] },
+    { name = "flex-core", extra = ["serial", "visa", "zmq"] },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "flex-protocols", extras = ["all"], editable = "packages/flex-protocols" },
-]
+requires-dist = [{ name = "flex-core", extras = ["visa", "zmq", "serial"], editable = "packages/flex-core" }]
 
 [[package]]
 name = "flex-exp"
@@ -432,14 +419,10 @@ version = "2.0.0a1"
 source = { editable = "packages/flex-exp" }
 dependencies = [
     { name = "flex-core" },
-    { name = "flex-db" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "flex-db", editable = "packages/flex-db" },
-]
+requires-dist = [{ name = "flex-core", editable = "packages/flex-core" }]
 
 [[package]]
 name = "flex-nextcloud"
@@ -457,53 +440,15 @@ requires-dist = [
 ]
 
 [[package]]
-name = "flex-protocols"
-version = "2.0.0a1"
-source = { editable = "packages/flex-protocols" }
-dependencies = [
-    { name = "flex-core" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "pyserial" },
-    { name = "pyvisa" },
-    { name = "pyzmq" },
-]
-serial = [
-    { name = "pyserial" },
-]
-visa = [
-    { name = "pyvisa" },
-]
-zmq = [
-    { name = "pyzmq" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "flex-core", editable = "packages/flex-core" },
-    { name = "pyserial", marker = "extra == 'all'", specifier = ">=3.5" },
-    { name = "pyserial", marker = "extra == 'serial'", specifier = ">=3.5" },
-    { name = "pyvisa", marker = "extra == 'all'", specifier = ">=1.14" },
-    { name = "pyvisa", marker = "extra == 'visa'", specifier = ">=1.14" },
-    { name = "pyzmq", marker = "extra == 'all'", specifier = ">=25" },
-    { name = "pyzmq", marker = "extra == 'zmq'", specifier = ">=25" },
-]
-provides-extras = ["visa", "zmq", "serial", "all"]
-
-[[package]]
 name = "flex-workspace"
 version = "2.0.0a1"
 source = { virtual = "." }
 dependencies = [
     { name = "flex" },
     { name = "flex-asana" },
-    { name = "flex-datatypes" },
-    { name = "flex-db", extra = ["postgres"] },
+    { name = "flex-core", extra = ["all"] },
     { name = "flex-drivers" },
     { name = "flex-nextcloud" },
-    { name = "flex-protocols", extra = ["all"] },
 ]
 
 [package.dev-dependencies]
@@ -523,11 +468,9 @@ docs = [
 requires-dist = [
     { name = "flex", editable = "packages/flex" },
     { name = "flex-asana", editable = "packages/flex-asana" },
-    { name = "flex-datatypes", editable = "packages/flex-datatypes" },
-    { name = "flex-db", extras = ["postgres"], editable = "packages/flex-db" },
+    { name = "flex-core", extras = ["all"], editable = "packages/flex-core" },
     { name = "flex-drivers", editable = "packages/flex-drivers" },
     { name = "flex-nextcloud", editable = "packages/flex-nextcloud" },
-    { name = "flex-protocols", extras = ["all"], editable = "packages/flex-protocols" },
 ]
 
 [package.metadata.requires-dev]

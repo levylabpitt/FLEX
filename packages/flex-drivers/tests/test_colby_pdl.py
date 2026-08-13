@@ -2,8 +2,8 @@
 
 import pytest
 
+import flex.protocols.visa as visa_module
 import flex_drivers.colby.pdl as pdl_module
-import flex_protocols.visa as visa_module
 from flex_drivers.colby import ColbyPDL
 
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from flex_protocols import ZMQInstrument
+from flex.protocols import ZMQInstrument
 
 
 class KrohnHite7008(ZMQInstrument):

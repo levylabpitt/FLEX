@@ -34,7 +34,7 @@ This writes `acme4000.py` **in the current directory** (change with
 ```python
 """FLEX driver for Acme4000."""
 
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 
 class Acme4000(VISAInstrument):
@@ -49,7 +49,7 @@ class Acme4000(VISAInstrument):
 
 ```python
 from flex.instrument import Numbers
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 
 class Acme4000(VISAInstrument):
@@ -100,8 +100,16 @@ For many drivers this is the end of the tutorial.
 ## 5. Optional: register it for name-based resolution
 
 Registration only matters if you want the driver addressable *by name* — in
-`[stations.*]` config blocks, `flex enable`, `flex instruments --probe`, and
-the dashboard.
+`[stations.*]` config blocks, `flex instruments --probe`, and the dashboard.
+
+**No registration at all.** A station entry accepts a direct
+`"module:Class"` reference, so any importable driver works immediately:
+
+```toml
+[stations.bench.instruments.acme]
+driver = "flex_drivers_mylab.acme4000:Acme4000"
+address = "GPIB0::4::INSTR"
+```
 
 **Your own package.** Scaffold one and move the driver file in:
 
@@ -110,7 +118,7 @@ flex new package flex-drivers-mylab
 ```
 
 This creates an installable package (`pyproject.toml`, `src/flex_drivers_mylab/`,
-`tests/`) whose `__init__.py` holds the registry dict:
+`tests/`) whose `__init__.py` holds a registry dict:
 
 ```python
 CATALOG: dict[str, str] = {
@@ -118,15 +126,8 @@ CATALOG: dict[str, str] = {
 }
 ```
 
-Install it (`pip install -e flex-drivers-mylab`), then point FLEX at the
-registry with a `catalog.local.json` **next to your active ecosystem config**:
-
-```json
-{"flex-drivers-mylab": {"registries": {"drivers": "flex_drivers_mylab:CATALOG"}}}
-```
-
-The local catalog is merged over the built-in one at load time, so your
-drivers now appear in `flex list --drivers` and resolve by name everywhere.
+Install it (`pip install -e flex-drivers-mylab`) and use the `"module:Class"`
+form above, or short names via your own dict at script level.
 
 **Or contribute to `flex-drivers`.** Add a vendor folder
 (`src/flex_drivers/acme/`), put the module there, and add one line to the
@@ -140,7 +141,7 @@ LabVIEW class name so `CESession` can auto-connect it:
 
 ```python
 from flex_drivers.levylab._commands import IFTemperatureCommands
-from flex_protocols import ZMQInstrument
+from flex.protocols import ZMQInstrument
 
 
 class MyCryostat(ZMQInstrument, IFTemperatureCommands):
@@ -161,13 +162,13 @@ class MyCryostat(ZMQInstrument, IFTemperatureCommands):
 
 ## 7. Test without hardware
 
-For ZMQ drivers, `flex_protocols.testing.FakeIFServer` is an in-process fake
+For ZMQ drivers, `flex.protocols.testing.FakeIFServer` is an in-process fake
 IF app: give it canned results per method, then assert on both the returned
 values and the exact wire traffic it recorded. This is how every LevyLab
 driver in the repo is tested (`packages/flex-drivers/tests/test_levylab_drivers.py`):
 
 ```python
-from flex_protocols.testing import FakeIFServer
+from flex.protocols.testing import FakeIFServer
 
 
 def test_pressure():
@@ -192,6 +193,6 @@ only need canned query/reply behavior on top of the base `Instrument`.
 - [ ] Sweepable/measurable quantities are parameters, with units
 - [ ] Validators on anything that could damage a sample
 - [ ] Driver works by direct import
-- [ ] (optional) `CATALOG` entry + `catalog.local.json`, or a `flex-drivers` PR
+- [ ] (optional) a `CATALOG` entry via a `flex-drivers` PR, or use the `"module:Class"` driver form
 - [ ] (LevyLab) `lv_class` set; command mixins used where they apply
 - [ ] Tests pass without hardware

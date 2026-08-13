@@ -8,8 +8,8 @@ import pytest
 from flex_exp.sessions.ce import CESession, parse_ce_config
 
 zmq = pytest.importorskip("zmq")
-from flex_protocols.testing import FakeIFServer  # noqa: E402
-from flex_protocols.zmq import ZMQInstrument  # noqa: E402
+from flex.protocols.testing import FakeIFServer  # noqa: E402
+from flex.protocols.zmq import ZMQInstrument  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "control_experiment.json"
 
@@ -74,7 +74,7 @@ def test_session_connects_instruments(servers, config):
 def test_missing_driver_is_actionable(servers, config):
     import logging
 
-    from flex_db.sqlite import SQLiteStore
+    from flex.db.sqlite import SQLiteStore
 
     ce_path, *_ = servers
     with pytest.raises(RuntimeError, match="No driver for 'Instrument.Lockin.lvclass'"):

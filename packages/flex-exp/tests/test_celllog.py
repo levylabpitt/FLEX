@@ -1,6 +1,6 @@
 import types
 
-from flex_db.sqlite import SQLiteStore
+from flex.db.sqlite import SQLiteStore
 from flex_exp import Experiment
 from flex_exp.celllog import CellLogger
 

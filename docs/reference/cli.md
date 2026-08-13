@@ -3,24 +3,18 @@
 Every command of the `flex` command-line tool. Global behavior: running
 `flex` with no arguments prints help.
 
-## Packages & drivers
+## Drivers
 
 | Command | Does |
 |---|---|
-| `flex list` | List official packages: group, installed version, summary. |
-| `flex list --drivers` | List drivers instead: parent package, available (package installed), enabled. |
-| `flex install <pkg>...` | Install official packages (editable from a repo checkout, else from GitHub — see [Architecture](../concepts/architecture.md#installation)). |
-| `flex remove <pkg>...` | Uninstall packages. |
-| `flex enable <driver>` | Add a driver to `[drivers] enabled` in the active config; installs its parent package first if missing. |
-| `flex disable <driver>` | Remove a driver from `[drivers] enabled`. |
+| `flex drivers` | List every driver available in this environment and the class it resolves to. |
 
-## Ecosystems
+## Configuration
 
 | Command | Does |
 |---|---|
-| `flex ecosystem use <manifest>` | Activate an ecosystem: install its packages, make it the active config. `<manifest>` is a file path or a known name (bundled `default`, or the repo's `ecosystems/` folder). `--no-install` skips package installation. |
-| `flex ecosystem show` | Print the resolved active configuration and its source file. |
-| `flex ecosystem validate <manifest>` | Check a manifest: schema, then whether its db/writer/storage components resolve to installed packages. |
+| `flex config show` | Print the resolved active configuration and its source file. |
+| `flex config validate <path>` | Check a config file: schema, then whether its db/writer/storage/comms components and station drivers resolve in this environment. |
 
 ## Records
 

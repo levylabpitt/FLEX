@@ -6,10 +6,9 @@
 irm flex.levylab.org/install.ps1 | iex
 ```
 
-This brings in the six default packages (`flex-core`, `flex-protocols`,
-`flex-db`, `flex-datatypes`, `flex-exp`, `flex-drivers`). No configuration is
-needed — data goes to HDF5 files and a SQLite database under your user data
-directory.
+This brings in the default packages (`flex-core`, `flex-exp`,
+`flex-drivers`). No configuration is needed — data goes to HDF5 files and a
+SQLite database under your user data directory.
 (Developing FLEX itself, or on another OS? Install editable from a clone —
 see the README's Development section.)
 
@@ -51,7 +50,7 @@ flex measurements <experiment-id>
 Any VISA instrument works the same way — drivers are one inheritance:
 
 ```python
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 class Keithley2400(VISAInstrument):
     def __init__(self, name="k2400", resource="GPIB0::24::INSTR"):
@@ -85,8 +84,8 @@ with exp.measurement("noise vs time") as m:
 
 ## Next steps
 
-- [Build an ecosystem](build-an-ecosystem.md) — configure your lab's database,
-  storage, data format, and hooks in one file.
+- [Configuration & stations](concepts/configuration.md) — configure your
+  lab's database, storage, data format, and hooks in one flex.toml.
 - [LevyLab guide](levylab.md) — `CESession` and the Instrument Framework.
-- [Dashboard](concepts/dashboard.md) — manage packages and browse experiments
+- [Dashboard](concepts/dashboard.md) — edit the config and browse experiments
   in the browser (`python -m flex dashboard`).

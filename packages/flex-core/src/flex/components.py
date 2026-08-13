@@ -1,16 +1,33 @@
 """Component resolution.
 
-FLEX packages declare what they provide in the shared package catalog
-(``flex.pkgmanager.catalog``): a ``registries`` entry per group, pointing at a
-``{name: "module:Class"}`` dict the providing package exports. The ecosystem
-configuration refers to components by short name ("sqlite", "hdf5",
-"nextcloud", ...) and this module resolves them to the actual class.
+The configuration refers to components by short name ("sqlite", "hdf5",
+"nextcloud", "levylab.lockin", ...) and this module resolves them to the
+actual class. Each group has a fixed list of registries — ``{name:
+"module:Class"}`` dicts exported by flex-core itself or by an optional
+package (flex-drivers, flex-nextcloud, flex-asana). A registry whose
+package isn't installed is simply skipped.
 """
 
 from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
+
+#: Component group -> registry references, in resolution order.
+_REGISTRIES: dict[str, list[str]] = {
+    "db": ["flex.db:DB_BACKENDS"],
+    "writer": ["flex.datatypes:WRITERS"],
+    "storage": ["flex.data:STORAGE", "flex_nextcloud:STORAGE"],
+    "comms": ["flex.comms:COMMS", "flex_asana:COMMS"],
+    "drivers": ["flex_drivers:CATALOG"],
+}
+
+#: Which pip package provides a missing component, for error messages.
+_PROVIDERS: dict[str, str] = {
+    "storage:nextcloud": "flex-nextcloud",
+    "comms:asana": "flex-asana",
+    "drivers:*": "flex-drivers",
+}
 
 
 class ComponentError(RuntimeError):
@@ -20,13 +37,8 @@ class ComponentError(RuntimeError):
 def available(group: str) -> dict[str, str]:
     """Return {name: dotted ref} for every component in ``group`` whose
     providing package is installed."""
-    from flex.pkgmanager.catalog import load_catalog
-
     result: dict[str, str] = {}
-    for info in load_catalog().values():
-        ref = info.get("registries", {}).get(group)
-        if not ref:
-            continue
+    for ref in _REGISTRIES.get(group, []):
         try:
             registry = load_ref(ref)
         except ComponentError:
@@ -39,17 +51,29 @@ def resolve(group: str, name: str) -> Any:
     """Load the component registered as ``name`` in ``group``.
 
     Raises :class:`ComponentError` with an actionable message when missing,
-    including which official package provides it if known.
+    including which package provides it if known.
     """
     refs = available(group)
     if name in refs:
         return load_ref(refs[name])
 
-    hint = _provider_hint(group, name)
+    provider = _PROVIDERS.get(f"{group}:{name}") or _PROVIDERS.get(f"{group}:*")
+    hint = f" Install it with: pip install {provider}" if provider else ""
     installed = ", ".join(sorted(refs)) or "none"
     raise ComponentError(
         f"No component '{name}' found for {group} (installed: {installed}).{hint}"
     )
+
+
+def resolve_driver(name: str) -> type:
+    """Load the instrument class for a driver name like ``"levylab.lockin"``.
+
+    A ``"module:Class"`` reference works too, so private driver packages
+    need no registration to be used in ``[stations.*]`` blocks.
+    """
+    if ":" in name:
+        return load_ref(name)
+    return resolve("drivers", name)
 
 
 def load_ref(ref: str) -> Any:
@@ -66,12 +90,3 @@ def load_ref(ref: str) -> Any:
         except AttributeError as e:
             raise ComponentError(f"'{module}' has no attribute '{attr}' (from '{ref}')") from e
     return obj
-
-
-def _provider_hint(group: str, name: str) -> str:
-    from flex.pkgmanager.catalog import load_catalog
-
-    for pkg, info in load_catalog().items():
-        if name in info.get("provides", {}).get(group, []):
-            return f" Install it with: flex install {pkg}"
-    return ""

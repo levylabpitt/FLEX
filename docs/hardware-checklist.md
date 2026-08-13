@@ -1,13 +1,13 @@
-# On-Hardware Validation Checklist (v2 acceptance)
+# On-Hardware Validation Checklist (acceptance)
 
 Run in the lab, on a station with live Instrument-Framework apps. Tick every
-box before switching production work to v2.
+box before switching production work over.
 
 ## Setup
 - [ ] Fresh venv: `pip install -e` the workspace packages (or `uv sync`)
-- [ ] `flex ecosystem use levylab` completes; `flex ecosystem show` looks right
+- [ ] `examples/levylab.toml` copied into place; `flex config show` looks right
 - [ ] `NEXTCLOUD_PASSWORD`, `ASANA_ACCESS_TOKEN`, `ASANA_EXPERIMENTS_PROJECT_GID`
-      set; `flex ecosystem validate levylab` all green
+      set; `flex config validate examples/levylab.toml` all green
 
 ## Instruments
 - [ ] `flex instruments --probe` reaches every configured IF app
@@ -28,8 +28,8 @@ box before switching production work to v2.
       on end (check the configured project directly)
 
 ## UX
-- [ ] `python -m flex dashboard`: Drivers tab installs/enables a driver; Experiments
-      tab shows the runs from today
+- [ ] `python -m flex dashboard`: Drivers tab lists and probes drivers;
+      Experiments tab shows the runs from today
 - [ ] Jupyter: `CESession()` renders the summary card; cells are logged as notes
 
 ## Cleanup decisions to confirm with the lab

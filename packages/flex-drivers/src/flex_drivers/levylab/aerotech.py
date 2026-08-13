@@ -9,7 +9,7 @@ constructing the driver raises until the IF app exists.
 
 from __future__ import annotations
 
-from flex_protocols import ZMQInstrument
+from flex.protocols import ZMQInstrument
 
 
 class Aerotech(ZMQInstrument):

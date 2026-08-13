@@ -8,7 +8,7 @@ version = "2.0.0a1"
 description = "FLEX instrument drivers, organized by vendor (including LevyLab)"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["flex-core", "flex-protocols[all]"]
+dependencies = ["flex-core[visa,zmq,serial]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_drivers"]

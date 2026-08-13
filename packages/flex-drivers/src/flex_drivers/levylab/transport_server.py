@@ -8,7 +8,7 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from flex_protocols import ZMQInstrument
+from flex.protocols import ZMQInstrument
 
 _ALLOWED_VIS = {"LockinSweep", "LockinTime", "LockinTimeDelay"}
 

@@ -4,8 +4,8 @@ import h5py
 import numpy as np
 import pytest
 
+from flex.db.sqlite import SQLiteStore
 from flex.instrument import SimulatedInstrument
-from flex_db.sqlite import SQLiteStore
 from flex_exp import Experiment
 
 
@@ -180,7 +180,7 @@ def test_writer_close_failure_still_records_end(config, tmp_path):
 
 def test_metadata_store_failure_does_not_break_experiment(config, monkeypatch):
     monkeypatch.setattr(
-        "flex.ecosystem.FlexConfig.build_db",
+        "flex.config.FlexConfig.build_db",
         lambda self: (_ for _ in ()).throw(RuntimeError("db down")),
     )
     with Experiment("u", config=config) as exp:  # must not raise
@@ -209,7 +209,7 @@ def test_comms_notify_start_and_end(config, monkeypatch):
         def notify_end(self, experiment, state):
             calls.append(("end", experiment.id, state))
 
-    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: RecordingComms())
+    monkeypatch.setattr("flex.config.FlexConfig.build_comms", lambda self: RecordingComms())
     with Experiment("u", config=config) as exp:
         assert calls == [("start", exp.id)]
     assert calls == [("start", exp.id), ("end", exp.id, "task-42")]
@@ -217,7 +217,7 @@ def test_comms_notify_start_and_end(config, monkeypatch):
 
 def test_comms_build_failure_does_not_break_experiment(config, monkeypatch):
     monkeypatch.setattr(
-        "flex.ecosystem.FlexConfig.build_comms",
+        "flex.config.FlexConfig.build_comms",
         lambda self: (_ for _ in ()).throw(RuntimeError("no token")),
     )
     with Experiment("u", config=config) as exp:  # must not raise
@@ -234,7 +234,7 @@ def test_comms_notify_failure_does_not_break_experiment(config, monkeypatch):
         def notify_end(self, experiment, state):
             raise RuntimeError("end boom")
 
-    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: BrokenComms())
+    monkeypatch.setattr("flex.config.FlexConfig.build_comms", lambda self: BrokenComms())
     with Experiment("u", config=config):  # must not raise, either at start or end
         pass
 
@@ -275,7 +275,7 @@ def test_notify_false_skips_comms_entirely(config, monkeypatch):
         def notify_end(self, experiment, state):
             calls.append("end")
 
-    monkeypatch.setattr("flex.ecosystem.FlexConfig.build_comms", lambda self: RecordingComms())
+    monkeypatch.setattr("flex.config.FlexConfig.build_comms", lambda self: RecordingComms())
     with Experiment("u", config=config, notify=False) as exp:
         assert exp.comms is None
     assert calls == []
@@ -316,7 +316,7 @@ def test_load_station(config, monkeypatch):
     cfg_dict["stations"] = {
         "bench": {"instruments": {"sim1": {"driver": "test.sim", "address": "sim://x"}}}
     }
-    from flex.ecosystem import FlexConfig
+    from flex.config import FlexConfig
 
     cfg = FlexConfig.model_validate(cfg_dict)
 
@@ -326,7 +326,7 @@ def test_load_station(config, monkeypatch):
             self._address = address
 
     monkeypatch.setattr(
-        "flex.pkgmanager.PackageManager.resolve_driver", lambda self, name: AddressedSim
+        "flex.components.resolve_driver", lambda name: AddressedSim
     )
     with Experiment("u", config=cfg) as exp:
         exp.load_station()

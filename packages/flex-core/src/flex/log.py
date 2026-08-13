@@ -77,7 +77,7 @@ def remove_log_handler(handler: logging.Handler) -> None:
 class DBLogHandler(logging.Handler):
     """Mirrors emitted records into a metadata store via a callback.
 
-    Kept generic (no ``flex.metadata``/``flex_db`` import here) -- the caller
+    Kept generic (no ``flex.metadata``/``flex.db`` import here) -- the caller
     supplies ``sink(level, logger_name, message, exc_text)``; ``Experiment``
     wires it to ``self.db.record_log``.
     """

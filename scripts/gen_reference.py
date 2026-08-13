@@ -1,7 +1,7 @@
 """Generate the reference section at mkdocs build time.
 
-Driver pages come from the live ``flex_drivers.CATALOG`` and integration pages
-from ``catalog.json``, so a new driver or integration shows up on the site
+Driver pages come from the live ``flex_drivers.CATALOG`` and integration
+pages from a static table below, so a new driver shows up on the site
 without touching the docs. Also publishes ``install.ps1`` at the site root so
 ``irm flex.levylab.org/install.ps1 | iex`` works.
 """
@@ -11,8 +11,19 @@ from pathlib import Path
 import mkdocs_gen_files
 
 from flex.components import load_ref
-from flex.pkgmanager.catalog import load_catalog
 from flex_drivers import CATALOG
+
+#: Integration packages documented on the reference site.
+INTEGRATIONS = {
+    "flex-nextcloud": {
+        "summary": "Nextcloud storage backend (WebDAV upload)",
+        "registries": ["flex_nextcloud:STORAGE"],
+    },
+    "flex-asana": {
+        "summary": "Asana comms backend: an experiment task per run, via the Asana API directly",
+        "registries": ["flex_asana:COMMS"],
+    },
+}
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,7 +50,7 @@ with mkdocs_gen_files.open("reference/drivers/index.md", "w") as f:
     f.write(
         "Every driver in `flex-drivers`, generated from the package's live\n"
         "`CATALOG` at build time. The **name** column is what goes in a\n"
-        "station's `driver = ...` key and in `flex enable`.\n\n"
+        "station's `driver = ...` key.\n\n"
     )
     for vendor, entries in sorted(drivers.items()):
         f.write(f"## {vendor}\n\n")
@@ -67,36 +78,25 @@ with mkdocs_gen_files.open("reference/drivers/SUMMARY.md", "w") as f:
 
 # -- integrations -------------------------------------------------------------
 
-catalog = load_catalog()
-integrations = {k: v for k, v in catalog.items() if v.get("group") == "Integrations"}
-
 with mkdocs_gen_files.open("reference/integrations/index.md", "w") as f:
     f.write("# Integrations\n\n")
-    f.write("Generated from the package catalog at build time.\n\n")
-    f.write("| Package | Provides | Summary |\n|---|---|---|\n")
-    for pkg, meta in sorted(integrations.items()):
-        provides = ", ".join(
-            f"`{kind}: {', '.join(names)}`" for kind, names in meta.get("provides", {}).items()
-        ) or "hooks"
-        f.write(f"| [`{pkg}`]({pkg}.md) | {provides} | {meta.get('summary', '')} |\n")
+    f.write("| Package | Summary |\n|---|---|\n")
+    for pkg, meta in sorted(INTEGRATIONS.items()):
+        f.write(f"| [`{pkg}`]({pkg}.md) | {meta['summary']} |\n")
 
 nav_lines = ["- [Overview](index.md)"]
-for pkg, meta in sorted(integrations.items()):
+for pkg, meta in sorted(INTEGRATIONS.items()):
     with mkdocs_gen_files.open(f"reference/integrations/{pkg}.md", "w") as f:
-        f.write(f"# `{pkg}`\n\n{meta.get('summary', '')}\n\n")
-        if not meta.get("default"):
-            f.write(f"```\nflex install {pkg}\n```\n\n")
+        f.write(f"# `{pkg}`\n\n{meta['summary']}\n\n")
+        f.write(f"```\npip install {pkg}\n```\n\n")
         refs = [
             (name, ref)
-            for registry in meta.get("registries", {}).values()
+            for registry in meta["registries"]
             for name, ref in sorted(load_ref(registry).items())
         ]
         for name, ref in refs:
             module, _, cls_name = ref.partition(":")
             f.write(f"## `{name}`\n\n::: {module}.{cls_name}\n\n")
-        if not refs:  # hook-only package: document its hooks module
-            module = pkg.replace("-", "_")
-            f.write(f"::: {module}.hooks\n")
     nav_lines.append(f"- [{pkg}]({pkg}.md)")
 
 with mkdocs_gen_files.open("reference/integrations/SUMMARY.md", "w") as f:

@@ -78,7 +78,7 @@ def test_abort_runs_cleanup_and_marks_aborted(exp, sim, tmp_path):
 
     assert "abort" in cleanups and "axis" in cleanups
 
-    from flex_db.sqlite import SQLiteStore
+    from flex.db.sqlite import SQLiteStore
 
     store = SQLiteStore(path=tmp_path / "flex.db")
     (meas,) = store.list_measurements(exp.id)

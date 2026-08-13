@@ -17,7 +17,6 @@ class ExperimentRecord:
     name: str = ""
     start_time: datetime | None = None
     end_time: datetime | None = None
-    ecosystem: str | None = None
     station: str | None = None
     host: str | None = None
     flex_version: str | None = None

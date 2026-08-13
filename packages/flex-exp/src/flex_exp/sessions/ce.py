@@ -16,8 +16,8 @@ Usage::
         exp.DAQ.set_ao_dc(1, 0.5)      # instruments attach by their CE "Type"
         ...
 
-Requires the ``flex-drivers`` package (``flex install flex-drivers``),
-activated by the ``levylab`` ecosystem.
+Requires the ``flex-drivers`` package,
+configured in your flex.toml.
 """
 
 from __future__ import annotations
@@ -288,7 +288,7 @@ def _levylab_registry() -> dict[str, str]:
     except ImportError as e:
         raise ImportError(
             "CESession needs the LevyLab drivers. Install them with: "
-            "flex install flex-drivers   (or: flex ecosystem use levylab)"
+            "pip install flex-drivers"
         ) from e
     registry = lvclass_registry()
     registry.setdefault("__transport_server__", "flex_drivers.levylab.transport_server:TransportServer")

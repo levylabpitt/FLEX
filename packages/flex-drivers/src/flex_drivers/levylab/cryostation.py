@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from flex.protocols import ZMQInstrument
 from flex_drivers.levylab._commands import IFTemperatureCommands
-from flex_protocols import ZMQInstrument
 
 
 class Cryostation(ZMQInstrument, IFTemperatureCommands):

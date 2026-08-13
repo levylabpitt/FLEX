@@ -2,7 +2,7 @@
 
 import pytest
 
-import flex_protocols.serial as serial_module
+import flex.protocols.serial as serial_module
 from flex_drivers.rotrics import DexArm
 
 

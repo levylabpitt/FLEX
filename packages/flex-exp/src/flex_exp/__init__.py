@@ -2,7 +2,7 @@
 
 :class:`Experiment` is the default handler; lab-specific sessions (e.g. the
 LevyLab :class:`CESession`) live under :mod:`flex_exp.sessions` and are
-activated through the ecosystem configuration.
+activated through the FLEX configuration.
 """
 
 from flex_exp.experiment import Experiment

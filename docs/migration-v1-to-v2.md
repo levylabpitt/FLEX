@@ -8,15 +8,15 @@ home.
 
 | v1 | v2 |
 |---|---|
-| clone repo + `pip install -e .` (one big package) | `irm flex.levylab.org/install.ps1 \| iex`, then `flex ecosystem use levylab` for the lab stack |
-| hardcoded DB / Nextcloud / n8n endpoints in code | one manifest in the repo's `ecosystems/` folder: `flex ecosystem show` after activating `levylab` |
+| clone repo + `pip install -e .` (one big package) | `irm flex.levylab.org/install.ps1 \| iex`, then copy `examples/levylab.toml` into place for the lab stack |
+| hardcoded DB / Nextcloud / n8n endpoints in code | one config file (`flex.toml`); `flex config show` prints the resolved result |
 | secrets in source | environment variables (`NEXTCLOUD_PASSWORD`, `ASANA_ACCESS_TOKEN`) |
 
 ## Imports and classes
 
 | v1 | v2 |
 |---|---|
-| `from flex.inst.base import Instrument` (ZMQ baked in) | `from flex_protocols import ZMQInstrument` (also `VISAInstrument`, `TCPInstrument`, `SerialInstrument`) |
+| `from flex.inst.base import Instrument` (ZMQ baked in) | `from flex.protocols import ZMQInstrument` (also `VISAInstrument`, `TCPInstrument`, `SerialInstrument`) |
 | `from flex.inst.levylab.Lockin import Lockin` | `from flex_drivers.levylab.lockin import Lockin` |
 | `inst._send_command(cmd, params)['result']` | `inst.call(cmd, params)` — errors now **raise** instead of returning `None` |
 | `_LABVIEW_CLASS_NAME` module constant | `lv_class` class attribute; `flex_drivers.levylab.lvclass_registry()` derives the CESession lookup from it |
@@ -57,7 +57,7 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 - `flex.lv` LabVIEW call helpers, `exp/pund.py` (experiment logic, not
   framework — rewrite as a `Scan` script), `exp/experiment_bak`.
 - Newport/Ophir/Sphere drivers that require .NET or COM — tracked in
-  [`packages/flex-drivers/DEFERRED.md`](https://github.com/levylabpitt/flex/blob/v2/packages/flex-drivers/DEFERRED.md).
+  [`packages/flex-drivers/DEFERRED.md`](https://github.com/levylabpitt/flex/blob/v3/packages/flex-drivers/DEFERRED.md).
 
 ## Postgres note
 

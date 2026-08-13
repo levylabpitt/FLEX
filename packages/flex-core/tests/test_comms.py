@@ -1,5 +1,5 @@
 from flex.comms import COMMS, NoComms
-from flex.ecosystem import FlexConfig
+from flex.config import FlexConfig
 
 
 def test_no_comms_is_a_noop():

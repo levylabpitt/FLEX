@@ -37,7 +37,7 @@ class NextcloudStorage(StorageBackend):
         **_options,
     ):
         if root is None:
-            from flex.ecosystem import default_data_root
+            from flex.config import default_data_root
 
             root = default_data_root()
         self.root = Path(root)

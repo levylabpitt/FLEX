@@ -1,6 +1,6 @@
 # LevyLab Guide
 
-The LevyLab ecosystem connects FLEX to the lab's LabVIEW **Instrument
+The LevyLab setup connects FLEX to the lab's LabVIEW **Instrument
 Framework** (IF): each instrument runs as an IF app exposing a JSON-RPC API
 over ZMQ, experiments are configured in the **Configure Experiments VI**, data
 goes to TDMS + Nextcloud, metadata to the lab PostgreSQL, and Asana gets a
@@ -10,11 +10,16 @@ task per experiment via `flex-asana` — the Asana API directly, no n8n.
 
 ```powershell
 irm flex.levylab.org/install.ps1 | iex
-flex ecosystem use levylab
+uv pip install flex-nextcloud flex-asana     # the LevyLab integrations
+Copy-Item examples\levylab.toml "$env:LOCALAPPDATA\flex\config.toml"
 $env:NEXTCLOUD_PASSWORD = '...'              # or add to the machine environment
 $env:ASANA_ACCESS_TOKEN = '...'
 $env:ASANA_EXPERIMENTS_PROJECT_GID = '...'
 ```
+
+(`examples/levylab.toml` in the repo is the lab's shared configuration —
+PostgreSQL, TDMS, Nextcloud, Asana, `exp.handler = "ce"`. Copy it, then add
+your bench's `[stations.*]` block locally.)
 
 ## CESession
 
@@ -74,10 +79,10 @@ with CESession() as exp:
 
 ## Testing drivers without LabVIEW
 
-`flex_protocols.testing.FakeIFServer` is an in-process fake IF app:
+`flex.protocols.testing.FakeIFServer` is an in-process fake IF app:
 
 ```python
-from flex_protocols.testing import FakeIFServer
+from flex.protocols.testing import FakeIFServer
 
 with FakeIFServer({"getResults": {"X": [1.0]}}) as server:
     li = Lockin("li", server.address)

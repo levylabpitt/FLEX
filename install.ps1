@@ -3,14 +3,14 @@
 #
 #   Usage:   irm flex.levylab.org/install.ps1 | iex
 #
-#   FLEX v2 is a monorepo of interdependent packages (not published anywhere
+#   FLEX is a monorepo of interdependent packages (not published anywhere
 #   else), so unlike v1 this needs Git: it keeps a persistent local checkout
 #   under %LOCALAPPDATA%\flex\src and installs the default packages from it
-#   *editable* -- which also means `flex install <package>` later on finds
-#   every other package right there and never has to touch the network again.
+#   *editable* -- which also means the optional packages are a
+#   `pip install -e` away from the same checkout, no network needed.
 #
 #   Optional environment overrides (set before piping):
-#     $env:FLEX_SOURCE_REF = 'develop'   # install from a specific branch/tag (default: v2)
+#     $env:FLEX_SOURCE_REF = 'develop'   # install from a specific branch/tag (default: v3)
 # ==============================================================================
 
 & {
@@ -226,7 +226,7 @@
 
     # --- 5. Clone or update a persistent local checkout -------------------------
     $branch = $env:FLEX_SOURCE_REF
-    if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'v2' }
+    if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'v3' }
     $srcRoot = Join-Path $env:LOCALAPPDATA 'flex\src'
 
     Write-Host ""
@@ -245,14 +245,14 @@
     }
 
     # --- 6. Install the default packages, editable -----------------------------
-    # Editable, from the persistent checkout above: `flex install <name>` later
-    # finds every other package right there (see flex.pkgmanager.manager) without
-    # ever needing the network again, and `git pull`-ing $srcRoot picks up updates
-    # immediately (no reinstall step, unlike v1's force-reinstall pass).
+    # Editable, from the persistent checkout above: installing the optional
+    # packages later is a `pip install -e` away from the same checkout, and
+    # `git pull`-ing $srcRoot picks up updates immediately (no reinstall step,
+    # unlike v1's force-reinstall pass).
     Write-Host ""
     Log "Installing FLEX packages (editable)..." 'Yellow'
     Write-Host "  ----------------------------- pip ----------------------------" -ForegroundColor DarkGray
-    $defaultPackages = 'flex-core', 'flex-protocols[visa]', 'flex-db', 'flex-datatypes', 'flex-exp', 'flex-drivers', 'flex'
+    $defaultPackages = 'flex-core[visa]', 'flex-exp', 'flex-drivers', 'flex'
     $pipArgs = @('-m', 'pip', 'install', '--upgrade')
     foreach ($pkg in $defaultPackages) { $pipArgs += @('-e', (Join-Path $srcRoot "packages\$pkg")) }
     $code = Invoke-ExeLive $py $pipArgs
@@ -276,8 +276,8 @@
     # the dashboard fails the moment uv/pip tries to touch its own launcher.
     # A flex.cmd shim isn't managed by pip, so nothing ever needs to lock or
     # rewrite it; it just hands off to `python -m flex`, which never self-locks.
-    # PackageManager deletes flex.exe again after every future install so this
-    # sticks (see flex.pkgmanager.manager._remove_shadowed_console_script).
+    # (A later manual pip install may regenerate flex.exe -- delete it again
+    # if `flex` starts resolving to the exe instead of this shim.)
     $scriptsDir = Split-Path $py -Parent
     $flexCmd = Join-Path $scriptsDir 'flex.cmd'
     @"

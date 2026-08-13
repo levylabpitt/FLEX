@@ -11,9 +11,9 @@ irm flex.levylab.org/install.ps1 | iex
 ```
 
 (Windows; see [`install.ps1`](install.ps1). Already have Python + a venv you
-manage yourself? `pip install -e packages/flex-core -e packages/flex-protocols[visa]
--e packages/flex-db -e packages/flex-datatypes -e packages/flex-exp -e packages/flex-drivers
--e packages/flex` from a clone works too — see [Development](#development).)
+manage yourself? `pip install -e packages/flex-core[visa] -e packages/flex-exp
+-e packages/flex-drivers -e packages/flex` from a clone works too — see
+[Development](#development).)
 
 ```python
 from flex import Experiment, Scan, sweep, SimulatedInstrument
@@ -37,45 +37,34 @@ needed. Swap `SimulatedInstrument` for a real one to run it on hardware.
 
 ## Packages
 
-FLEX is a collection of small packages; the installer gives you the six
-default ones. Everything else is opt-in via the package manager.
+FLEX is a handful of packages, split where installation actually differs;
+the installer gives you the three default ones (via the `flex` metapackage).
 
 | Package | What it is | Installed by default |
 |---|---|---|
-| `flex-core` | Instrument model, data & metadata services, package manager, dashboard, CLI | ✅ |
-| `flex-protocols` | `VISAInstrument`, `TCPInstrument`, `SerialInstrument`, `ZMQInstrument` base classes | ✅ |
-| `flex-db` | Metadata database backends: SQLite (default), PostgreSQL | ✅ |
+| `flex-core` | Instrument model, protocol bases (VISA/TCP/Serial/ZMQ), config, DB backends (SQLite/PostgreSQL), data writers (HDF5/TDMS), dashboard, CLI | ✅ |
 | `flex-exp` | `Experiment`, `Measurement`, `Scan`, lab sessions (`CESession`) | ✅ |
-| `flex-datatypes` | HDF5 (default format) and TDMS (LabVIEW-compatible) data writers | ✅ |
 | `flex-drivers` | Instrument drivers, by vendor (including LevyLab, over ZMQ) | ✅ |
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
 | `flex-asana` | Asana comms backend: a task per experiment | opt-in |
 
-## Ecosystems
+Optional dependencies are extras on flex-core: `flex-core[visa]`,
+`[zmq]`, `[serial]`, `[postgres]`, `[tdms]`, or `[all]`.
 
-An **ecosystem** is a lab's complete FLEX setup in one TOML manifest: which
-packages to install and how everything is configured (database, storage, data
-format, hooks, stations, enabled drivers). `default` (generic, no config
-needed) ships with `flex-core`; lab-specific ones like `levylab` live in this
-repo's own [`ecosystems/`](ecosystems/) folder — forks are free to delete or
-replace them without touching `flex-core` at all. Activate one by name, or
-point at your own manifest file.
+## Configuration
 
-```
-flex ecosystem use levylab
-```
-
-installs the LevyLab stack (Instrument-Framework drivers, PostgreSQL, TDMS,
-Nextcloud, Asana task tracking) and activates its configuration. A new lab
-member is productive in one command; a new lab writes one file.
+One `flex.toml` per PC describes the whole setup: the station's instruments
+and the settings for every service (database, storage, data format, comms,
+hooks). No config at all is a valid setup — SQLite + HDF5 + local files
+under your user data directory. A lab shares an example config in
+[`examples/`](examples/) that each machine copies and adjusts; see the
+[configuration guide](docs/concepts/configuration.md).
 
 ## The CLI and the dashboard
 
 ```
-flex list [--drivers]        # what's available / installed / enabled
-flex install flex-datatypes  # add a package
-flex enable levylab.lockin   # enable one driver (auto-installs its package)
-flex ecosystem show          # the active configuration
+flex drivers                 # every driver available in this environment
+flex config show             # the active configuration
 flex experiments             # browse recorded experiments
 flex instruments --probe     # test-connect every configured instrument
 flex new driver Keithley2400 # scaffold a driver
@@ -87,7 +76,7 @@ python -m flex dashboard     # all of the above, in the browser
 Inherit from the protocol class matching how the instrument is connected:
 
 ```python
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 class Keithley2400(VISAInstrument):
     def __init__(self, name="k2400", resource="GPIB0::24::INSTR"):
@@ -112,7 +101,7 @@ uv run pytest packages -q
 uv run ruff check packages
 ```
 
-Plain pip works too: `pip install -e packages/flex-core -e packages/flex-protocols ...`
+Plain pip works too: `pip install -e packages/flex-core[all] -e packages/flex-exp ...`
 
 ## License
 

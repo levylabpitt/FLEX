@@ -9,135 +9,71 @@ from rich.console import Console
 from rich.table import Column, Table
 
 app = typer.Typer(help="FLEX: Framework for Laboratory EXperiments", no_args_is_help=True)
-ecosystem_app = typer.Typer(help="Activate and inspect ecosystem configurations", no_args_is_help=True)
+config_app = typer.Typer(help="Inspect and validate the active configuration", no_args_is_help=True)
 new_app = typer.Typer(help="Scaffold new drivers and packages", no_args_is_help=True)
-app.add_typer(ecosystem_app, name="ecosystem")
+app.add_typer(config_app, name="config")
 app.add_typer(new_app, name="new")
 
 console = Console()
 
 
-# -- packages & drivers -------------------------------------------------------
+# -- drivers ------------------------------------------------------------------
 
 
-@app.command("list")
-def list_(drivers: bool = typer.Option(False, "--drivers", help="List drivers instead of packages")):
-    """List official FLEX packages (or drivers) and their status."""
-    from flex.pkgmanager import PackageManager
+@app.command()
+def drivers():
+    """List every driver available in this environment."""
+    from flex import components
 
-    manager = PackageManager()
-    if drivers:
-        table = Table("Driver", "Package", "Available", "Enabled")
-        for d in manager.list_drivers():
-            table.add_row(
-                d.name,
-                d.package,
-                "[green]yes[/]" if d.available else "[dim]no[/]",
-                "[green]yes[/]" if d.enabled else "[dim]no[/]",
-            )
-        console.print(table if table.rows else "No drivers known. Install a driver package first.")
+    refs = components.available("drivers")
+    if not refs:
+        console.print("No drivers found. Install a driver package (e.g. flex-drivers) first.")
         return
-    table = Table("Package", "Group", "Installed", "Summary")
-    for p in sorted(manager.list_packages(), key=lambda p: (p.group, p.name)):
-        installed = f"[green]{p.installed}[/]" if p.installed else "[dim]-[/]"
-        table.add_row(p.name, p.group, installed, p.summary)
+    table = Table("Driver", "Class")
+    for name in sorted(refs):
+        table.add_row(name, refs[name])
     console.print(table)
 
 
-@app.command()
-def install(packages: list[str]):
-    """Install official FLEX packages into this environment."""
-    from flex.pkgmanager import PackageManager
-
-    PackageManager().install(*packages)
-    console.print(f"[green]Installed:[/] {', '.join(packages)}")
+# -- config -------------------------------------------------------------------
 
 
-@app.command()
-def remove(packages: list[str]):
-    """Remove FLEX packages from this environment."""
-    from flex.pkgmanager import PackageManager
-
-    PackageManager().remove(*packages)
-    console.print(f"[green]Removed:[/] {', '.join(packages)}")
-
-
-@app.command()
-def enable(driver: str):
-    """Enable a driver (installs its package if needed)."""
-    from flex.pkgmanager import PackageManager
-
-    info = PackageManager().enable_driver(driver)
-    console.print(f"[green]Enabled:[/] {info.name} (from {info.package})")
-
-
-@app.command()
-def disable(driver: str):
-    """Disable a driver in the active configuration."""
-    from flex.pkgmanager import PackageManager
-
-    PackageManager().disable_driver(driver)
-    console.print(f"[green]Disabled:[/] {driver}")
-
-
-# -- ecosystem -----------------------------------------------------------
-
-
-def _resolve_manifest(target: str) -> Path:
-    path = Path(target)
-    if path.exists():
-        return path
-    from flex.pkgmanager import ecosystems
-
-    bundled = ecosystems.resolve(target)
-    if bundled is not None:
-        return bundled
-    known = ", ".join(e["name"] for e in ecosystems.list_bundled())
-    raise typer.BadParameter(f"No manifest at '{target}' (bundled ecosystems: {known})")
-
-
-@ecosystem_app.command()
-def use(
-    manifest: str = typer.Argument(help="Manifest file, or name under ./ecosystems/"),
-    install: bool = typer.Option(True, help="Install the packages the ecosystem lists"),
-):
-    """Activate an ecosystem: install its packages, make it the active config."""
-    from flex import ecosystem
-
-    cfg = ecosystem.activate(_resolve_manifest(manifest), install=install)
-    console.print(f"[green]Ecosystem '{cfg.ecosystem.name}' active[/] -> {ecosystem.ACTIVE_CONFIG}")
-
-
-@ecosystem_app.command()
+@config_app.command()
 def show():
     """Show the active configuration (resolved)."""
-    from flex.ecosystem import find_config, load_config
+    from flex.config import find_config, load_config
 
     source = find_config()
     cfg = load_config()
     console.print(f"[bold]Source:[/] {source or '(built-in defaults)'}")
     table = Table("Setting", "Value")
-    table.add_row("ecosystem", cfg.ecosystem.name)
+    table.add_row("lab.name", cfg.lab.name or "-")
+    table.add_row("lab.station", cfg.lab.station or "-")
     table.add_row("db.backend", cfg.db.backend)
     table.add_row("data.writer", cfg.data.writer)
     table.add_row("data.root", str(cfg.data.root))
     table.add_row("storage.backend", cfg.storage.backend)
     table.add_row("exp.handler", cfg.exp.handler)
-    table.add_row("drivers.enabled", ", ".join(cfg.drivers.enabled) or "-")
     table.add_row("stations", ", ".join(cfg.stations) or "-")
     console.print(table)
 
 
-@ecosystem_app.command()
-def validate(manifest: str = typer.Argument(help="Manifest file, or name under ./ecosystems/")):
-    """Validate a manifest: schema, and that its components can be resolved."""
+@config_app.command()
+def validate(path: str = typer.Argument(help="Configuration file (flex.toml)")):
+    """Validate a configuration file: schema, and that its components resolve."""
     from flex import components
-    from flex.ecosystem import load_config
+    from flex.config import load_config
 
-    path = _resolve_manifest(manifest)
-    cfg = load_config(path)
+    cfg = load_config(Path(path))
     console.print(f"[green]Schema OK[/] ({path})")
     checks = [("db", cfg.db.backend), ("writer", cfg.data.writer), ("storage", cfg.storage.backend)]
+    if cfg.comms.backend != "none":
+        checks.append(("comms", cfg.comms.backend))
+    checks += [
+        ("drivers", inst.driver)
+        for station in cfg.stations.values()
+        for inst in station.instruments.values()
+    ]
     failures = 0
     for group, name in checks:
         try:
@@ -145,10 +81,9 @@ def validate(manifest: str = typer.Argument(help="Manifest file, or name under .
             console.print(f"  [green]ok[/]  {group}: {name}")
         except components.ComponentError as e:
             failures += 1
-            console.print(f"  [yellow]--[/]  {group}: {name} — {e}")
+            console.print(f"  [red]!![/]  {group}: {name} — {e}")
     if failures:
-        console.print("[yellow]Some components are not installed yet; "
-                      "`flex ecosystem use` will install the listed packages.[/]")
+        raise typer.Exit(1)
 
 
 # -- browsing ------------------------------------------------------------
@@ -160,7 +95,7 @@ def experiments(
     last: int = typer.Option(20, help="Number of experiments to show"),
 ):
     """Browse recorded experiments."""
-    from flex.ecosystem import load_config
+    from flex.config import load_config
 
     store = load_config().build_db()
     try:
@@ -180,7 +115,7 @@ def experiments(
 @app.command()
 def measurements(experiment_id: str):
     """List the measurements (and data files) of an experiment."""
-    from flex.ecosystem import load_config
+    from flex.config import load_config
 
     store = load_config().build_db()
     try:
@@ -208,21 +143,20 @@ def measurements(experiment_id: str):
 @app.command()
 def instruments(probe: bool = typer.Option(False, "--probe", help="Connect and query *IDN*")):
     """List instruments configured in the active station(s)."""
-    from flex.ecosystem import load_config
-    from flex.pkgmanager import PackageManager
+    from flex import components
+    from flex.config import load_config
 
     cfg = load_config()
     if not cfg.stations:
         console.print("No stations defined in the active configuration.")
         raise typer.Exit()
-    manager = PackageManager()
     table = Table("Station", "Instrument", "Driver", "Address", *(["IDN"] if probe else []))
     for station, spec in cfg.stations.items():
         for name, inst in spec.instruments.items():
             row = [station, name, inst.driver, inst.address or "-"]
             if probe:
                 try:
-                    cls = manager.resolve_driver(inst.driver)
+                    cls = components.resolve_driver(inst.driver)
                     args = (inst.address,) if inst.address else ()
                     with cls(name, *args, **inst.options()) as device:
                         idn = device.idn()
@@ -257,7 +191,7 @@ def new_package(
     name: str = typer.Argument(help="Package name, e.g. flex-drivers-mylab"),
     out: Path = typer.Option(Path("."), help="Output directory"),
 ):
-    """Generate a FLEX package skeleton (installable, with a driver catalog)."""
+    """Generate a FLEX package skeleton (installable, with a driver registry)."""
     from flex.cli.scaffold import create_package
 
     if (out / name).exists():
@@ -280,12 +214,15 @@ def dashboard(
 @app.command()
 def version():
     """Show versions of every installed FLEX package."""
-    from flex.pkgmanager import PackageManager
+    from importlib import metadata
 
+    known = ["flex", "flex-core", "flex-exp", "flex-drivers", "flex-nextcloud", "flex-asana"]
     table = Table("Package", "Version")
-    for p in PackageManager().list_packages():
-        if p.installed:
-            table.add_row(p.name, p.installed)
+    for name in known:
+        try:
+            table.add_row(name, metadata.version(name))
+        except metadata.PackageNotFoundError:
+            pass
     console.print(table)
 
 

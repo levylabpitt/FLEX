@@ -10,8 +10,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from flex.config import FlexConfig, load_config
 from flex.display import auto_display, refresh_display
-from flex.ecosystem import FlexConfig, load_config
 from flex.instrument import Instrument
 from flex.log import (
     add_db_log_handler,
@@ -48,7 +48,7 @@ class Experiment:
 
     Works with any FLEX instrument (VISA, TCP, serial, ZMQ, simulated) and
     builds its services — metadata store, storage backend, data writer, comms
-    backend, hooks — from the active ecosystem configuration. With no
+    backend, hooks — from the active configuration (flex.toml). With no
     configuration, everything lands in SQLite + HDF5 files under the user
     data directory, and no external notifications are sent.
 
@@ -61,7 +61,7 @@ class Experiment:
 
     Args:
         notify: Build and call the configured `[comms] backend` (e.g. Asana).
-            Set False to skip it for one run without changing the ecosystem
+            Set False to skip it for one run without changing the active
             config — a scratch script that shouldn't create a task, say.
     """
 
@@ -114,7 +114,6 @@ class Experiment:
                     user=self.user,
                     name=self.name,
                     start_time=self.start_time,
-                    ecosystem=self.config.ecosystem.name,
                     station=self.config.lab.station or None,
                     host=self.host,
                     flex_version=_flex_version(),
@@ -209,11 +208,10 @@ class Experiment:
                 station = next(iter(stations))
             if station is None:
                 raise ValueError(f"Choose a station: {', '.join(stations)}")
-        from flex.pkgmanager import PackageManager
+        from flex import components
 
-        manager = PackageManager()
         for name, spec in stations[station].instruments.items():
-            cls = manager.resolve_driver(spec.driver)
+            cls = components.resolve_driver(spec.driver)
             args = (spec.address,) if spec.address else ()
             self.add_instrument(cls(name, *args, **spec.options()), name)
 

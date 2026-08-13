@@ -6,6 +6,7 @@ JSON-RPC method names and param-dict key spellings.
 
 import pytest
 
+from flex.protocols.testing import FakeIFServer
 from flex_drivers.levylab import capabilities
 from flex_drivers.levylab.aerotech import Aerotech
 from flex_drivers.levylab.cryostation import Cryostation
@@ -16,7 +17,6 @@ from flex_drivers.levylab.oxford import Oxford1820, OxfordVRM
 from flex_drivers.levylab.ppms import PPMS
 from flex_drivers.levylab.tc import TC_CF, TC_MNK
 from flex_drivers.levylab.transport_server import TransportServer
-from flex_protocols.testing import FakeIFServer
 
 HANDLERS = {
     # Lockin

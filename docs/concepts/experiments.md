@@ -31,7 +31,7 @@ always recoverable — including its execution count and whether it raised.
 
 Instruments can also come from configuration: `exp.load_station("cryo1")`
 instantiates everything in the config's `[stations.cryo1]` block — see
-[Ecosystems & stations](ecosystems.md#stations-at-runtime).
+[Configuration & stations](configuration.md#stations-at-runtime).
 
 In Jupyter or VS Code's Interactive Window, every `Experiment` shows a live
 summary card (id, user, instruments) that updates as instruments are added
@@ -111,7 +111,7 @@ holds the canonical `FilePointer`.
 The metadata store (from `[db] backend`; SQLite by default) keeps six
 `flex_`-prefixed tables, normalized one entity per table:
 
-- **flex_experiments** — id, user, name, start/end, ecosystem, station, host,
+- **flex_experiments** — id, user, name, start/end, station, host,
   flex version, full config snapshot.
 - **flex_measurements** — id, experiment, name, start/end, aborted, writer
   format, row count, file pointer (uri/backend/size).
@@ -144,7 +144,7 @@ environment variables it reads). `Experiment` builds the backend and calls it
 wrapped in try/except, same as the metadata store: a missing token,
 unreachable API, or misconfigured project never breaks a run, only logs a
 warning. Pass `Experiment(..., notify=False)` to skip it for one run without
-touching the ecosystem config.
+touching the config.
 
 If `flex-asana` is installed and `python -m flex_asana.update_users` has been
 run at least once (regenerates a `Literal` of workspace handles from Asana —

@@ -14,21 +14,16 @@ header stops the server (you can also Ctrl-C the terminal).
 !!! note
     Use `python -m flex dashboard`, not the bare `flex dashboard` console
     script. On Windows, `flex.exe` stays open for the life of the server and
-    holds a file lock on itself; installing or enabling anything through the
-    Integrations/Drivers tabs then fails because the installer can't rewrite
-    its own locked launcher. `python -m flex` runs the same CLI without that
-    lock.
+    holds a file lock on itself, which blocks pip/uv from touching the
+    environment while it runs. `python -m flex` runs the same CLI without
+    that lock.
 
 ## Tabs
 
-- **Ecosystem** (home) — the discovered ecosystem manifests with the active
-  one marked; an **Activate** button per manifest, or activate any manifest
-  by path. "Advanced: raw configuration" edits the active config TOML
-  directly, validated against the config schema before saving.
-- **Integrations** — the official package list with install/uninstall
-  buttons.
-- **Drivers** — every known driver, searchable; enable/disable each, and
-  **Probe** an enabled driver (connect and query its identity).
+- **Config** (home) — edits the active flex.toml directly, validated
+  against the config schema before saving.
+- **Drivers** — every driver available in this environment, searchable;
+  **Probe** connects one and queries its identity.
 - **Experiments** — recent experiment records; click one for its
   measurements, data-file pointers, and notes.
 

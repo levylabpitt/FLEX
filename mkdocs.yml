@@ -3,7 +3,7 @@ site_description: Framework for Laboratory EXperiments
 site_url: https://flex.levylab.org
 repo_url: https://github.com/levylabpitt/flex
 repo_name: levylabpitt/flex
-edit_uri: edit/v2/docs/
+edit_uri: edit/v3/docs/
 
 theme:
   name: material
@@ -70,11 +70,10 @@ nav:
       - Architecture: concepts/architecture.md
       - Instruments & drivers: concepts/instruments.md
       - Experiments & data: concepts/experiments.md
-      - Ecosystems & stations: concepts/ecosystems.md
+      - Configuration & stations: concepts/configuration.md
       - Dashboard & CLI: concepts/dashboard.md
   - Tutorials:
       - Write a driver: tutorials/write-a-driver.md
-      - Build an ecosystem: build-an-ecosystem.md
       - LevyLab setup: levylab.md
   - Reference:
       - Drivers: reference/drivers/

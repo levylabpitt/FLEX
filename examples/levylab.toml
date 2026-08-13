@@ -1,0 +1,56 @@
+# Example flex.toml for the LevyLab setup: Instrument-Framework drivers over
+# ZMQ, PostgreSQL metadata, TDMS data files, Nextcloud storage, an Asana task
+# per experiment.
+#
+# Install the packages this configuration needs:
+#
+#     uv pip install flex-core[postgres,tdms,zmq] flex-drivers flex-nextcloud flex-asana
+#
+# Then copy this file to ./flex.toml (or %LOCALAPPDATA%/flex/config.toml, or
+# point $FLEX_CONFIG at it) and adjust the [stations.*] block for your bench.
+
+[lab]
+name = "levylab"
+station = "" # set to your station's name once you've added a [stations.*] block below
+
+[db]
+backend = "postgres"
+dsn = "postgresql://llab_admin@db.levylab.org/levylab_test"
+
+[storage]
+backend = "nextcloud"
+url = "https://nextcloud.levylab.org"
+user = "llab_shared"
+remote_root = "Shared/Data/FLEX"
+# password comes from the NEXTCLOUD_PASSWORD environment variable
+
+[data]
+writer = "tdms"
+
+[exp]
+handler = "ce"   # CESession: bootstrapped from the Configure Experiments VI
+
+[comms]
+backend = "asana"
+# By default this reads the ASANA_ACCESS_TOKEN, ASANA_EXPERIMENTS_PROJECT_GID
+# (both required) and ASANA_WORKSPACE_GID (optional, single-workspace
+# accounts only) environment variables. If you'd rather not set those on
+# this machine, you can instead add them right here as config keys --
+# any key besides "backend" is passed straight to the backend, e.g.:
+#
+# access_token = "2/1234567890/abcdefg..."
+# project_gid = "123456789"
+# workspace_gid = "987654321"
+#
+# Only do this in a config you don't commit/share (e.g. your own
+# %LOCALAPPDATA%/flex/config.toml) -- this file is shared, so a real token
+# here would be a plaintext secret in git history.
+
+# Which instruments live at your bench is per-station, not lab-wide -- add
+# your own [stations.*] block locally (dashboard "Config" tab, or edit
+# flex.toml directly) instead of inheriting someone else's station here.
+# Example:
+#
+# [stations.mystation.instruments.lockin]
+# driver = "levylab.lockin"
+# address = "tcp://localhost:29170"

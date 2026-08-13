@@ -1,1 +1,1 @@
-"""Lab-specific experiment sessions (activated via ecosystem configuration)."""
+"""Lab-specific experiment sessions (activated via the FLEX configuration)."""

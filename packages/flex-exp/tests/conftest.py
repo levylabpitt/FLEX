@@ -1,6 +1,6 @@
 import pytest
 
-from flex.ecosystem import FlexConfig
+from flex.config import FlexConfig
 
 
 @pytest.fixture

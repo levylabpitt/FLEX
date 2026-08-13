@@ -1,7 +1,7 @@
 """FLEX v2 drivers for LevyLab Instrument-Framework apps (JSON-RPC over ZMQ).
 
 Ports of the FLEX v1 ``flex.inst.levylab`` drivers onto
-``flex_protocols.ZMQInstrument``. Driver modules are imported lazily via
+``flex.protocols.ZMQInstrument``. Driver modules are imported lazily via
 :data:`CATALOG` — importing this package does not import zmq or any driver
 module.
 """

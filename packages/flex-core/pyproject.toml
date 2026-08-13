@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "flex-core"
 version = "2.0.0a1"
-description = "FLEX core: instrument model, data & metadata services, package manager, ecosystem configuration, CLI"
+description = "FLEX core: instrument model, protocol bases, data & metadata services, station configuration, CLI"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,7 +18,16 @@ dependencies = [
     "tomlkit>=0.12",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "h5py>=3.10",
 ]
+
+[project.optional-dependencies]
+visa = ["pyvisa>=1.14"]
+zmq = ["pyzmq>=25"]
+serial = ["pyserial>=3.5"]
+postgres = ["psycopg[binary]>=3.1"]
+tdms = ["npTDMS>=1.9"]
+all = ["pyvisa>=1.14", "pyzmq>=25", "pyserial>=3.5", "psycopg[binary]>=3.1", "npTDMS>=1.9"]
 
 [project.scripts]
 flex = "flex.cli:app"

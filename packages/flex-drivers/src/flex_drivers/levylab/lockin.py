@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from flex_protocols import ZMQInstrument
+from flex.protocols import ZMQInstrument
 
 _ALLOWED_AO_FUNCTIONS = {"Sine", "Triangle", "Square"}
 

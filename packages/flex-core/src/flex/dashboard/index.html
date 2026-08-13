@@ -138,8 +138,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const TABS = ["Ecosystem", "Integrations", "Drivers", "Experiments"];
-let current = "Ecosystem";
+const TABS = ["Config", "Drivers", "Experiments"];
+let current = "Config";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -174,7 +174,7 @@ async function show(tab) {
   nav();
   $("#main").innerHTML = '<p class="empty">loading…</p>';
   try {
-    await ({ Ecosystem: ecosystem, Integrations: integrations, Drivers: driversTab, Experiments: experiments }[tab])();
+    await ({ Config: configTab, Drivers: driversTab, Experiments: experiments }[tab])();
   } catch (e) {
     if (tab !== current) return;  // a later tab switch already owns #main
     $("#main").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
@@ -202,40 +202,14 @@ async function exitServer() {
     </div>`;
 }
 
-// -- Ecosystem (home) ---------------------------------------------------------
+// -- Config (home) ------------------------------------------------------------
 
-let ecoCache = [];
-
-async function ecosystem() {
-  const [eco, raw] = await Promise.all([api("/api/ecosystems"), api("/api/config/raw")]);
-  ecoCache = eco.available;
-  // Bundled manifests are absolute filesystem paths (backslashes on Windows) --
-  // pass the array index through onclick, not the raw path: interpolating a
-  // path straight into an inline onclick="...'...'" handler makes the browser
-  // parse it as a JS string literal, where "\f" etc. are real escape sequences
-  // and silently corrupt the text.
-  const cards = ecoCache.map((e, i) => {
-    const isActive = e.name === eco.active;
-    return `<div class="eco-card${isActive ? " active" : ""}">
-      <div class="eco-card-head">
-        <span class="eco-name">${esc(e.name)}</span>
-        ${isActive ? '<span class="badge ok">active</span>' : ""}
-      </div>
-      <p class="eco-packages">${e.packages.length ? esc(e.packages.join(", ")) : "no extra packages"}</p>
-      ${isActive ? "" : `<button class="action" onclick="activateEcosystem(this,${i})">Activate</button>`}
-    </div>`;
-  }).join("");
+async function configTab() {
+  const raw = await api("/api/config/raw");
   $("#main").innerHTML = `
     <section>
-      <div class="section-head"><h2>Ecosystems</h2></div>
-      <p class="hint">Pick a lab's complete setup. Activating installs its packages and applies its configuration.</p>
-      ${ecoCache.length ? `<div class="eco-grid">${cards}</div>` : '<div class="card"><p class="empty">No bundled ecosystems found.</p></div>'}
-    </section>
-    <section>
-      <div class="section-head">
-        <h2>Advanced: raw configuration</h2>
-        <button class="action" onclick="useManifest()">Activate manifest…</button>
-      </div>
+      <div class="section-head"><h2>Configuration</h2></div>
+      <p class="hint">One flex.toml describes this PC: station instruments and service settings (db, storage, data, comms, hooks).</p>
       <p class="path">${esc(raw.path)}</p>
       <textarea id="cfg" spellcheck="false">${esc(raw.text)}</textarea>
       <div class="actions-row">
@@ -244,48 +218,11 @@ async function ecosystem() {
     </section>`;
 }
 
-async function activateEcosystem(button, index) {
-  button.disabled = true;
-  const file = ecoCache[index].file;
-  try {
-    const result = await api("/api/ecosystem/use", { method: "POST", body: JSON.stringify({ path: file }) });
-    toast(`Ecosystem '${result.ecosystem}' activated`);
-    ecosystem();
-  } catch (e) { toast(e.message, true); button.disabled = false; }
-}
-
 async function saveConfig() {
   try {
     await api("/api/config/raw", { method: "PUT", body: JSON.stringify({ text: $("#cfg").value }) });
     toast("Configuration saved");
   } catch (e) { toast(e.message, true); }
-}
-
-async function useManifest() {
-  const path = prompt("Path to ecosystem manifest (.toml):");
-  if (!path) return;
-  try {
-    const result = await api("/api/ecosystem/use", { method: "POST", body: JSON.stringify({ path }) });
-    toast(`Ecosystem '${result.ecosystem}' activated`);
-    ecosystem();
-  } catch (e) { toast(e.message, true); }
-}
-
-// -- Integrations --------------------------------------------------------------
-
-async function integrations() {
-  const pkgs = (await api("/api/packages")).filter((p) => p.group === "Integrations");
-  const rows = pkgs.map((p) => {
-    const status = p.installed
-      ? `<span class="badge ok">${esc(p.installed)}</span>`
-      : '<span class="badge dim">not installed</span>';
-    const name = encodeURIComponent(p.name);
-    const button = p.installed
-      ? `<button class="action danger" onclick="act(this,'/api/packages/${name}/remove','POST',integrations)">Remove</button>`
-      : `<button class="action" onclick="act(this,'/api/packages/${name}/install','POST',integrations)">Install</button>`;
-    return `<tr><td>${esc(p.name)}</td><td>${status}</td><td>${esc(p.summary)}</td><td>${button}</td></tr>`;
-  });
-  $("#main").innerHTML = `<section><div class="section-head"><h2>Integrations</h2></div>${table(["Package", "Status", "Summary", ""], rows)}</section>`;
 }
 
 // -- Drivers ---------------------------------------------------------------
@@ -307,20 +244,13 @@ async function driversTab() {
 
 function renderDrivers() {
   const q = ($("#driver-search")?.value || "").trim().toLowerCase();
-  const filtered = driverCache.filter((d) => !q || d.name.toLowerCase().includes(q) || d.package.toLowerCase().includes(q));
+  const filtered = driverCache.filter((d) => !q || d.name.toLowerCase().includes(q) || d.ref.toLowerCase().includes(q));
   const rows = filtered.map((d) => {
-    const status = d.enabled
-      ? '<span class="badge ok">enabled</span>'
-      : d.available ? '<span class="badge dim">available</span>' : '<span class="badge dim">not installed</span>';
-    const name = encodeURIComponent(d.name);
-    const actions = d.enabled
-      ? `<button class="action" onclick="act(this,'/api/drivers/${name}/disable','POST',driversTab)">Disable</button>
-         <button class="action" onclick="probeDriver(this,'${esc(d.name)}')">Probe</button>
-         <span id="probe-${esc(d.name)}"></span>`
-      : `<button class="action" onclick="act(this,'/api/drivers/${name}/enable','POST',driversTab)">Enable</button>`;
-    return `<tr><td>${esc(d.name)}</td><td>${status}</td><td>${actions}</td></tr>`;
+    const actions = `<button class="action" onclick="probeDriver(this,'${esc(d.name)}')">Probe</button>
+         <span id="probe-${esc(d.name)}"></span>`;
+    return `<tr><td>${esc(d.name)}</td><td><code>${esc(d.ref)}</code></td><td>${actions}</td></tr>`;
   });
-  $("#driver-table").innerHTML = table(["Driver", "Status", ""], rows);
+  $("#driver-table").innerHTML = table(["Driver", "Class", ""], rows);
 }
 
 async function probeDriver(button, name) {

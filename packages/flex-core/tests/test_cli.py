@@ -6,11 +6,10 @@ from flex.cli import app
 runner = CliRunner()
 
 
-def test_list_packages():
-    result = runner.invoke(app, ["list"])
+def test_drivers_listing():
+    result = runner.invoke(app, ["drivers"])
     assert result.exit_code == 0
-    assert "flex-core" in result.output
-    assert "flex-datatypes" in result.output
+    assert "levylab.lockin" in result.output
 
 
 def test_version():
@@ -27,25 +26,31 @@ def test_module_entry_point_exposes_same_app():
     assert main.app is app
 
 
-def test_ecosystem_show_defaults(monkeypatch, tmp_path):
+def test_config_show_defaults(monkeypatch, tmp_path):
     monkeypatch.delenv("FLEX_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("flex.ecosystem.ACTIVE_CONFIG", tmp_path / "missing.toml")
-    result = runner.invoke(app, ["ecosystem", "show"])
+    monkeypatch.setattr("flex.config.USER_CONFIG", tmp_path / "missing.toml")
+    result = runner.invoke(app, ["config", "show"])
     assert result.exit_code == 0
     assert "built-in defaults" in result.output
     assert "sqlite" in result.output
 
 
-def test_ecosystem_validate(tmp_path, monkeypatch):
-    manifest = tmp_path / "lab.toml"
-    manifest.write_text(
-        '[ecosystem]\nname = "lab"\n[db]\nbackend = "sqlite"\n', encoding="utf-8"
-    )
-    result = runner.invoke(app, ["ecosystem", "validate", str(manifest)])
+def test_config_validate(tmp_path, monkeypatch):
+    config = tmp_path / "lab.toml"
+    config.write_text('[db]\nbackend = "sqlite"\n', encoding="utf-8")
+    result = runner.invoke(app, ["config", "validate", str(config)])
     assert result.exit_code == 0
     assert "Schema OK" in result.output
     assert "db: sqlite" in result.output
+
+
+def test_config_validate_unresolvable_component_fails(tmp_path):
+    config = tmp_path / "lab.toml"
+    config.write_text('[db]\nbackend = "not-a-backend"\n', encoding="utf-8")
+    result = runner.invoke(app, ["config", "validate", str(config)])
+    assert result.exit_code == 1
+    assert "not-a-backend" in result.output
 
 
 def test_experiments_and_measurements(tmp_path, monkeypatch):
@@ -53,7 +58,7 @@ def test_experiments_and_measurements(tmp_path, monkeypatch):
     config.write_text(f'[data]\nroot = "{tmp_path.as_posix()}"\n', encoding="utf-8")
     monkeypatch.setenv("FLEX_CONFIG", str(config))
 
-    from flex.ecosystem import FlexConfig
+    from flex.config import FlexConfig
     from flex_exp import Experiment
 
     with Experiment("cliuser", name="demo", config=FlexConfig.model_validate(
@@ -105,12 +110,12 @@ def test_dashboard_launches(monkeypatch):
 def test_instruments_without_stations(monkeypatch, tmp_path):
     monkeypatch.delenv("FLEX_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("flex.ecosystem.ACTIVE_CONFIG", tmp_path / "missing.toml")
+    monkeypatch.setattr("flex.config.USER_CONFIG", tmp_path / "missing.toml")
     result = runner.invoke(app, ["instruments"])
     assert result.exit_code == 0
     assert "No stations defined" in result.output
 
 
-@pytest.mark.parametrize("cmd", [["--help"], ["ecosystem", "--help"], ["new", "--help"]])
+@pytest.mark.parametrize("cmd", [["--help"], ["config", "--help"], ["new", "--help"]])
 def test_help_screens(cmd):
     assert runner.invoke(app, cmd).exit_code == 0

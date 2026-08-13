@@ -1,8 +1,8 @@
 """CATALOG / lvclass_registry() integrity tests."""
 
 from flex.components import load_ref
+from flex.protocols import ZMQInstrument
 from flex_drivers.levylab import CATALOG, lvclass_registry
-from flex_protocols import ZMQInstrument
 
 
 def test_catalog_names_are_namespaced():

@@ -36,9 +36,9 @@ a real one to run it on hardware.
 - **[Quickstart](quickstart.md)** — install and run your first experiment in
   five minutes.
 - **[Concepts](concepts/architecture.md)** — how the pieces fit together:
-  packages, instruments, experiments, ecosystems, the dashboard.
-- **[Tutorials](tutorials/write-a-driver.md)** — write a driver, build your
-  lab's ecosystem, set up a LevyLab station.
+  packages, instruments, experiments, configuration, the dashboard.
+- **[Tutorials](tutorials/write-a-driver.md)** — write a driver, set up a
+  LevyLab station.
 - **[Reference](reference/drivers/index.md)** — every driver and integration,
   generated from the code.
 - **[Migrating from v1](migration-v1-to-v2.md)** — v1 stays on the `main`
@@ -51,5 +51,5 @@ a real one to run it on hardware.
 | talk to an instrument | `VISAInstrument` / `ZMQInstrument` / `TCPInstrument` / `SerialInstrument` base classes, and a [catalog of ready drivers](reference/drivers/index.md) |
 | run a sweep safely | `Scan` + `sweep`: Ctrl-C finalizes the file, marks the measurement aborted, runs your cleanup |
 | keep records | every experiment and measurement is recorded (SQLite by default, PostgreSQL for labs) |
-| share a lab setup | an [ecosystem](concepts/ecosystems.md): one TOML manifest, one `flex ecosystem use` command |
-| manage it all visually | `python -m flex dashboard` — packages, drivers, ecosystems, and experiment browsing in the browser |
+| share a lab setup | one [flex.toml](concepts/configuration.md) per PC: services + station in a single file |
+| manage it all visually | `python -m flex dashboard` — config, drivers, and experiment browsing in the browser |

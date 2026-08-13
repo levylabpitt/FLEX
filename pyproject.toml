@@ -5,10 +5,8 @@ description = "Development workspace for the FLEX platform (not a distributable 
 requires-python = ">=3.11"
 dependencies = [
     "flex",
-    "flex-protocols[all]",
-    "flex-db[postgres]",
+    "flex-core[all]",
     "flex-drivers",
-    "flex-datatypes",
     "flex-nextcloud",
     "flex-asana",
 ]
@@ -38,11 +36,8 @@ members = ["packages/*"]
 [tool.uv.sources]
 flex = { workspace = true }
 flex-core = { workspace = true }
-flex-protocols = { workspace = true }
-flex-db = { workspace = true }
 flex-exp = { workspace = true }
 flex-drivers = { workspace = true }
-flex-datatypes = { workspace = true }
 flex-nextcloud = { workspace = true }
 flex-asana = { workspace = true }
 
@@ -60,11 +55,8 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 [tool.ruff.lint.isort]
 known-first-party = [
     "flex",
-    "flex_protocols",
-    "flex_db",
     "flex_exp",
     "flex_drivers",
-    "flex_datatypes",
     "flex_nextcloud",
     "flex_asana",
 ]

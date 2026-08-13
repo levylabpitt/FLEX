@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 
 class ColbyPDL(VISAInstrument):

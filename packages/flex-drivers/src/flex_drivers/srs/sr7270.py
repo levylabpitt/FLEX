@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pyvisa
 
-from flex_protocols import VISAInstrument
+from flex.protocols import VISAInstrument
 
 
 class SR7270(VISAInstrument):

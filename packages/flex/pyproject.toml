@@ -11,11 +11,8 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-    "flex-core",
-    "flex-protocols[visa]",
-    "flex-db",
+    "flex-core[visa]",
     "flex-exp",
-    "flex-datatypes",
     "flex-drivers",
 ]
 

@@ -53,7 +53,7 @@ Optional dependencies are extras on flex-core: `flex-core[visa]`,
 
 ## Configuration
 
-One `flex.toml` per PC describes the whole setup: the station's instruments
+One `flex.toml` per PC describes the whole setup: the machine's instruments
 and the settings for every service (database, storage, data format, comms,
 hooks). No config at all is a valid setup — SQLite + HDF5 + local files
 under your user data directory. A lab shares an example config in

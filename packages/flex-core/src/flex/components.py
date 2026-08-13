@@ -69,7 +69,7 @@ def resolve_driver(name: str) -> type:
     """Load the instrument class for a driver name like ``"levylab.lockin"``.
 
     A ``"module:Class"`` reference works too, so private driver packages
-    need no registration to be used in ``[stations.*]`` blocks.
+    need no registration to be used in ``[instruments.*]`` blocks.
     """
     if ":" in name:
         return load_ref(name)

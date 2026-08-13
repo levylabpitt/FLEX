@@ -84,7 +84,7 @@ with exp.measurement("noise vs time") as m:
 
 ## Next steps
 
-- [Configuration & stations](concepts/configuration.md) — configure your
+- [Configuration & instruments](concepts/configuration.md) — configure your
   lab's database, storage, data format, and hooks in one flex.toml.
 - [LevyLab guide](levylab.md) — `CESession` and the Instrument Framework.
 - [Dashboard](concepts/dashboard.md) — edit the config and browse experiments

@@ -20,9 +20,13 @@ root = "D:/data"
 [hooks]
 on_experiment_end = ["os.path:join"]
 
-[stations.cryo1.instruments.lockin]
+[instruments.lockin]
 driver = "levylab.lockin"
 address = "tcp://localhost:29170"
+
+[instruments.bench]
+driver = "levylab.lockin"
+simulate = true
 """
 
 
@@ -52,9 +56,26 @@ def test_load_config_file(tmp_path):
     assert cfg.db.backend == "postgres"
     assert cfg.db.options() == {"dsn": "postgresql://example.org/lab"}
     assert cfg.data.root == Path("D:/data")
-    inst = cfg.stations["cryo1"].instruments["lockin"]
+    inst = cfg.instruments["lockin"]
     assert inst.driver == "levylab.lockin"
     assert inst.address == "tcp://localhost:29170"
+    assert inst.simulate is False
+
+
+def test_simulated_entry_builds_without_hardware(tmp_path):
+    path = tmp_path / "flex.toml"
+    path.write_text(CONFIG, encoding="utf-8")
+    cfg = load_config(path)
+    device = cfg.instruments["bench"].build("bench")
+    assert device.idn()["model"] == "SimulatedInstrument"
+    device.close()
+
+
+def test_entry_without_driver_or_simulate_refuses_to_build():
+    from flex.config import InstrumentConfig
+
+    with pytest.raises(ValueError, match="no driver"):
+        InstrumentConfig().build("mystery")
 
 
 def test_find_config_precedence(monkeypatch, tmp_path):

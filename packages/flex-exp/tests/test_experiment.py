@@ -309,12 +309,11 @@ def test_user_type_falls_back_to_str_without_flex_asana(monkeypatch):
         importlib.reload(experiment_module)  # restore the real import for later tests
 
 
-def test_load_station(config, monkeypatch):
-    config.stations = {}
-    cfg = config.model_copy()
-    cfg_dict = cfg.model_dump()
-    cfg_dict["stations"] = {
-        "bench": {"instruments": {"sim1": {"driver": "test.sim", "address": "sim://x"}}}
+def test_load_instruments(config, monkeypatch):
+    cfg_dict = config.model_dump()
+    cfg_dict["instruments"] = {
+        "sim1": {"driver": "test.sim", "address": "sim://x"},
+        "sim2": {"driver": "test.sim", "address": "sim://y"},
     }
     from flex.config import FlexConfig
 
@@ -329,5 +328,23 @@ def test_load_station(config, monkeypatch):
         "flex.components.resolve_driver", lambda name: AddressedSim
     )
     with Experiment("u", config=cfg) as exp:
-        exp.load_station()
+        exp.load_instruments()
         assert exp.sim1.address == "sim://x"
+        assert exp.sim2.address == "sim://y"
+
+
+def test_load_instruments_subset_and_unknown(config):
+    cfg_dict = config.model_dump()
+    cfg_dict["instruments"] = {
+        "bench": {"simulate": True},
+        "lockin": {"driver": "levylab.lockin", "address": "tcp://localhost:1"},
+    }
+    from flex.config import FlexConfig
+
+    cfg = FlexConfig.model_validate(cfg_dict)
+    with Experiment("u", config=cfg) as exp:
+        exp.load_instruments("bench")   # simulated: needs no hardware, no driver
+        assert list(exp.instruments) == ["bench"]
+        assert exp.bench.idn()["model"] == "SimulatedInstrument"
+        with pytest.raises(KeyError, match="nope"):
+            exp.load_instruments("nope")

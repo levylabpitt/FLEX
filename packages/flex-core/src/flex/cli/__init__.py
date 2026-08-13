@@ -54,7 +54,7 @@ def show():
     table.add_row("data.root", str(cfg.data.root))
     table.add_row("storage.backend", cfg.storage.backend)
     table.add_row("exp.handler", cfg.exp.handler)
-    table.add_row("stations", ", ".join(cfg.stations) or "-")
+    table.add_row("instruments", ", ".join(cfg.instruments) or "-")
     console.print(table)
 
 
@@ -70,9 +70,7 @@ def validate(path: str = typer.Argument(help="Configuration file (flex.toml)")):
     if cfg.comms.backend != "none":
         checks.append(("comms", cfg.comms.backend))
     checks += [
-        ("drivers", inst.driver)
-        for station in cfg.stations.values()
-        for inst in station.instruments.values()
+        ("drivers", inst.driver) for inst in cfg.instruments.values() if not inst.simulate
     ]
     failures = 0
     for group, name in checks:
@@ -142,28 +140,25 @@ def measurements(experiment_id: str):
 
 @app.command()
 def instruments(probe: bool = typer.Option(False, "--probe", help="Connect and query *IDN*")):
-    """List instruments configured in the active station(s)."""
-    from flex import components
+    """List instruments configured on this PC ([instruments.*])."""
     from flex.config import load_config
 
     cfg = load_config()
-    if not cfg.stations:
-        console.print("No stations defined in the active configuration.")
+    if not cfg.instruments:
+        console.print("No instruments defined in the active configuration.")
         raise typer.Exit()
-    table = Table("Station", "Instrument", "Driver", "Address", *(["IDN"] if probe else []))
-    for station, spec in cfg.stations.items():
-        for name, inst in spec.instruments.items():
-            row = [station, name, inst.driver, inst.address or "-"]
-            if probe:
-                try:
-                    cls = components.resolve_driver(inst.driver)
-                    args = (inst.address,) if inst.address else ()
-                    with cls(name, *args, **inst.options()) as device:
-                        idn = device.idn()
-                    row.append(f"[green]{idn.get('model') or 'ok'}[/]")
-                except Exception as e:
-                    row.append(f"[red]{e}[/]")
-            table.add_row(*row)
+    table = Table("Instrument", "Driver", "Address", *(["IDN"] if probe else []))
+    for name, inst in cfg.instruments.items():
+        driver = "[dim]simulated[/]" if inst.simulate else inst.driver
+        row = [name, driver, inst.address or "-"]
+        if probe:
+            try:
+                with inst.build(name) as device:
+                    idn = device.idn()
+                row.append(f"[green]{idn.get('model') or 'ok'}[/]")
+            except Exception as e:
+                row.append(f"[red]{e}[/]")
+        table.add_row(*row)
     console.print(table)
 
 

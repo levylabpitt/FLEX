@@ -19,7 +19,7 @@ $env:ASANA_EXPERIMENTS_PROJECT_GID = '...'
 
 (`examples/levylab.toml` in the repo is the lab's shared configuration —
 PostgreSQL, TDMS, Nextcloud, Asana, `exp.handler = "ce"`. Copy it, then add
-your bench's `[stations.*]` block locally.)
+your bench's `[instruments.*]` entries locally.)
 
 ## CESession
 

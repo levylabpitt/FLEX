@@ -97,8 +97,8 @@ Two ways to get a driver class:
 - **Direct import — always works.** A driver is just a class:
   `from flex_drivers.srs.sr7270 import SR7270`. No installation state, no
   enablement, nothing gates imports.
-- **By name**, through the catalog: station configs (`driver =
-  "srs.sr7270"`), `flex instruments --probe`, and the dashboard resolve
+- **By name**, through the catalog: `[instruments.*]` config entries
+  (`driver = "srs.sr7270"`), `flex instruments --probe`, and the dashboard resolve
   driver names via `CATALOG` (`flex.components.resolve_driver`). Installing
   the driver package is all it takes — `flex drivers` lists every name
   available in this environment.

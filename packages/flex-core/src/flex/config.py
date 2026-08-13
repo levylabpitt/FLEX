@@ -1,10 +1,10 @@
 """FLEX configuration.
 
-One TOML file (``flex.toml``) describes a PC's whole setup: the station's
-instruments and the settings for every service (database, storage, data
-writer, comms, hooks). With no configuration at all, FLEX still works:
-SQLite metadata, HDF5 data files, local storage under the user data
-directory.
+One TOML file (``flex.toml``) describes a PC's whole setup: the instruments
+wired to it (``[instruments.*]``) and the settings for every service
+(database, storage, data writer, comms, hooks). With no configuration at
+all, FLEX still works: SQLite metadata, HDF5 data files, local storage
+under the user data directory.
 
 Active configuration resolution order:
     1. explicit path argument
@@ -80,12 +80,23 @@ class LogsConfig(_Section):
 
 
 class InstrumentConfig(_Section):
-    driver: str
+    driver: str = ""
     address: str = ""
+    simulate: bool = False
 
+    def build(self, name: str):
+        """Instantiate this entry: the driver class, or — with
+        ``simulate = true`` — a :class:`SimulatedInstrument` stand-in, so a
+        whole config can dry-run without hardware."""
+        if self.simulate:
+            from flex.instrument.simulated import SimulatedInstrument
 
-class StationConfig(_Section):
-    instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
+            return SimulatedInstrument(name)
+        if not self.driver:
+            raise ValueError(f"Instrument '{name}' has no driver (and simulate is off)")
+        cls = components.resolve_driver(self.driver)
+        args = (self.address,) if self.address else ()
+        return cls(name, *args, **self.options())
 
 
 class FlexConfig(BaseModel):
@@ -99,7 +110,7 @@ class FlexConfig(BaseModel):
     comms: CommsConfig = Field(default_factory=CommsConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
-    stations: dict[str, StationConfig] = Field(default_factory=dict)
+    instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
 
     source: Path | None = Field(default=None, exclude=True)
 

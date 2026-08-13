@@ -10,7 +10,7 @@ def client(tmp_path, monkeypatch):
     config = tmp_path / "flex.toml"
     config.write_text(
         f'[data]\nroot = "{tmp_path.as_posix()}"\n'
-        '[stations.bench.instruments.sim]\ndriver = "test.sim"\naddress = ""\n',
+        '[instruments.sim]\ndriver = "test.sim"\naddress = ""\n',
         encoding="utf-8",
     )
     monkeypatch.setenv("FLEX_CONFIG", str(config))
@@ -54,7 +54,7 @@ def test_shutdown_signals_process(client, monkeypatch):
 def test_config_roundtrip(client, tmp_path):
     raw = client.get("/api/config/raw").json()
     assert raw["path"].endswith("flex.toml")
-    assert "[stations.bench" in raw["text"]
+    assert "[instruments.sim" in raw["text"]
 
     response = client.put("/api/config/raw", json={"text": raw["text"] + '\n[lab]\nname = "x"\n'})
     assert response.status_code == 200

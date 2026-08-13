@@ -100,13 +100,13 @@ For many drivers this is the end of the tutorial.
 ## 5. Optional: register it for name-based resolution
 
 Registration only matters if you want the driver addressable *by name* — in
-`[stations.*]` config blocks, `flex instruments --probe`, and the dashboard.
+`[instruments.*]` config blocks, `flex instruments --probe`, and the dashboard.
 
-**No registration at all.** A station entry accepts a direct
+**No registration at all.** An instrument entry accepts a direct
 `"module:Class"` reference, so any importable driver works immediately:
 
 ```toml
-[stations.bench.instruments.acme]
+[instruments.acme]
 driver = "flex_drivers_mylab.acme4000:Acme4000"
 address = "GPIB0::4::INSTR"
 ```

@@ -14,7 +14,7 @@ Every command of the `flex` command-line tool. Global behavior: running
 | Command | Does |
 |---|---|
 | `flex config show` | Print the resolved active configuration and its source file. |
-| `flex config validate <path>` | Check a config file: schema, then whether its db/writer/storage/comms components and station drivers resolve in this environment. |
+| `flex config validate <path>` | Check a config file: schema, then whether its db/writer/storage/comms components and instrument drivers resolve in this environment. |
 
 ## Records
 
@@ -22,7 +22,7 @@ Every command of the `flex` command-line tool. Global behavior: running
 |---|---|
 | `flex experiments` | Browse recorded experiments. `--user <name>` filters; `--last <n>` limits (default 20). |
 | `flex measurements <experiment-id>` | List an experiment's measurements (times, aborted flag, data file) and note count. |
-| `flex instruments` | List instruments configured in the active `[stations.*]` blocks. `--probe` connects each one and shows its identity (or the error). |
+| `flex instruments` | List the instruments configured in the active `[instruments.*]` blocks. `--probe` connects each one and shows its identity (or the error). |
 
 ## Scaffolding
 

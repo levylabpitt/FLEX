@@ -107,13 +107,22 @@ def test_dashboard_launches(monkeypatch):
     assert calls == [{"host": "127.0.0.1", "port": 8756}]
 
 
-def test_instruments_without_stations(monkeypatch, tmp_path):
+def test_instruments_without_config(monkeypatch, tmp_path):
     monkeypatch.delenv("FLEX_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("flex.config.USER_CONFIG", tmp_path / "missing.toml")
     result = runner.invoke(app, ["instruments"])
     assert result.exit_code == 0
-    assert "No stations defined" in result.output
+    assert "No instruments defined" in result.output
+
+
+def test_instruments_probe_simulated(monkeypatch, tmp_path):
+    config = tmp_path / "flex.toml"
+    config.write_text("[instruments.bench]\nsimulate = true\n", encoding="utf-8")
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+    result = runner.invoke(app, ["instruments", "--probe"])
+    assert result.exit_code == 0
+    assert "SimulatedInstrument" in result.output
 
 
 @pytest.mark.parametrize("cmd", [["--help"], ["config", "--help"], ["new", "--help"]])

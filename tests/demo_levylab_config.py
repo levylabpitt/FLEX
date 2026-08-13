@@ -8,10 +8,10 @@ What this exercises:
 
   1. Loads the *real* example config (examples/levylab.toml) -- proves
      config loading genuinely works, not a stand-in.
-  2. A LevyLab driver (levylab.lockin) via the manual [stations.*] path:
-     Experiment.load_station().
+  2. A LevyLab driver (levylab.lockin) via the config-driven path:
+     Experiment.load_instruments().
   3. A normal, non-LevyLab driver (colby.pdl, a VISA instrument) via the
-     same manual [stations.*] path -- same mechanism, any driver works.
+     same config-driven path -- same mechanism, any driver works.
   4. A LevyLab driver via CESession -- the fully automatic path.
   5. Why there's no "normal driver via CESession": CESession only
      auto-discovers drivers that declare an `lv_class` (a LabVIEW class
@@ -27,9 +27,9 @@ Config note -- what's overridden and why:
   exp.handler = "ce") is exactly what the file sets. So this script loads
   the real file, then overrides *only* db/storage to local equivalents
   (sqlite + local) purely so the demo can run end-to-end without lab network
-  access, and adds a `[stations.demo]` block (the real file ships with
-  none — see the comment in examples/levylab.toml explaining why stations
-  are per-machine, not lab-wide). On an actual lab machine with real
+  access, and adds `[instruments.*]` entries (the real file ships with
+  none — see the comment in examples/levylab.toml explaining why instrument
+  entries are per-machine, not lab-wide). On an actual lab machine with real
   credentials, you'd skip both overrides.
 
 Where things land (after the local override): same layout as
@@ -67,14 +67,14 @@ print(
     f"data.writer={raw['data']['writer']}  exp.handler={raw['exp']['handler']}"
 )
 
-# Override db/storage to local (see module docstring); add two demo stations
-# -- kept separate so each load_station() call below isolates one driver's
-# failure instead of the first one aborting the whole station load.
+# Override db/storage to local (see module docstring); add two demo
+# instruments -- loaded one at a time below so each load_instruments() call
+# isolates one driver's failure instead of the first aborting both.
 raw["db"] = {"backend": "sqlite"}
 raw["storage"] = {"backend": "local"}
-raw["stations"] = {
-    "demo_lockin": {"instruments": {"lockin": {"driver": "levylab.lockin", "address": "tcp://localhost:29170"}}},
-    "demo_pdl": {"instruments": {"pdl": {"driver": "colby.pdl", "address": "GPIB0::15::INSTR"}}},
+raw["instruments"] = {
+    "lockin": {"driver": "levylab.lockin", "address": "tcp://localhost:29170"},
+    "pdl": {"driver": "colby.pdl", "address": "GPIB0::15::INSTR"},
 }
 config = FlexConfig.model_validate(raw)
 print(f"Demo config   -- db.backend={config.db.backend}  storage.backend={config.storage.backend}"
@@ -90,30 +90,30 @@ print(
 
 
 # -----------------------------------------------------------------------------
-section("2. LevyLab driver (levylab.lockin) via Experiment.load_station()")
+section("2. LevyLab driver (levylab.lockin) via Experiment.load_instruments()")
 # -----------------------------------------------------------------------------
 with Experiment("demo-user", name="levylab-driver-demo", config=config, cell_log=False) as exp:
     try:
-        exp.load_station("demo_lockin")
+        exp.load_instruments("lockin")
     except Exception as e:
         # resolve_driver("levylab.lockin") succeeds (the class is found via
         # flex_drivers.levylab.CATALOG); the failure is the connection
         # attempt itself -- no real LevyLab IF app listening here.
-        print(f"load_station() failed — expected without real hardware: {e}")
+        print(f"load_instruments() failed — expected without real hardware: {e}")
     print(f"Instruments connected: {list(exp.instruments)}")
 
 
 # -----------------------------------------------------------------------------
-section("3. Normal driver (colby.pdl, VISA) via Experiment.load_station()")
+section("3. Normal driver (colby.pdl, VISA) via Experiment.load_instruments()")
 # -----------------------------------------------------------------------------
-# Same mechanism as above, different driver family entirely -- load_station()
-# doesn't care whether a driver is LevyLab-specific or not, it just resolves
-# by catalog name and instantiates.
+# Same mechanism as above, different driver family entirely --
+# load_instruments() doesn't care whether a driver is LevyLab-specific or
+# not, it just resolves by catalog name and instantiates.
 with Experiment("demo-user", name="normal-driver-demo", config=config, cell_log=False) as exp:
     try:
-        exp.load_station("demo_pdl")
+        exp.load_instruments("pdl")
     except Exception as e:
-        print(f"load_station() failed — expected without real hardware/VISA backend: {e}")
+        print(f"load_instruments() failed — expected without real hardware/VISA backend: {e}")
     print(f"Instruments connected: {list(exp.instruments)}")
 
 
@@ -149,7 +149,7 @@ print(
     "counterpart, so CESession's lvclass_registry() (derived from every\n"
     "driver's own lv_class) has nothing to match it against. Not a bug --\n"
     "CESession is specifically the LevyLab-IF-VI-driven path; a general\n"
-    "driver reaches an Experiment through load_station() (see step 3) or a\n"
+    "driver reaches an Experiment through load_instruments() (see step 3) or a\n"
     "direct import instead."
 )
 

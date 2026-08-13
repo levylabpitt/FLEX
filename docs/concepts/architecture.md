@@ -60,7 +60,7 @@ pip install flex-core[tdms]          # npTDMS
   (see [Instruments & drivers](instruments.md)), plus the protocol bases
   (`VISAInstrument`, `ZMQInstrument`, `TCPInstrument`, `SerialInstrument`).
 - **Configuration** — the `FlexConfig` model, loaded from one `flex.toml`
-  per PC (see [Configuration & stations](configuration.md)).
+  per PC (see [Configuration & instruments](configuration.md)).
 - **Data interfaces** — `DataWriter` (HDF5 default, TDMS for LabVIEW) and
   `StorageBackend` (local default, Nextcloud opt-in).
 - **Metadata interface** — the `MetadataStore` ABC and its record dataclasses,
@@ -99,7 +99,7 @@ is no plugin framework, no entry points, no registration side effects.
 
 The layers above all run in-process today: a notebook or script owns the
 instruments directly. The next step makes the same `Station` (the
-`[stations.*]` blocks in flex.toml) hostable as a long-running process:
+`[instruments.*]` set in flex.toml) hostable as a long-running process:
 
 ```
 flex.toml ──► Station ──┬── notebook mode:   station.lockin.x()   (today)

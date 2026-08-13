@@ -197,23 +197,21 @@ class Experiment:
             return instruments[name]
         raise AttributeError(f"'{type(self).__name__}' has no attribute or instrument '{name}'")
 
-    def load_station(self, station: str | None = None) -> None:
-        """Instantiate every instrument defined for a station in the config."""
-        stations = self.config.stations
-        if not stations:
-            raise ValueError("No [stations.*] defined in the active configuration")
-        if station is None:
-            station = self.config.lab.station if self.config.lab.station in stations else None
-            if station is None and len(stations) == 1:
-                station = next(iter(stations))
-            if station is None:
-                raise ValueError(f"Choose a station: {', '.join(stations)}")
-        from flex import components
-
-        for name, spec in stations[station].instruments.items():
-            cls = components.resolve_driver(spec.driver)
-            args = (spec.address,) if spec.address else ()
-            self.add_instrument(cls(name, *args, **spec.options()), name)
+    def load_instruments(self, *names: str) -> None:
+        """Instantiate instruments defined in the config's ``[instruments.*]``
+        blocks — every one of them, or just the given names. An entry with
+        ``simulate = true`` becomes a :class:`SimulatedInstrument` stand-in."""
+        configured = self.config.instruments
+        if not configured:
+            raise ValueError("No [instruments.*] defined in the active configuration")
+        unknown = [n for n in names if n not in configured]
+        if unknown:
+            raise KeyError(
+                f"Not in the configuration: {', '.join(unknown)}"
+                f" (configured: {', '.join(configured)})"
+            )
+        for name in names or configured:
+            self.add_instrument(configured[name].build(name), name)
 
     def close_all(self) -> None:
         """Close every registered instrument (errors logged, not raised)."""

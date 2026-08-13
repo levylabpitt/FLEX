@@ -1,30 +1,40 @@
-# Configuration & stations
+# Configuration & instruments
 
 One TOML file — `flex.toml` — describes a PC's whole FLEX setup: the
 services everyone shares (database, storage, data format, comms, hooks) and
-the station wired to that bench. With no configuration at all, FLEX still
-works: SQLite metadata, HDF5 data files, local storage under the user data
-directory.
+the instruments wired to that machine. With no configuration at all, FLEX
+still works: SQLite metadata, HDF5 data files, local storage under the user
+data directory.
 
-## The hierarchy
+## The pieces
 
 - The **config file** holds the service settings for this machine — database,
   storage, data format, hooks. A lab typically keeps a shared example in the
   repo ([examples/levylab.toml](https://github.com/levylabpitt/flex/blob/v3/examples/levylab.toml))
   that each PC copies and adjusts.
-- A **station** is one bench's instrument set: a `[stations.<name>]` block
-  mapping instrument names to drivers and addresses. Stations are inherently
-  per-machine — your bench's addresses are not your neighbor's.
-- An **instrument entry** names a driver and an address:
+- An **instrument entry** names a driver and an address. The entries are
+  inherently per-machine — your bench's addresses are not your neighbor's:
 
 ```toml
-[stations.cryo1.instruments.lockin]
+[instruments.lockin]
 driver = "srs.sr7270"
 address = "USB0::0x0A2D::0x001B::12345::RAW"
 ```
 
 Extra keys in an instrument entry pass straight through to the driver's
-constructor as keyword arguments.
+constructor as keyword arguments. Two special keys don't:
+
+- `simulate = true` swaps the entry for a `SimulatedInstrument` stand-in,
+  so a whole config (or any one instrument of it) can dry-run scripts with
+  zero hardware; `driver` may even be omitted.
+- `driver` accepts either a catalog name (`"srs.sr7270"`) or a direct
+  `"module:Class"` reference — private driver packages need no
+  registration.
+
+A physical *station* (say a PPMS with one DAQ PC and one interface PC) can
+span several machines; each machine's flex.toml lists just the instruments
+it is wired to, and `[lab] station` labels which station the machine belongs
+to — that label is stamped on every experiment record.
 
 ## Configuration resolution
 
@@ -51,17 +61,16 @@ uv pip install flex-core[postgres,tdms] flex-nextcloud flex-asana
 
 `flex config show` prints the resolved configuration and its source;
 `flex config validate <path>` checks a file's schema and that every
-component it names (including station drivers) resolves in this
+component it names (including instrument drivers) resolves in this
 environment.
 
-## Stations at runtime
+## Instruments at runtime
 
-`exp.load_station("cryo1")` instantiates every instrument in the block —
-resolving each `driver` name through the driver registry, passing the
-address and extra keys — and registers them on the experiment. With
-`[lab] station` set (or only one station defined), the name argument is
-optional. `flex instruments --probe` test-connects the same entries from
-the shell.
+`exp.load_instruments()` instantiates every `[instruments.*]` entry —
+resolving each `driver`, passing the address and extra keys — and registers
+them on the experiment; pass names (`exp.load_instruments("lockin")`) to
+load a subset. `flex instruments --probe` test-connects the same entries
+from the shell.
 
-The LevyLab setup replaces station config with the Configure Experiments
+The LevyLab setup replaces instrument config with the Configure Experiments
 VI: see [CESession](experiments.md#cesession).

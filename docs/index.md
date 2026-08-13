@@ -51,5 +51,5 @@ a real one to run it on hardware.
 | talk to an instrument | `VISAInstrument` / `ZMQInstrument` / `TCPInstrument` / `SerialInstrument` base classes, and a [catalog of ready drivers](reference/drivers/index.md) |
 | run a sweep safely | `Scan` + `sweep`: Ctrl-C finalizes the file, marks the measurement aborted, runs your cleanup |
 | keep records | every experiment and measurement is recorded (SQLite by default, PostgreSQL for labs) |
-| share a lab setup | one [flex.toml](concepts/configuration.md) per PC: services + station in a single file |
+| share a lab setup | one [flex.toml](concepts/configuration.md) per PC: services + instruments in a single file |
 | manage it all visually | `python -m flex dashboard` — config, drivers, and experiment browsing in the browser |

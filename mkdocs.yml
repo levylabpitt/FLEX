@@ -70,7 +70,7 @@ nav:
       - Architecture: concepts/architecture.md
       - Instruments & drivers: concepts/instruments.md
       - Experiments & data: concepts/experiments.md
-      - Configuration & stations: concepts/configuration.md
+      - Configuration & instruments: concepts/configuration.md
       - Dashboard & CLI: concepts/dashboard.md
   - Tutorials:
       - Write a driver: tutorials/write-a-driver.md

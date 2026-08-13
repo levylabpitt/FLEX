@@ -1,5 +1,5 @@
 """FLEX dashboard: a local web UI over the configuration,
-station instruments, and experiment records.
+configured instruments, and experiment records.
 
 Launch with ``flex dashboard`` (or ``python -m flex.dashboard``).
 """

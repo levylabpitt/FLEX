@@ -29,9 +29,9 @@ Inside Jupyter, every executed cell is recorded as a row in `flex_cells`
 (disable with `cell_log=False`), so the code that produced a dataset is
 always recoverable — including its execution count and whether it raised.
 
-Instruments can also come from configuration: `exp.load_station("cryo1")`
-instantiates everything in the config's `[stations.cryo1]` block — see
-[Configuration & stations](configuration.md#stations-at-runtime).
+Instruments can also come from configuration: `exp.load_instruments()`
+instantiates the config's `[instruments.*]` entries — see
+[Configuration & instruments](configuration.md#instruments-at-runtime).
 
 In Jupyter or VS Code's Interactive Window, every `Experiment` shows a live
 summary card (id, user, instruments) that updates as instruments are added
@@ -188,8 +188,8 @@ Its card (inherited from `Experiment`, see above) additionally shows device,
 station, and wiring. Pass `verbose=True` to also print a line as each
 instrument connects — useful while debugging a new station.
 
-`CESession` and `load_station()` are two independent mechanisms for the same
+`CESession` and `load_instruments()` are two independent mechanisms for the same
 job — populating `exp.instruments`. One is driven by the lab's LabVIEW
-tooling, the other by `[stations.*]` config; everything downstream
+tooling, the other by `[instruments.*]` config; everything downstream
 (measurements, scans, records, hooks) is identical. Usage examples are in the
 [LevyLab guide](../levylab.md).

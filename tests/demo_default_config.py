@@ -11,7 +11,7 @@ What this exercises:
   2. A LevyLab driver, imported and used *directly* -- a driver class is
      just a class; once its package is installed you can always import and
      instantiate it yourself. Name-based resolution (`driver =
-     "levylab.lockin"` in a [stations.*] block) is only for config-driven
+     "levylab.lockin"` in an [instruments.*] block) is only for config-driven
      construction.
   3. Both together in one Experiment.
 

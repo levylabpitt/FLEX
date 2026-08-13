@@ -47,7 +47,7 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 - **Metadata store failures never kill a measurement** — they are logged and
   the experiment continues (opt into strictness with `[exp] strict_metadata = true`).
 - The five `PPMS*` classes are one `PPMS` (they only differed in address);
-  pass the address, or define stations in the config.
+  pass the address, or define instruments in the config.
 
 ## Not carried over (deliberately)
 

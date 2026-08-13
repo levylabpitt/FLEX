@@ -7,11 +7,11 @@
 #     uv pip install flex-core[postgres,tdms,zmq] flex-drivers flex-nextcloud flex-asana
 #
 # Then copy this file to ./flex.toml (or %LOCALAPPDATA%/flex/config.toml, or
-# point $FLEX_CONFIG at it) and adjust the [stations.*] block for your bench.
+# point $FLEX_CONFIG at it) and add [instruments.*] entries for your bench.
 
 [lab]
 name = "levylab"
-station = "" # set to your station's name once you've added a [stations.*] block below
+station = "" # label for the physical station this PC belongs to (e.g. "ppms"); recorded on every experiment
 
 [db]
 backend = "postgres"
@@ -46,11 +46,11 @@ backend = "asana"
 # %LOCALAPPDATA%/flex/config.toml) -- this file is shared, so a real token
 # here would be a plaintext secret in git history.
 
-# Which instruments live at your bench is per-station, not lab-wide -- add
-# your own [stations.*] block locally (dashboard "Config" tab, or edit
-# flex.toml directly) instead of inheriting someone else's station here.
-# Example:
+# Which instruments are wired to this PC is per-machine, not lab-wide --
+# add your own [instruments.*] entries locally (dashboard "Config" tab, or
+# edit flex.toml directly) instead of inheriting someone else's here.
+# Example (`simulate = true` swaps any entry for a hardware-free stand-in):
 #
-# [stations.mystation.instruments.lockin]
+# [instruments.lockin]
 # driver = "levylab.lockin"
 # address = "tcp://localhost:29170"

@@ -179,6 +179,40 @@ def test_array_parameter_over_the_wire():
         station.close()
 
 
+def test_monitor_write_retries_transient_failure(tmp_path, monkeypatch):
+    cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("x", initial=9.0, unit="V")
+    station = Station({"bench": sim}, name="s", config=cfg)
+    server = StationServer(station, monitor={"bench": (["x"], 60)})
+
+    from flex.db.sqlite import SQLiteStore
+
+    real_record = SQLiteStore.record_monitor
+    calls = {"n": 0}
+
+    def flaky(self, record, **extra):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("simulated transient lock")
+        return real_record(self, record, **extra)
+
+    monkeypatch.setattr(SQLiteStore, "record_monitor", flaky)
+    server.start()
+    try:
+        time.sleep(1.0)  # first attempt fails, retry (0.2s backoff) succeeds
+    finally:
+        server.stop()
+        station.close()
+
+    assert calls["n"] >= 2
+    store = cfg.build_db()
+    try:
+        assert store.list_monitor("bench.x")  # the record survived the retry
+    finally:
+        store.close()
+
+
 def test_monitor_store_roundtrip_array(tmp_path):
     import numpy as np
 

@@ -17,6 +17,7 @@ CATALOG: dict[str, str] = {
     "srs.sr7270": "flex_drivers.srs.sr7270:SR7270",
     "colby.pdl": "flex_drivers.colby.pdl:ColbyPDL",
     "rotrics.dexarm": "flex_drivers.rotrics.dexarm:DexArm",
+    "aseq.spectrometer": "flex_drivers.aseq.aseq:ASEQSpectrometer",
     **_LEVYLAB_CATALOG,
 }
 

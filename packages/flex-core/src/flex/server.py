@@ -87,6 +87,12 @@ class StationServer:
         self._running = False
         self._thread: threading.Thread | None = None
         self._workers: dict[str, tuple[threading.Thread, queue.Queue]] = {}
+        # worker threads nudge the main loop through an inproc socket, so
+        # replies and events flush immediately instead of on the next poll tick
+        self._wake_addr = f"inproc://flex-wake-{id(self)}"
+        self._waker = self._context.socket(zmq.PULL)
+        self._waker.bind(self._wake_addr)
+        self._local = threading.local()
         for event in EVENTS:
             station.events.subscribe(event, self._forward_event, name="server")
 
@@ -124,6 +130,7 @@ class StationServer:
             t.join(timeout=2)
         self._router.close(linger=0)
         self._pub.close(linger=0)
+        self._waker.close(linger=0)
 
     def _start_workers(self) -> None:
         for name in self.station.instruments:
@@ -145,12 +152,31 @@ class StationServer:
     def _loop(self) -> None:
         poller = zmq.Poller()
         poller.register(self._router, zmq.POLLIN)
+        poller.register(self._waker, zmq.POLLIN)
         while self._running:
-            if dict(poller.poll(50)).get(self._router):
+            ready = dict(poller.poll(100))
+            if ready.get(self._waker):
+                while True:
+                    try:
+                        self._waker.recv(zmq.DONTWAIT)
+                    except zmq.Again:
+                        break
+            if ready.get(self._router):
                 identity, _, payload = self._router.recv_multipart()
                 self._dispatch(identity, payload)
             self._flush()
         self._flush()
+
+    def _wake(self) -> None:
+        sock = getattr(self._local, "wake", None)
+        if sock is None:
+            sock = self._local.wake = self._context.socket(zmq.PUSH)
+            sock.setsockopt(zmq.LINGER, 0)
+            sock.connect(self._wake_addr)
+        try:
+            sock.send(b"", zmq.DONTWAIT)
+        except zmq.Again:
+            pass  # a wake-up is already pending
 
     def _flush(self) -> None:
         while True:
@@ -261,6 +287,7 @@ class StationServer:
                 self._replies.put((identity, self._error(req_id, -32602, f"{name}: no parameter {e}")))
             except Exception as e:
                 self._replies.put((identity, self._error(req_id, -32000, f"{name}: {e}")))
+            self._wake()
 
     # -- monitoring --------------------------------------------------------
 
@@ -309,6 +336,8 @@ class StationServer:
                    if isinstance(v, (str, int, float, bool, list, tuple, dict, type(None)))}
         payload.update(seq=next(self._seq), event=event, station=self.station.name)
         self._events.put((event, json.dumps(payload, default=_jsonable).encode()))
+        if self._running and threading.current_thread() is not self._thread:
+            self._wake()
 
     # -- json-rpc ----------------------------------------------------------
 

@@ -43,8 +43,8 @@ _METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "listInstruments", "ge
 
 
 def _jsonable(obj: Any) -> Any:
-    if hasattr(obj, "item"):  # numpy scalars
-        return obj.item()
+    if hasattr(obj, "tolist"):  # numpy arrays and scalars
+        return obj.tolist()
     return str(obj)
 
 
@@ -332,6 +332,7 @@ class StationServer:
                 time=datetime.fromtimestamp(payload["ts"]), station=self.station.name,
                 unit=payload.get("unit", ""),
             ))
+        payload = {k: v.tolist() if hasattr(v, "tolist") else v for k, v in payload.items()}
         payload = {k: v for k, v in payload.items()
                    if isinstance(v, (str, int, float, bool, list, tuple, dict, type(None)))}
         payload.update(seq=next(self._seq), event=event, station=self.station.name)

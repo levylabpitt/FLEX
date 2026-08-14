@@ -151,6 +151,34 @@ def test_monitor_logs_remote_sets_too(tmp_path):
         store.close()
 
 
+def test_array_parameter_over_the_wire():
+    import numpy as np
+
+    sim = SimulatedInstrument("li")
+    sim.add_parameter("waveform", getter=lambda: np.linspace(0, 1, 100), unit="V")
+    station = Station({"li": sim}, name="t")
+    server = StationServer(station)
+    server.start()
+    remote = connect(f"tcp://127.0.0.1:{server.port}", timeout=3.0)
+    events = []
+    remote.subscribe(events.append)
+    try:
+        wf = remote.li.waveform()
+        assert wf == pytest.approx(list(np.linspace(0, 1, 100)))
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            values = [e["value"] for e in events
+                      if e.get("parameter") == "li.waveform" and e.get("value") is not None]
+            if values:
+                break
+            time.sleep(0.05)
+        assert values and len(values[0]) == 100
+    finally:
+        remote.close()
+        server.stop()
+        station.close()
+
+
 def test_monitor_store_roundtrip_array(tmp_path):
     import numpy as np
 

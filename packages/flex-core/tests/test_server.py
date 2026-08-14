@@ -179,6 +179,58 @@ def test_array_parameter_over_the_wire():
         station.close()
 
 
+def test_serving_continues_when_db_unavailable_at_start(monkeypatch):
+    cfg = FlexConfig.model_validate({"db": {"backend": "postgres", "dsn": "postgresql://nope/nope"}})
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("x", initial=1.0, unit="V")
+    station = Station({"bench": sim}, name="s", config=cfg)
+    server = StationServer(station, monitor={"bench": (["x"], 60)})
+    server.start()
+    try:
+        remote = connect(f"tcp://127.0.0.1:{server.port}", timeout=3.0)
+        assert remote.bench.x() == 1.0  # control plane unaffected by a dead DB
+        remote.close()
+    finally:
+        server.stop()
+        station.close()
+
+
+def test_monitor_db_reconnects_after_startup_failure(tmp_path, monkeypatch):
+    calls = {"n": 0}
+    real_build = FlexConfig.build_db
+
+    def flaky_build(self):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("db not ready yet")
+        return real_build(self)
+
+    monkeypatch.setattr(FlexConfig, "build_db", flaky_build)
+    monkeypatch.setattr("flex.server.time.sleep", lambda s: None)  # skip the 5s backoff
+
+    cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("x", initial=2.0, unit="V")
+    station = Station({"bench": sim}, name="s", config=cfg)
+    server = StationServer(station, monitor={"bench": (["x"], 60)})
+    server.start()
+    try:
+        deadline = time.time() + 3
+        while calls["n"] < 2 and time.time() < deadline:
+            time.sleep(0.05)
+        time.sleep(0.3)  # let the now-working store write the first poll
+    finally:
+        server.stop()
+        station.close()
+
+    assert calls["n"] >= 2
+    store = cfg.build_db()
+    try:
+        assert store.list_monitor("bench.x")
+    finally:
+        store.close()
+
+
 def test_monitor_write_retries_transient_failure(tmp_path, monkeypatch):
     cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
     sim = SimulatedInstrument("bench")

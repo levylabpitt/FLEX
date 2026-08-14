@@ -303,14 +303,24 @@ class StationServer:
 
     def _write_records(self) -> None:
         """Single writer thread: owns the DB connection, drains the record queue.
-        A write that fails (e.g. a transient lock) retries with backoff rather
-        than silently dropping the point; only gives up after real downtime."""
-        try:
-            store = self.station.config.build_db()
-        except Exception as e:
-            self.log.warning("Monitor DB unavailable (%s) - background logging disabled", e)
-            return
+        Records queue up in memory (not lost) while the DB is unreachable --
+        whether it's down at startup or drops out mid-run -- and get flushed
+        once it's back, so a `flex serve` restart is never required."""
+        store = None
+        down = False
         while self._running or not self._records.empty():
+            if store is None:
+                try:
+                    store = self.station.config.build_db()
+                    if down:
+                        self.log.info("Monitor DB reconnected")
+                        down = False
+                except Exception as e:
+                    if not down:
+                        self.log.warning("Monitor DB unavailable (%s) - will keep retrying", e)
+                        down = True
+                    time.sleep(5)
+                    continue
             try:
                 record = self._records.get(timeout=0.2)
             except queue.Empty:
@@ -325,7 +335,8 @@ class StationServer:
                         self.log.warning("Monitor write failed (%s) - retrying", e)
             else:
                 self.log.error("Monitor write for %s dropped after repeated failures", record.parameter)
-        store.close()
+        if store is not None:
+            store.close()
 
     # -- events ------------------------------------------------------------
 

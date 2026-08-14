@@ -2,23 +2,33 @@
 
 All logic lives in flex-core (config, components, metadata); the dashboard
 only exposes it to the bundled single-page frontend.
+
+The Station tab is the UI shell for station servers: the dashboard connects
+to every address in ``[ui] stations`` (default: this PC's own server),
+auto-generates an instrument panel from each server's ``describe``, and
+bridges the ZMQ event stream to the browser over a WebSocket.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import signal
 import threading
 import time
 import tomllib
 from importlib.resources import files
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from flex import __version__ as flex_version
 from flex import components
+from flex.client import connect
 from flex.config import USER_CONFIG, FlexConfig, find_config, load_config
+from flex.log import get_logger
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -27,8 +37,84 @@ class ConfigText(BaseModel):
     text: str
 
 
+class ParamOp(BaseModel):
+    address: str
+    instrument: str
+    parameter: str
+
+
+class ParamSet(ParamOp):
+    value: Any
+
+
+class _StationHub:
+    """Lazy connections to station servers, fanning their events out to
+    websocket clients. One ZMQ link per server, guarded by a lock (REQ is
+    lockstep and dashboard requests run on a thread pool)."""
+
+    def __init__(self, addresses: list[str]):
+        self.addresses = addresses
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.log = get_logger("dashboard.stations")
+        self._connections: dict[str, tuple[Any, threading.Lock]] = {}
+        self._clients: set[asyncio.Queue] = set()
+        self._lock = threading.Lock()
+
+    def connection(self, address: str):
+        if address not in self.addresses:
+            raise HTTPException(404, f"Unknown station '{address}'")
+        with self._lock:
+            entry = self._connections.get(address)
+            if entry is None:
+                conn = connect(address, timeout=3.0)
+                conn.subscribe(lambda e, a=address: self._fan_out(e, a), events=("",))
+                entry = self._connections[address] = (conn, threading.Lock())
+            return entry
+
+    def drop(self, address: str) -> None:
+        """Forget a dead connection so the next request reconnects."""
+        with self._lock:
+            entry = self._connections.pop(address, None)
+        if entry is not None:
+            with contextlib.suppress(Exception):
+                entry[0].close()
+
+    def _fan_out(self, event: dict, address: str) -> None:
+        event["address"] = address
+        if self.loop is None:
+            return
+        for q in list(self._clients):
+            self.loop.call_soon_threadsafe(self._offer, q, event)
+
+    @staticmethod
+    def _offer(q: asyncio.Queue, event: dict) -> None:
+        with contextlib.suppress(asyncio.QueueFull):
+            q.put_nowait(event)
+
+    def register(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=500)
+        self._clients.add(q)
+        return q
+
+    def unregister(self, q: asyncio.Queue) -> None:
+        self._clients.discard(q)
+
+    def close(self) -> None:
+        for address in list(self._connections):
+            self.drop(address)
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="FLEX Dashboard", version=flex_version)
+    cfg = load_config()
+    hub = _StationHub(cfg.ui.stations or [f"tcp://localhost:{cfg.server.port}"])
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        hub.loop = asyncio.get_running_loop()
+        yield
+        hub.close()
+
+    app = FastAPI(title="FLEX Dashboard", version=flex_version, lifespan=_lifespan)
 
     @app.middleware("http")
     async def _localhost_only(request: Request, call_next):
@@ -39,6 +125,61 @@ def create_app() -> FastAPI:
         if host not in _LOCAL_HOSTS:
             return JSONResponse({"detail": "Forbidden host"}, status_code=403)
         return await call_next(request)
+
+    # -- stations ------------------------------------------------------------
+
+    @app.get("/api/stations")
+    def stations():
+        """Describe every configured station server (or its connection error)."""
+        out = []
+        for address in hub.addresses:
+            try:
+                conn, lock = hub.connection(address)
+                with lock:
+                    info = conn.describe()
+            except Exception as e:
+                hub.drop(address)
+                out.append({"address": address, "ok": False, "error": str(e)})
+                continue
+            out.append({"address": address, "ok": True,
+                        "station": info["station"], "instruments": info["instruments"]})
+        return out
+
+    @app.post("/api/stations/get")
+    def station_get(op: ParamOp):
+        conn, lock = hub.connection(op.address)
+        try:
+            with lock:
+                value = conn.instruments[op.instrument].parameters[op.parameter].get()
+        except KeyError as e:
+            raise HTTPException(404, f"No such instrument/parameter: {e}") from e
+        except Exception as e:
+            raise HTTPException(502, str(e)) from e
+        return {"value": value}
+
+    @app.post("/api/stations/set")
+    def station_set(op: ParamSet):
+        conn, lock = hub.connection(op.address)
+        try:
+            with lock:
+                conn.instruments[op.instrument].parameters[op.parameter].set(op.value)
+        except KeyError as e:
+            raise HTTPException(404, f"No such instrument/parameter: {e}") from e
+        except Exception as e:
+            raise HTTPException(502, str(e)) from e
+        return {"ok": True}
+
+    @app.websocket("/ws/events")
+    async def ws_events(ws: WebSocket):
+        await ws.accept()
+        q = hub.register()
+        try:
+            while True:
+                await ws.send_json(await q.get())
+        except WebSocketDisconnect:
+            pass
+        finally:
+            hub.unregister(q)
 
     # -- drivers ------------------------------------------------------------
 

@@ -79,6 +79,11 @@ class LogsConfig(_Section):
     level: str = "WARNING"
 
 
+class UIConfig(_Section):
+    #: station servers the dashboard connects to; default: this PC's own server
+    stations: list[str] = Field(default_factory=list)
+
+
 class ServerConfig(_Section):
     port: int = 29500  # events published on port + 1
 
@@ -116,6 +121,7 @@ class FlexConfig(BaseModel):
     comms: CommsConfig = Field(default_factory=CommsConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
 

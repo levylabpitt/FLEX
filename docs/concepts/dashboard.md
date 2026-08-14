@@ -20,12 +20,23 @@ header stops the server (you can also Ctrl-C the terminal).
 
 ## Tabs
 
-- **Config** (home) — edits the active flex.toml directly, validated
+- **Station** (home) — live panels for every station server in
+  `[ui] stations` (default: this PC's own `flex serve`). Panels are
+  auto-generated from each server's `describe`: settable parameters get
+  input fields, gettable ones live readouts, array parameters (e.g. a
+  spectrometer's `spectrum`) live plots — all fed by the server's event
+  stream over a WebSocket. No per-instrument UI code needed.
+- **Config** — edits the active flex.toml directly, validated
   against the config schema before saving.
 - **Drivers** — every driver available in this environment, searchable;
   **Probe** connects one and queries its identity.
 - **Experiments** — recent experiment records; click one for its
   measurements, data-file pointers, and notes.
+
+The dashboard itself can run on any PC: point `[ui] stations` at remote
+station servers (`["tcp://ppms-pc:29500", "tcp://bench2:29500"]`) and one
+browser page shows the whole physical station, even when its instruments
+are split across machines.
 
 ## Security
 

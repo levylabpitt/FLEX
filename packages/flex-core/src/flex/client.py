@@ -117,6 +117,10 @@ class RemoteStation:
             raise KeyError(f"No instrument '{name}' (served: {have})")
         return self.instruments[name]
 
+    def describe(self) -> dict:
+        """The server's live describe: instruments, parameters, cached values."""
+        return self._link.call("describe")
+
     def snapshot(self, *, read: bool = False) -> dict:
         return self._link.call("snapshot", {"read": read})
 

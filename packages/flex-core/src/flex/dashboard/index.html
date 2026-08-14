@@ -138,8 +138,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const TABS = ["Config", "Drivers", "Experiments"];
-let current = "Config";
+const TABS = ["Station", "Config", "Drivers", "Experiments"];
+let current = "Station";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -174,7 +174,7 @@ async function show(tab) {
   nav();
   $("#main").innerHTML = '<p class="empty">loading…</p>';
   try {
-    await ({ Config: configTab, Drivers: driversTab, Experiments: experiments }[tab])();
+    await ({ Station: stationTab, Config: configTab, Drivers: driversTab, Experiments: experiments }[tab])();
   } catch (e) {
     if (tab !== current) return;  // a later tab switch already owns #main
     $("#main").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
@@ -202,7 +202,126 @@ async function exitServer() {
     </div>`;
 }
 
-// -- Config (home) ------------------------------------------------------------
+// -- Station (home) -----------------------------------------------------------
+
+// key "address|instrument.parameter" -> row updater, fed by the event socket
+const paramCells = new Map();
+let eventSocket = null;
+
+function connectEvents() {
+  if (eventSocket) return;
+  const socket = new WebSocket(`ws://${location.host}/ws/events`);
+  socket.onmessage = (msg) => {
+    const e = JSON.parse(msg.data);
+    if (e.event !== "parameter.update") return;
+    const cell = paramCells.get(`${e.address}|${e.parameter}`);
+    if (cell) cell(e.value);
+  };
+  socket.onclose = () => { eventSocket = null; setTimeout(connectEvents, 2000); };
+  eventSocket = socket;
+}
+
+async function stationTab() {
+  const stations = await api("/api/stations");
+  paramCells.clear();
+  connectEvents();
+  const sections = stations.map((s, si) => {
+    if (!s.ok) {
+      return `<section><div class="section-head"><h2>${esc(s.address)}</h2></div>
+        <div class="card"><p class="empty">Not reachable: ${esc(s.error)}<br>
+        <span class="hint">Start it with \`flex serve\` on that PC.</span></p></div></section>`;
+    }
+    const cards = Object.entries(s.instruments).map(([name, inst]) => {
+      const rows = Object.entries(inst.parameters).map(([pname, meta], pi) =>
+        paramRow(si, s.address, name, pname, meta, pi)).join("");
+      const cls = inst.class.split(".").pop();
+      return `<section><div class="section-head"><h2>${esc(name)} — ${esc(cls)}</h2></div>
+        <div class="card"><table>
+        <tr><th>Parameter</th><th>Value</th><th>Unit</th><th></th></tr>${rows}</table></div></section>`;
+    }).join("");
+    return `<section><div class="section-head"><h2>Station: ${esc(s.station)}</h2>
+      <span class="hint">${esc(s.address)}</span></div></section>` + cards;
+  }).join("");
+  $("#main").innerHTML = sections || '<p class="empty">No stations configured.</p>';
+  for (const bind of pendingBindings.splice(0)) bind();
+}
+
+// row builders register their live-update bindings here, applied after innerHTML
+const pendingBindings = [];
+
+function paramRow(si, address, inst, pname, meta, pi) {
+  const id = `p-${si}-${esc(inst)}-${pi}`;
+  const controls = [];
+  if (meta.settable) {
+    controls.push(`<input class="search" style="width:110px" id="${id}-in" placeholder="value">
+      <button class="action" onclick="setParam('${esc(address)}','${esc(inst)}','${esc(pname)}','${id}')">Set</button>`);
+  }
+  if (meta.gettable) {
+    controls.push(`<button class="action" onclick="getParam('${esc(address)}','${esc(inst)}','${esc(pname)}','${id}')">Get</button>`);
+  }
+  pendingBindings.push(() => {
+    const container = document.getElementById(`${id}-val`);
+    const update = makeValueCell(container);
+    paramCells.set(`${address}|${inst}.${pname}`, update);
+    if (meta.cache !== null && meta.cache !== undefined) update(meta.cache);
+  });
+  return `<tr><td>${esc(pname)}</td><td id="${id}-val" style="min-width:160px">—</td>
+    <td>${esc(meta.unit || "")}</td><td>${controls.join(" ")}</td></tr>`;
+}
+
+function makeValueCell(container) {
+  let plot = null;
+  return (value) => {
+    if (Array.isArray(value)) {
+      if (!plot) {
+        container.innerHTML = '<canvas width="420" height="110" style="display:block"></canvas><span class="hint"></span>';
+        plot = { canvas: container.querySelector("canvas"), label: container.querySelector("span") };
+      }
+      drawTrace(plot.canvas, value);
+      plot.label.textContent = `${value.length} pts  [${fmt(Math.min(...value))} … ${fmt(Math.max(...value))}]`;
+    } else {
+      plot = null;
+      container.textContent = typeof value === "number" ? fmt(value) : String(value);
+    }
+  };
+}
+
+const fmt = (x) => Math.abs(x) >= 1e4 || (x !== 0 && Math.abs(x) < 1e-3) ? x.toExponential(3) : +x.toPrecision(5);
+
+function drawTrace(canvas, data) {
+  const ctx = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  ctx.clearRect(0, 0, w, h);
+  let min = Math.min(...data), max = Math.max(...data);
+  if (min === max) { min -= 1; max += 1; }
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent");
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let i = 0; i < data.length; i++) {
+    const x = (i / (data.length - 1)) * (w - 4) + 2;
+    const y = h - 4 - ((data[i] - min) / (max - min)) * (h - 8);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+}
+
+async function setParam(address, instrument, parameter, id) {
+  const raw = document.getElementById(`${id}-in`).value.trim();
+  const value = raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw;
+  try {
+    await api("/api/stations/set", { method: "POST", body: JSON.stringify({ address, instrument, parameter, value }) });
+  } catch (e) { toast(e.message, true); }
+}
+
+async function getParam(address, instrument, parameter, id) {
+  try {
+    const r = await api("/api/stations/get", { method: "POST", body: JSON.stringify({ address, instrument, parameter }) });
+    const cell = paramCells.get(`${address}|${instrument}.${parameter}`);
+    if (cell) cell(r.value);
+  } catch (e) { toast(e.message, true); }
+}
+
+// -- Config ------------------------------------------------------------
 
 async function configTab() {
   const raw = await api("/api/config/raw");

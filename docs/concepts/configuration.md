@@ -77,6 +77,10 @@ standalone station (no experiment), and `flex serve` hosts that station
 over ZMQ — port set by `[server] port` (default 29500). See
 [Architecture](architecture.md#the-station-server).
 
+The dashboard's Station tab connects to `[ui] stations` (a list of server
+addresses; default: this PC's own server) and shows live, auto-generated
+panels for everything they serve — see [Dashboard](dashboard.md).
+
 ## Background logging
 
 `flex serve` can log parameters to the database around the clock:

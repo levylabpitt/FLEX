@@ -2,6 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from flex.dashboard.app import create_app
+from flex.instrument import SimulatedInstrument
+from flex.server import StationServer
+from flex.station import Station
 
 
 @pytest.fixture
@@ -15,6 +18,71 @@ def client(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("FLEX_CONFIG", str(config))
     return TestClient(create_app(), base_url="http://127.0.0.1")
+
+
+@pytest.fixture
+def served_station(tmp_path, monkeypatch):
+    """A real StationServer plus a dashboard configured to talk to it."""
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("gate", unit="V")
+    station = Station({"bench": sim}, name="uistation")
+    server = StationServer(station)
+    server.start()
+    config = tmp_path / "flex.toml"
+    config.write_text(
+        f'[data]\nroot = "{tmp_path.as_posix()}"\n'
+        f'[ui]\nstations = ["tcp://127.0.0.1:{server.port}"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+    yield server, sim
+    server.stop()
+    station.close()
+
+
+def test_station_tab_end_to_end(served_station):
+    server, sim = served_station
+    address = f"tcp://127.0.0.1:{server.port}"
+    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+        (info,) = client.get("/api/stations").json()
+        assert info["ok"] and info["station"] == "uistation"
+        assert info["instruments"]["bench"]["parameters"]["gate"]["settable"]
+
+        with client.websocket_connect("/ws/events") as ws:
+            r = client.post("/api/stations/set", json={
+                "address": address, "instrument": "bench", "parameter": "gate", "value": 0.7})
+            assert r.status_code == 200
+            assert sim.values["gate"] == 0.7
+            for _ in range(10):  # the set's event reaches the browser socket
+                event = ws.receive_json()
+                if event.get("parameter") == "bench.gate":
+                    assert event["value"] == 0.7
+                    assert event["address"] == address
+                    break
+            else:
+                raise AssertionError("no bench.gate event on the websocket")
+
+        r = client.post("/api/stations/get", json={
+            "address": address, "instrument": "bench", "parameter": "gate"})
+        assert r.json()["value"] == 0.7
+
+        r = client.post("/api/stations/get", json={
+            "address": address, "instrument": "bench", "parameter": "nope"})
+        assert r.status_code == 404
+
+
+def test_station_tab_reports_unreachable_server(tmp_path, monkeypatch):
+    config = tmp_path / "flex.toml"
+    config.write_text(
+        f'[data]\nroot = "{tmp_path.as_posix()}"\n'
+        '[ui]\nstations = ["tcp://127.0.0.1:1"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+        (info,) = client.get("/api/stations").json()
+        assert not info["ok"]
+        assert info["error"]
 
 
 def test_index_serves_frontend(client):

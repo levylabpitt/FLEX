@@ -215,6 +215,8 @@ def serve(
         params, interval = server.monitor.get(name, ([], 0))
         logged = f"{', '.join(params)} [dim]@{interval:g}s[/]" if params else "-"
         table.add_row(name, type(inst).__name__, inst.address or "-", logged)
+    for name, error in station.failed.items():
+        table.add_row(name, f"[red]failed: {error}[/]", "-", "-")
     console.print(table)
     console.print(f"[green]Serving station '{station.name}'[/] on port {server.port} "
                   f"(events on {server.pub_port}). Ctrl-C to stop.")

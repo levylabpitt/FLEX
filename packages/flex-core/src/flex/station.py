@@ -29,6 +29,9 @@ class Station:
         self.name = name or self.config.lab.station or socket.gethostname()
         self.events = EventBus()
         self.instruments: dict[str, Instrument] = {}
+        #: name -> error message, for [instruments.*] entries that failed to
+        #: build via Station.load() (unplugged hardware, bad config, ...)
+        self.failed: dict[str, str] = {}
         self.log = get_logger(f"station.{self.name}")
         for inst_name, inst in (instruments or {}).items():
             self.add_instrument(inst, inst_name)
@@ -49,7 +52,15 @@ class Station:
             )
         station = cls(config=cfg)
         for name in names or configured:
-            station.add_instrument(configured[name].build(name), name)
+            try:
+                instrument = configured[name].build(name)
+            except Exception as e:
+                # one bad instrument (unplugged, misconfigured) must not take
+                # the rest of the bench offline
+                station.log.error("Instrument '%s' failed to load: %s", name, e)
+                station.failed[name] = str(e)
+                continue
+            station.add_instrument(instrument, name)
         return station
 
     def add_instrument(self, instrument: Instrument, name: str | None = None) -> Instrument:

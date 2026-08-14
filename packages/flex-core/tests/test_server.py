@@ -102,6 +102,19 @@ def test_station_load_from_config():
         assert station.bench.idn()["model"] == "SimulatedInstrument"
 
 
+def test_one_bad_instrument_does_not_take_down_the_others():
+    cfg = FlexConfig.model_validate({
+        "instruments": {
+            "bench": {"simulate": True},
+            "broken": {"driver": "flex.instrument:Instrument", "address": "nope"},  # bad args -> raises
+        }
+    })
+    with Station.load(cfg) as station:
+        assert list(station.instruments) == ["bench"]
+        assert "broken" in station.failed
+        assert station.bench.idn()["model"] == "SimulatedInstrument"
+
+
 def test_background_logging(tmp_path):
     cfg = FlexConfig.model_validate({"data": {"root": str(tmp_path)}})
     sim = SimulatedInstrument("bench")

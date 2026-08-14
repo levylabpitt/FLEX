@@ -96,5 +96,11 @@ with `flex monitor`, or stream live with `flex monitor --follow`. Anything
 loggable must be a parameter — wrap a driver method with
 `add_parameter(..., getter=...)` if needed.
 
+**If the database is unreachable** (Postgres down, network blip), nothing is
+lost: with a non-SQLite backend, points buffer in a local SQLite file
+(`<data_root>/monitor_outbox.db`) and replay automatically once the database
+comes back — even across a `flex serve` restart, since the outbox is a file,
+not memory. Instrument control is unaffected either way; only logging pauses.
+
 The LevyLab setup replaces instrument config with the Configure Experiments
 VI: see [CESession](experiments.md#cesession).

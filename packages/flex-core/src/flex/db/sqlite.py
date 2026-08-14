@@ -406,6 +406,28 @@ class SQLiteStore(MetadataStore):
             for r in rows
         ]
 
+    def pop_monitor(self, limit: int = 1000) -> list[MonitorRecord]:
+        """Return and delete the oldest ``limit`` rows, atomically.
+
+        Used to drain a local outbox: a row is only removed once handed to
+        the caller, so a replay that fails partway through never re-sends
+        (or loses) rows it hasn't returned yet.
+        """
+        rows = self._conn.execute(
+            "SELECT id, time, station, parameter, value, unit FROM flex_monitor ORDER BY id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        if rows:
+            self._conn.executemany(
+                "DELETE FROM flex_monitor WHERE id = ?", [(r[0],) for r in rows]
+            )
+            self._conn.commit()
+        return [
+            MonitorRecord(time=_dt(r[1]), station=r[2], parameter=r[3],
+                          value=json.loads(r[4]), unit=r[5] or "")
+            for r in rows
+        ]
+
     def close(self) -> None:
         self._conn.close()
 

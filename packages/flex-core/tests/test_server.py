@@ -179,6 +179,84 @@ def test_array_parameter_over_the_wire():
         station.close()
 
 
+def test_outbox_buffers_while_db_down(tmp_path, monkeypatch):
+    def always_down(self):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(FlexConfig, "build_db", always_down)
+    monkeypatch.setattr("flex.server.time.sleep", lambda s: None)  # don't wait out the 5s backoff
+
+    cfg = FlexConfig.model_validate({
+        "data": {"root": str(tmp_path)},
+        "db": {"backend": "postgres", "dsn": "postgresql://irrelevant/irrelevant"},
+    })
+    sim = SimulatedInstrument("bench")
+    sim.add_sim_parameter("x", initial=5.0, unit="V")
+    station = Station({"bench": sim}, name="s", config=cfg)
+    server = StationServer(station, monitor={"bench": (["x"], 0.1)})
+    server.start()
+    try:
+        from flex.db.sqlite import SQLiteStore
+
+        deadline = time.time() + 3
+        outbox_rows = []
+        while time.time() < deadline and not outbox_rows:
+            time.sleep(0.05)
+            outbox = SQLiteStore(path=tmp_path / "monitor_outbox.db")
+            outbox_rows = outbox.list_monitor("bench.x")
+            outbox.close()
+        assert outbox_rows  # buffered locally instead of lost
+    finally:
+        server.stop()
+        station.close()
+
+
+def test_outbox_drains_once_db_reachable(tmp_path, monkeypatch):
+    from flex.db.sqlite import SQLiteStore
+    from flex.metadata import MonitorRecord
+
+    # simulate leftover data from a prior run that crashed while the DB was down
+    outbox = SQLiteStore(path=tmp_path / "monitor_outbox.db")
+    outbox.record_monitor(MonitorRecord(parameter="bench.x", value=1.23, station="s", unit="V"))
+    outbox.close()
+
+    primary_path = tmp_path / "primary.db"
+    monkeypatch.setattr(FlexConfig, "build_db", lambda self: SQLiteStore(path=primary_path))
+
+    cfg = FlexConfig.model_validate({
+        "data": {"root": str(tmp_path)},
+        "db": {"backend": "postgres", "dsn": "postgresql://irrelevant/irrelevant"},
+    })
+    sim = SimulatedInstrument("bench")
+    station = Station({"bench": sim}, name="s", config=cfg)
+    server = StationServer(station, monitor={"bench": (["idn"], 999)})
+    server.start()
+    try:
+        deadline = time.time() + 3
+        primary = None
+        while time.time() < deadline:
+            time.sleep(0.05)
+            primary = SQLiteStore(path=primary_path)
+            if primary.list_monitor("bench.x"):
+                break
+            primary.close()
+            primary = None
+    finally:
+        server.stop()
+        station.close()
+
+    assert primary is not None
+    try:
+        assert primary.list_monitor("bench.x")[0].value == 1.23
+    finally:
+        primary.close()
+    outbox = SQLiteStore(path=tmp_path / "monitor_outbox.db")
+    try:
+        assert outbox.list_monitor("bench.x") == []  # drained
+    finally:
+        outbox.close()
+
+
 def test_serving_continues_when_db_unavailable_at_start(monkeypatch):
     cfg = FlexConfig.model_validate({"db": {"backend": "postgres", "dsn": "postgresql://nope/nope"}})
     sim = SimulatedInstrument("bench")

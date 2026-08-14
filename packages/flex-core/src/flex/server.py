@@ -29,6 +29,7 @@ import queue
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import zmq
@@ -301,11 +302,43 @@ class StationServer:
                 next_due = time.monotonic() + interval
             time.sleep(min(0.05, interval / 4))
 
+    def _open_outbox(self):
+        """A local SQLite buffer for monitor records when the primary DB is
+        remote (Postgres) -- pointless for an already-local sqlite backend."""
+        if self.station.config.db.backend == "sqlite":
+            return None
+        from flex.db.sqlite import SQLiteStore
+
+        path = Path(self.station.config.data.root) / "monitor_outbox.db"
+        try:
+            return SQLiteStore(path=path)
+        except Exception as e:
+            self.log.warning("Local monitor outbox unavailable (%s)", e)
+            return None
+
+    def _drain_outbox(self, outbox, store) -> None:
+        """Replay buffered records into the now-reachable primary DB."""
+        while True:
+            batch = outbox.pop_monitor(limit=500)
+            if not batch:
+                return
+            self.log.info("Replaying %d buffered monitor point(s)", len(batch))
+            for i, record in enumerate(batch):
+                try:
+                    store.record_monitor(record)
+                except Exception as e:
+                    # put the un-replayed remainder back and try again later
+                    for r in batch[i:]:
+                        outbox.record_monitor(r)
+                    self.log.warning("Outbox replay interrupted (%s); resuming later", e)
+                    return
+
     def _write_records(self) -> None:
         """Single writer thread: owns the DB connection, drains the record queue.
-        Records queue up in memory (not lost) while the DB is unreachable --
-        whether it's down at startup or drops out mid-run -- and get flushed
-        once it's back, so a `flex serve` restart is never required."""
+        Records are never lost to a DB outage: while it's unreachable they go
+        to a local SQLite outbox (survives a `flex serve` restart too), and
+        get replayed once the DB is back."""
+        outbox = self._open_outbox()
         store = None
         down = False
         while self._running or not self._records.empty():
@@ -315,10 +348,13 @@ class StationServer:
                     if down:
                         self.log.info("Monitor DB reconnected")
                         down = False
+                    if outbox is not None:
+                        self._drain_outbox(outbox, store)
                 except Exception as e:
                     if not down:
-                        self.log.warning("Monitor DB unavailable (%s) - will keep retrying", e)
+                        self.log.warning("Monitor DB unavailable (%s) - buffering locally", e)
                         down = True
+                    self._park_queue(outbox)
                     time.sleep(5)
                     continue
             try:
@@ -334,9 +370,26 @@ class StationServer:
                     if attempt == 0:
                         self.log.warning("Monitor write failed (%s) - retrying", e)
             else:
-                self.log.error("Monitor write for %s dropped after repeated failures", record.parameter)
+                if outbox is not None:
+                    outbox.record_monitor(record)
+                    self.log.warning("Monitor write for %s buffered locally", record.parameter)
+                else:
+                    self.log.error("Monitor write for %s dropped after repeated failures", record.parameter)
         if store is not None:
             store.close()
+        if outbox is not None:
+            outbox.close()
+
+    def _park_queue(self, outbox) -> None:
+        """While the primary DB is down, move anything already queued into
+        the durable outbox instead of leaving it only in memory."""
+        if outbox is None:
+            return
+        while True:
+            try:
+                outbox.record_monitor(self._records.get_nowait())
+            except queue.Empty:
+                return
 
     # -- events ------------------------------------------------------------
 

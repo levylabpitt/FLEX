@@ -960,17 +960,25 @@ class AFMLitho(Instrument):
         finally:
             self._token = None
 
-    def heartbeat(self, token: str | None = None) -> dict[str, Any]:
+    def heartbeat(
+        self, token: str | None = None, *, timeout: float | None = None
+    ) -> dict[str, Any]:
         """Refresh the dead-man. Uses the stored token when ``token`` is
         omitted (via :meth:`require_token`, so a script holding no token gets
         an immediate, clear ``RuntimeError`` rather than a wire round trip).
+
+        ``timeout``, when given, overrides :meth:`timeout_for`'s
+        bound-derived default for this one call -- what :class:`Heartbeat`
+        uses to give its beats a generous, latency-tolerant timeout instead of
+        the tight one an interactive command gets. ``None`` (the default)
+        keeps the normal :meth:`_command_call` behaviour.
 
         Raises :class:`ControlRevoked` (-32011) if the token was ours and is
         not any more -- a human took the instrument, or the dead-man expired
         it. **Do not blindly re-acquire** on that exception.
         """
         tok = token if token is not None else self.require_token()
-        return self._command_call("heartbeat", {"token": tok})
+        return self._command_call("heartbeat", {"token": tok}, timeout=timeout)
 
     def abort(self, scope: str | None = None) -> dict[str, Any]:
         """**Token-free** emergency stop: cooperative stop of whatever is in
@@ -1002,7 +1010,11 @@ class AFMLitho(Instrument):
 
         ``period`` defaults to ``deadman_s / 3`` (two missed beats of slack)
         from the last :meth:`acquire_control`, and its beat is
-        ``self.heartbeat()``. Wrap any blocking third-party call while
+        ``self.heartbeat(timeout=...)`` -- a generous, latency-tolerant
+        per-beat timeout (:data:`HEARTBEAT_TIMEOUT_S`, clamped to at most
+        ``period / 2``), retried after :data:`HEARTBEAT_RETRY_S` rather than
+        a full ``period`` on a miss; see :class:`Heartbeat` for the full
+        timeout/retry/death contract. Wrap any blocking third-party call while
         holding control::
 
             afm.acquire_control("flex-exp", deadman_s=60)
@@ -1943,6 +1955,29 @@ class AFMLitho(Instrument):
                 self.log.error("session cleanup: release_control() failed: %s", e)
 
 
+#: Default per-beat wire timeout for the Heartbeat thread's OWN calls (not
+#: :meth:`AFMLitho.timeout_for`'s bound-derived timeouts used everywhere
+#: else). A heartbeat is not latency-critical -- it exists to outlast a
+#: blocking third-party call, not to answer fast -- so it should tolerate a
+#: busy service far longer than a normal command-socket call would.
+#: :meth:`Heartbeat.__init__` clamps it to at most half the beat ``period``,
+#: since a beat that can itself block longer than its own period defeats the
+#: point of having one.
+HEARTBEAT_TIMEOUT_S = 5.0
+
+#: How soon a FAILED beat is retried, instead of waiting out the rest of the
+#: normal ``period``. Waiting a full period after a miss is expensive: with
+#: ``period == deadman_s / 3`` (the default :meth:`AFMLitho.heartbeat_context`
+#: derivation), one missed beat then waiting a full period before retrying
+#: burns a third of the whole dead-man window on a single dropped packet.
+HEARTBEAT_RETRY_S = 1.0
+
+#: The floor :meth:`Heartbeat.__init__` enforces on ``retry_s``. An
+#: instantly-failing beat (a closed socket, a method that raises with no wire
+#: I/O at all) must not turn the retry loop into a busy loop pegging a core.
+MIN_RETRY_S = 0.1
+
+
 class Heartbeat:
     """Keep something alive across a blocking call, from a background thread.
 
@@ -1955,46 +1990,74 @@ class Heartbeat:
         with Heartbeat(afm, period=20):
             lockin.lockin_sweep(config, timeout=120)
 
-    The thread never raises *from itself* and never retracts anything; it only
-    refreshes. But a refresher that dies silently is worse than no refresher:
-    the caller would keep blocking, believing it holds the instrument, while
-    the dead-man runs down. So:
+    Each beat gets a generous, independent timeout (:data:`HEARTBEAT_TIMEOUT_S`
+    by default, via the ``beat_timeout_s`` kwarg, clamped to ``period / 2``
+    but never below :data:`MIN_TIMEOUT`) -- a heartbeat is not latency-
+    critical, and the old behaviour of borrowing the same tight timeout an
+    interactive command gets (service bound + margin, floored at 1 s) meant
+    an ordinarily-slow-but-fine reply under load looked identical to a dead
+    socket.
 
-    * a failing beat is a ``warning``, and up to ``tolerate`` **consecutive**
-      failures are absorbed -- one dropped packet mid-sweep is not a reason to
-      hand the instrument back;
-    * exhausting them stops the loop with an ``error``, and sets
-      :attr:`died`;
-    * ``__exit__`` re-raises that as a ``RuntimeError`` in the *caller's*
-      thread, unless the body is already unwinding an exception of its own
-      (which is the more informative failure, and must not be masked).
+    The thread never raises *from itself* and never retracts anything; it only
+    refreshes, and it **never stops trying on its own** while the block is
+    open -- a beat that fails is retried after ``retry_s`` (default
+    :data:`HEARTBEAT_RETRY_S`, far shorter than ``period``) rather than after
+    a full period, and failures never end the loop by themselves: only
+    :meth:`stop` (i.e. leaving the ``with`` block) does, because if the
+    service is merely slow rather than gone, the next beat can still land and
+    the token survives. But a refresher that dies silently is worse than no
+    refresher: the caller would keep blocking, believing it holds the
+    instrument, while the dead-man runs down. So:
+
+    * a failing beat is a ``warning``;
+    * once consecutive failures have **spanned at least ``deadman_s``** since
+      the last successful beat -- read once from ``afm`` at construction time
+      -- the token is surely gone server-side, and :attr:`died` is set with an
+      ``error``. When ``deadman_s`` is unknown (a bare ``beat`` callable with
+      no ``afm``, or an ``afm`` that never called :meth:`AFMLitho.acquire_control`),
+      this falls back to the old ``tolerate``-consecutive-failures count;
+    * :attr:`died` is **not a latch** for this path: if a later beat succeeds
+      (the service recovered before the real dead-man expired anything),
+      :attr:`died` clears and beating continues normally;
+    * ``__exit__`` re-raises a ``RuntimeError`` only if :attr:`died` is still
+      set when the block exits, unless the body is already unwinding an
+      exception of its own (which is the more informative failure, and must
+      not be masked). If beats failed but recovered before exit, ``__exit__``
+      logs a ``warning`` naming how many beats failed and does not raise.
 
     **A -32011 ``control_revoked`` is different from a transient failure, and
     is treated differently.** It means a human took the instrument, or the
-    dead-man already expired the token -- there is nothing left to refresh,
-    and the ``tolerate`` counter is not the right response (waiting out three
-    "consecutive failures" just delays telling the script the truth). So a
-    revoked token is **fatal on the first beat**: logged as an error
-    immediately, :attr:`died` is set right away, and ``__exit__`` raises a
-    ``RuntimeError`` naming the lost control. A plain timeout or transient
-    wire error still gets the ``tolerate``-consecutive-failures grace above.
+    dead-man already expired the token -- there is nothing left to refresh, so
+    a revoked token is **fatal and terminal on the first beat**: logged as an
+    error immediately, :attr:`died` is set right away (and stays set -- unlike
+    the span/tolerate path above, the loop actually stops, since there is
+    nothing to recover from), and ``__exit__`` raises a ``RuntimeError``
+    naming the lost control.
 
     The beat is a *callable*: when the instrument holds no token (this
     build's read-only surfaces, or before :meth:`AFMLitho.acquire_control`),
     it defaults to ``afm.get_state`` -- the same read socket, the same round
     trip. Once a token is held, the default becomes ``lambda:
-    afm.heartbeat()``, refreshing the dead-man for real; an explicit ``beat``
-    callable always overrides this. :meth:`AFMLitho.heartbeat_context` builds
-    one with ``period = deadman_s / 3`` (two missed beats of slack).
+    afm.heartbeat(timeout=...)`` (the clamped ``beat_timeout_s`` above),
+    refreshing the dead-man for real; an explicit ``beat`` callable always
+    overrides this and is responsible for its own timeout.
+    :meth:`AFMLitho.heartbeat_context` builds one with ``period = deadman_s /
+    3`` (two missed beats of slack).
 
     Args:
-        afm: the instrument to beat -- used for the default callable and for
-            its logger.
+        afm: the instrument to beat -- used for the default callable, its
+            logger, and (once) its ``_deadman_s`` for span-based death.
         beat: what to call on each tick. Defaults to ``afm.heartbeat`` when
             ``afm`` holds a token, else ``afm.get_state``.
-        period: seconds between beats.
-        tolerate: consecutive *transient* failures absorbed before giving up.
-            A -32011 ``control_revoked`` bypasses this entirely.
+        period: seconds between beats when the last beat succeeded.
+        tolerate: consecutive-failures fallback used only when ``afm``'s
+            ``deadman_s`` is unknown. A -32011 ``control_revoked`` bypasses
+            this entirely.
+        beat_timeout_s: per-beat wire timeout for the DEFAULT beat callable
+            (ignored when an explicit ``beat`` is given), clamped to at most
+            ``period / 2``.
+        retry_s: seconds before retrying after a FAILED beat, instead of
+            waiting out the rest of ``period``.
     """
 
     def __init__(
@@ -2004,27 +2067,54 @@ class Heartbeat:
         *,
         period: float = 10.0,
         tolerate: int = 3,
+        beat_timeout_s: float = HEARTBEAT_TIMEOUT_S,
+        retry_s: float = HEARTBEAT_RETRY_S,
     ):
+        if tolerate < 1:
+            raise ValueError("tolerate must be at least 1")
+        if retry_s < MIN_RETRY_S:
+            raise ValueError(
+                f"retry_s must be at least {MIN_RETRY_S}s -- an instantly-failing beat "
+                f"must not busy-loop"
+            )
+        if beat_timeout_s < MIN_TIMEOUT:
+            raise ValueError(f"beat_timeout_s must be at least MIN_TIMEOUT ({MIN_TIMEOUT}s)")
         if beat is None:
             if afm is None:
                 raise ValueError("Heartbeat needs an instrument or a beat callable")
-            beat = (lambda: afm.heartbeat()) if getattr(afm, "token", None) else afm.get_state
-        if tolerate < 1:
-            raise ValueError("tolerate must be at least 1")
+            if getattr(afm, "token", None):
+                # Never below MIN_TIMEOUT even when period/2 is tighter (a
+                # short deadman_s -- e.g. 5s -> period 1.67s -> period/2
+                # 0.83s -- would otherwise floor the beat's own timeout below
+                # what the driver ever floors an ordinary call to).
+                effective_timeout = max(MIN_TIMEOUT, min(beat_timeout_s, period / 2))
+                beat = lambda: afm.heartbeat(timeout=effective_timeout)  # noqa: E731
+            else:
+                beat = afm.get_state
         self.afm = afm
         self.beat = beat
         self.period = period
         self.tolerate = tolerate
+        self.beat_timeout_s = beat_timeout_s
+        self.retry_s = retry_s
+        #: ``afm``'s dead-man window, read once here -- ``None`` when unknown
+        #: (no ``afm``, or control was never acquired), which is exactly when
+        #: death falls back to the ``tolerate`` count instead.
+        self.deadman_s: float | None = getattr(afm, "_deadman_s", None) if afm is not None else None
         self.log = getattr(afm, "log", None) or logging.getLogger("afm.heartbeat")
         #: beats completed without raising -- the number a test asserts on.
         self.beats = 0
         #: consecutive failures right now; reset by any successful beat.
         self.failures = 0
+        #: TOTAL failed beats this run (not reset by a recovery) -- what
+        #: __exit__ reports in its recovery warning.
+        self.failed_beats = 0
         #: the most recent exception a beat raised, if any.
         self.last_error: BaseException | None = None
         self._died = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._last_success: float = 0.0
 
     @property
     def alive(self) -> bool:
@@ -2037,7 +2127,11 @@ class Heartbeat:
         return self._died.is_set()
 
     def _run(self) -> None:
-        while not self._stop.wait(self.period):
+        self._last_success = time.monotonic()
+        while True:
+            wait = self.retry_s if self.failures else self.period
+            if self._stop.wait(wait):
+                return
             try:
                 self.beat()
             except BaseException as e:  # noqa: BLE001 - a beat thread never raises
@@ -2045,24 +2139,46 @@ class Heartbeat:
                 if getattr(e, "code", None) == CONTROL_REVOKED:
                     # Control is GONE -- a human took the instrument, or the
                     # dead-man already expired the token. There is nothing
-                    # left for `tolerate` to wait out, so this is fatal on the
-                    # first beat, not the `tolerate`-th.
+                    # left to refresh and nothing to recover from, so this is
+                    # fatal AND terminal on the first beat: stop the loop
+                    # (unlike the transient path below, which keeps trying).
                     self.log.error(
                         "heartbeat STOPPING: control was revoked (-32011) -- %s", e)
                     self._died.set()
                     return
                 self.failures += 1
-                self.log.warning("heartbeat beat failed (%d/%d): %s",
-                                 self.failures, self.tolerate, e)
-                if self.failures >= self.tolerate:
-                    self.log.error(
-                        "heartbeat STOPPING after %d consecutive failures -- nothing is "
-                        "refreshing the instrument any more: %s", self.failures, e)
-                    self._died.set()
-                    return
+                self.failed_beats += 1
+                elapsed = time.monotonic() - self._last_success
+                self.log.warning(
+                    "heartbeat beat failed (%d consecutive, %d total, %.1fs since last "
+                    "success) -- retrying in %gs: %s",
+                    self.failures, self.failed_beats, elapsed, self.retry_s, e)
+                if not self._died.is_set():
+                    if self.deadman_s is not None:
+                        given_up = elapsed >= self.deadman_s
+                    else:
+                        given_up = self.failures >= self.tolerate
+                    if given_up:
+                        self.log.error(
+                            "heartbeat: the token is surely gone (%s) -- nothing has "
+                            "refreshed it in %.1fs; still retrying every %gs in case the "
+                            "service recovers: %s",
+                            (f"{elapsed:.1f}s >= deadman_s={self.deadman_s:.1f}s"
+                             if self.deadman_s is not None
+                             else f"{self.failures} consecutive failures >= tolerate="
+                                  f"{self.tolerate}"),
+                            elapsed, self.retry_s, e)
+                        self._died.set()
+                # No `return`: a failed beat -- even one that just tipped
+                # `died` -- never ends the loop by itself. Only `stop()`
+                # (leaving the `with` block) does, because the service may
+                # still recover.
                 continue
+            if self._died.is_set():
+                self._died.clear()
             self.failures = 0
             self.beats += 1
+            self._last_success = time.monotonic()
 
     def start(self) -> Heartbeat:
         if self._thread is not None:
@@ -2075,15 +2191,45 @@ class Heartbeat:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2)
-            self._thread = None
+        if self._thread is None:
+            return
+        # A beat can now legitimately block up to ~beat_timeout_s (default
+        # 5s, or whatever an explicit `beat` callable takes) before it even
+        # notices `_stop`, so the join has to cover one such call plus one
+        # retry-spaced re-check, not a hardcoded 2s that predates
+        # beat_timeout_s existing at all.
+        join_timeout = self.beat_timeout_s + self.retry_s + 1.0
+        self._thread.join(timeout=join_timeout)
+        if self._thread.is_alive():
+            # Still running past its own timeout budget: do NOT clear the
+            # thread reference (that would silently forget a beat thread that
+            # is still out there, possibly still mutating self.* right now)
+            # and do not touch `died`/`failed_beats` here -- __exit__ must not
+            # read them until a join has actually completed.
+            self.log.error(
+                "heartbeat: the beat thread did not stop within %.1fs of being asked "
+                "to -- a beat is still in flight past its own timeout budget; leaving "
+                "the thread handle (see `alive`) instead of forgetting it", join_timeout)
+            return
+        self._thread = None
 
     def __enter__(self) -> Heartbeat:
         return self.start()
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.stop()
+        if self._thread is not None:
+            # stop() could not join the thread -- it may still be running and
+            # mutating `died`/`failed_beats`/`last_error` right now, so this
+            # branch must not read any of them. Report the stuck thread
+            # itself, distinctly from a normal died/recovered outcome.
+            if exc_type is None:
+                raise RuntimeError(
+                    "heartbeat: the beat thread did not stop -- a beat is still in "
+                    "flight past its own timeout; heartbeat state is unreliable and "
+                    "the instrument may or may not still be refreshed"
+                )
+            return
         if self._died.is_set() and exc_type is None:
             if getattr(self.last_error, "code", None) == CONTROL_REVOKED:
                 raise RuntimeError(
@@ -2093,6 +2239,12 @@ class Heartbeat:
                     "for part of this block"
                 ) from self.last_error
             raise RuntimeError(
-                f"heartbeat died after {self.tolerate} consecutive failed beats; "
+                f"heartbeat died: no beat succeeded for at least "
+                f"{self.deadman_s if self.deadman_s is not None else self.tolerate}"
+                f"{'s' if self.deadman_s is not None else ' consecutive failed beats'}; "
                 f"the instrument was not being refreshed for part of this block"
             ) from self.last_error
+        if self.failed_beats and not self._died.is_set():
+            self.log.warning(
+                "heartbeat: %d beat(s) failed during this block but the instrument "
+                "recovered before it exited -- nothing to do", self.failed_beats)

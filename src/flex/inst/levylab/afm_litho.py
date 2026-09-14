@@ -11,19 +11,11 @@ Port         Socket  Serves
 ===========  ======  ==========================================================
 
 This driver therefore keeps **two** links. ``super().__init__`` opens the
-command socket (with the eager ``ACK`` connect check every LevyLab ZMQ
-instrument does); a second :class:`~flex_afm._link.JsonRpcLink` opens the read
+command socket (with the eager ``ACK`` connect check FLEX does for every ZMQ
+instrument); a second :class:`~flex.inst.base.Instrument` opens the read
 socket, and every ``get*`` / polling call goes there. That is the whole point
 of the split: a 5 Hz ``getState`` loop must not stall behind a blocking
 command once mutating verbs land.
-
-Both links are :class:`~flex_afm._link.JsonRpcLink`, **this repo's** subclass
-of FLEX v1's :class:`flex.inst.base.Instrument` -- so an ``AFMLitho`` still IS
-a FLEX instrument (``idn()`` / ``help()`` / ``close()``, and v1's
-``CESession``-style code can hold one), but with the per-call timeout, the
-socket reset after a missed reply, the unique request ids and the ``error`` ->
-exception mapping v1 does not have. See :mod:`flex_afm._link` for the full
-list of what is added and why.
 
 **Milestone 3 wired the control plane.** ``acquireControl`` / ``releaseControl``
 / ``heartbeat`` and the token-free fail-safe verbs ``abort`` / ``safePark`` are
@@ -41,18 +33,27 @@ token except :meth:`AFMLitho.withdraw`, matched by :class:`Busy` (-32020),
 **This build (Asana 09) adds write control**: ``loadPattern``, ``startWrite``
 and the token-free ``abortWrite`` -- the first verb that puts VOLTAGE on a
 tip already on the surface -- plus the blocking :meth:`AFMLitho.write`
-helper. A design over the 87,380-point out-wave cap raises
-:class:`PatternTooLarge`. ``startMeasure`` / ``executePass`` are still named
-by the provider and answer ``-32601 "not implemented in this build"`` -- see
+helper. There is no size refusal (Joe's decision, 2026-09-11) and, as of a
+second decision the same day, no more 8,192-point split inside a stroke
+either -- the tip no longer lifts in the middle of a line the user drew as
+one stroke. A big object simply CHAINS at the DSP's 87,000-point out-wave
+cap instead: ``loadPattern`` reports the true out-wave count via
+``segments`` (one arm per stroke, plus one per chain chunk) alongside
+``strokes`` (continuous tip paths) and ``multi_segment_objects``, instead of
+raising. There is no ``max_segment_points`` key on this wire any more.
+:class:`PatternTooLarge` is kept for backward compatibility -- see its
+docstring. ``startMeasure`` / ``executePass`` are still named by the
+provider and answer ``-32601 "not implemented in this build"`` -- see
 :data:`RESERVED_VERBS`.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -114,6 +115,52 @@ CONTROL_HELD = -32040      #: someone else is the commander right now
 BACKEND_MISMATCH = -32010  #: a mutating verb on a hardware station with no live bridge
 BUSY = -32020              #: a start verb arrived while another run holds the claim
 REFUSED = -32021           #: a STATE refusal (e.g. setMode with the tip engaged)
+
+#: The fields a RELATIVE engage resolves server-side and reports on the
+#: ``startApproach`` reply -- copied onto :meth:`AFMLitho.approach`'s returned
+#: status, which is otherwise a plain ``getStatus`` and would drop them.
+#: Beyond the three numbers of the engage itself: ``sum_v`` is the detector
+#: sum the clamp was taken against (null on the twin, which models no
+#: detector), ``park_z_v`` the Z the tip was parked at when the baseline was
+#: read (0 V on hardware, -10 V on the twin), ``free_air_settle_s`` how long
+#: the deflection was left to settle, and ``mode`` the imaging mode it was
+#: resolved in. All of it is evidence ABOUT the engage, which is exactly what a
+#: sweep report has to carry -- a setpoint with no record of what it was
+#: resolved against cannot be checked afterwards.
+APPROACH_RESOLUTION_KEYS = ("free_air_v", "setpoint_relative_v", "setpoint",
+                            "sum_v", "park_z_v", "free_air_settle_s", "mode",
+                            "baseline_check")
+
+#: The subset of :data:`APPROACH_RESOLUTION_KEYS` a RELATIVE engage MUST echo
+#: for :meth:`AFMLitho.start_approach` to trust the reply at all. A provider
+#: that doesn't implement ``setpoint_relative_v`` has no reason to send any of
+#: these three -- it just ignores the unknown param -- so their absence is
+#: the signal, not ``sum_v`` / ``park_z_v`` / etc., which a real
+#: implementation may legitimately omit (``sum_v`` is null on the twin).
+APPROACH_RELATIVE_REQUIRED_KEYS = ("free_air_v", "setpoint", "setpoint_relative_v")
+
+#: The ``-32021`` :class:`Refused` reasons that mean **stop the run**, not
+#: "try again". Both say the tip is not where the free-air baseline assumed it
+#: was -- ``tip_not_parked`` because the last retract did not verify or Z is
+#: off the park value, ``free_air_jump`` because the fresh read disagrees with
+#: the last ACCEPTED baseline by more than the guard allows. Retrying either
+#: just engages on the same bad premise, one attempt later; the honest answer
+#: is to stop and look at the instrument.
+HARD_STOP_REFUSALS = ("tip_not_parked", "free_air_jump")
+
+#: The upper bound this driver enforces on ``setpoint_relative_v`` before
+#: sending it. **A placeholder, named on purpose**: the provider has the real
+#: limit (and clamps to 0.9x the detector SUM besides), and this only stops an
+#: obvious typo -- a 10 that was meant to be 0.10 -- from becoming a crash the
+#: instrument has to refuse. Raise it here only when the provider's own named
+#: max moves.
+SETPOINT_RELATIVE_MAX_V = 2.0
+
+#: ``readDeflection``'s ``tip_state`` values that mean the tip is NOT clear of
+#: the surface. ``approaching`` is one of them: a relative engage resolved
+#: against a deflection read while the tip was already on its way down is not a
+#: free-air baseline at all.
+TIP_NOT_WITHDRAWN_STATES = ("engaged", "approaching", "scanning", "writing")
 
 #: Verbs the provider names but does not implement in this build. Milestone 3
 #: moved the five control verbs out of this set; Asana 07 moved the seven
@@ -195,13 +242,20 @@ class Refused(ZMQInstrumentError):
 
 
 class PatternTooLarge(ZMQInstrumentError):
-    """-32602 ``invalid_params`` from :meth:`AFMLitho.load_pattern`: at least
-    one object in the design exceeds the 87,380-point out-wave cap.
-    ``.objects`` (``data["objects_over_cap"]``) lists the offenders as
-    ``[{name, points, cap}, ...]``, so a script can report *which* object is
-    too big instead of bisecting the design by hand. The provider leaves the
-    previously loaded design (if any) in place on this refusal -- a script
-    that catches this can keep writing whatever was loaded before.
+    """-32602 ``invalid_params`` from :meth:`AFMLitho.load_pattern`, shaped as
+    ``.objects`` (``data["objects_over_cap"]``) -- ``[{name, points, cap},
+    ...]``.
+
+    **Kept for backward compatibility; the current provider never raises it.**
+    As of Joe's 2026-09-11 decisions there is no size refusal at all, and no
+    8,192-point split inside a stroke either: a big object is simply CHAINED
+    at the 87,000-point out-wave cap, and :meth:`AFMLitho.load_pattern`
+    reports that via ``segments``, ``strokes`` and ``multi_segment_objects``
+    on a normal successful reply -- see its docstring. :meth:`load_pattern`
+    still maps a ``data.objects_over_cap`` reply to this exception if the
+    provider ever sends one (some other bad-argument shape it might reuse),
+    so this class stays for that mapping and for any caller still catching
+    it.
 
     Not one of :data:`_MAPPED_ERROR_TYPES` -- ``-32602`` covers many
     unrelated bad-argument cases, so :meth:`AFMLitho.load_pattern` raises
@@ -218,6 +272,28 @@ class PatternTooLarge(ZMQInstrumentError):
         return self.data.get("objects_over_cap") or []
 
 
+class ProviderLacksCapability(RuntimeError):
+    """Raised by :meth:`AFMLitho.start_approach` when ``setpoint_relative_v=``
+    was sent but the ``startApproach`` reply is missing one or more of
+    ``free_air_v``, ``setpoint``, ``setpoint_relative_v``.
+
+    A provider that does not implement the relative-engage verb simply
+    ignores the unknown ``setpoint_relative_v`` param rather than refusing
+    it, ARC-error style -- there is no ``-32602`` to catch. Left unchecked,
+    the tip engages at whatever setpoint the provider defaults to (an
+    absolute one, typically 1.0 V) while the caller believes it engaged at
+    free-air plus the requested offset, because nothing on the reply says
+    otherwise. This is **not** a wire error code -- it is a client-side
+    integrity check with no ``.code`` -- so it is a bare :class:`RuntimeError`
+    subclass rather than a :class:`ZMQInstrumentError`, and is not in
+    :data:`_MAPPED_ERROR_TYPES`.
+
+    :meth:`~AFMLitho.start_approach` calls :meth:`~AFMLitho.withdraw` (bounded,
+    token-free) before raising this, since the approach it can no longer
+    trust may already be descending.
+    """
+
+
 #: Wire error code -> the typed exception :meth:`AFMLitho._command_call`
 #: raises instead of a bare :class:`ZMQInstrumentError`. The raw code stays
 #: reachable on the exception (``.code``), so nothing that inspects it today
@@ -230,6 +306,213 @@ _MAPPED_ERROR_TYPES: dict[int, type[ZMQInstrumentError]] = {
     BUSY: Busy,
     REFUSED: Refused,
 }
+
+
+#: The two object ``kind``s :func:`chiral_spec` / :func:`rect_spec` build, and
+#: the only ones ``loadPattern``'s inline ``objects`` list accepts. A spec with
+#: any other ``kind`` is a client-side ``ValueError`` rather than a round trip
+#: that comes back ``-32602``.
+OBJECT_KINDS = ("chiral", "region")
+
+#: The two legal handednesses of a chiral wire. ``+1`` and ``-1`` name the two
+#: senses of the transverse modulation; WHICH physical chirality each one is has
+#: NOT been confirmed by Joe (see :func:`chiral_spec`), so this driver only
+#: enforces that it is one of the two.
+HANDS = (1, -1)
+
+
+def _finite(value: Any, what: str) -> float:
+    """``float(value)``, refusing NaN/inf and anything non-numeric, naming the
+    field in the message -- a spec is built once and written many times, so a
+    bad number is worth catching here rather than at the ARMFIRE."""
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} must be a number, got {value!r}") from None
+    if math.isnan(out) or math.isinf(out):
+        raise ValueError(f"{what} must be finite, got {value!r}")
+    return out
+
+
+def _positive(value: Any, what: str) -> float:
+    out = _finite(value, what)
+    if out <= 0:
+        raise ValueError(f"{what} must be > 0, got {out!r}")
+    return out
+
+
+def _hand(hand: Any) -> int:
+    """``hand`` as the int ``+1`` / ``-1``. ``True`` / ``False`` are refused
+    outright: ``bool`` is an ``int`` in Python and ``True == 1`` would sail
+    through as "right-handed" from a caller who meant a flag."""
+    if isinstance(hand, bool):
+        raise ValueError(f"hand must be 1 or -1, not a bool ({hand!r})")
+    try:
+        out = int(hand)
+    except (TypeError, ValueError):
+        raise ValueError(f"hand must be 1 or -1, got {hand!r}") from None
+    if out not in HANDS:
+        raise ValueError(f"hand must be 1 or -1, got {hand!r}")
+    return out
+
+
+def _points_um(points: Any) -> list[list[float]]:
+    """Validate an ``[[x, y], ...]`` polyline: at least two finite XY pairs."""
+    if isinstance(points, (str, bytes)) or not isinstance(points, Iterable):
+        raise ValueError(f"points_um must be a sequence of [x, y] pairs, got {points!r}")
+    out: list[list[float]] = []
+    for i, point in enumerate(points):
+        if isinstance(point, (str, bytes)) or not isinstance(point, Iterable):
+            raise ValueError(f"points_um[{i}] must be an [x, y] pair, got {point!r}")
+        pair = list(point)
+        if len(pair) != 2:
+            raise ValueError(
+                f"points_um[{i}] must be an [x, y] pair, got {len(pair)} value(s)"
+            )
+        out.append([_finite(pair[0], f"points_um[{i}][0]"),
+                    _finite(pair[1], f"points_um[{i}][1]")])
+    if len(out) < 2:
+        raise ValueError(f"points_um needs at least 2 points, got {len(out)}")
+    return out
+
+
+def chiral_spec(
+    *,
+    points_um: Any,
+    lambda_um: float,
+    y_amp_um: float,
+    v0: float,
+    v_k: float,
+    phase_deg: float,
+    hand: int = 1,
+    name: str | None = None,
+    speed_um_s: float | None = None,
+) -> dict[str, Any]:
+    """One ``{"kind": "chiral", ...}`` object spec for :meth:`AFMLitho.load_pattern`.
+
+    A chiral wire is a centre line (``points_um``, an ``[[x, y], ...]``
+    polyline in microns) plus a transverse modulation: wavelength
+    ``lambda_um``, amplitude ``y_amp_um``, starting ``phase_deg``, and a tip
+    bias that follows the modulation as ``v0 + v_k * <modulation>`` (``v0`` the
+    mean bias, ``v_k`` its swing). ``speed_um_s`` overrides the provider's own
+    write speed when given.
+
+    **``hand`` is a PARAMETER, not a settled convention.** ``+1`` / ``-1``
+    select the two senses of the modulation, but which of them is the physical
+    chirality Joe means by "right-handed" has NOT been confirmed -- so every
+    caller (``flex_afm.experiments.chiral_sweep`` included) carries it as an
+    explicit knob and reports it with every result, rather than baking a guess
+    into a default. Confirm it against a written wire before reading any
+    handedness conclusion out of a sweep.
+
+    Every value is validated here (finite numbers, at least two points,
+    ``lambda_um > 0``, ``hand`` in :data:`HANDS`) so a typo is a ``ValueError``
+    in the caller's own stack frame rather than a ``-32602`` after a round
+    trip. The provider validates again, authoritatively -- notably the
+    curvature clamp, which only it can apply (its reply carries
+    ``profile.curvature_clamped``).
+    """
+    y_amp = _finite(y_amp_um, "y_amp_um")
+    if y_amp < 0:
+        raise ValueError(f"y_amp_um must be >= 0, got {y_amp!r}")
+    spec: dict[str, Any] = {
+        "kind": "chiral",
+        "points_um": _points_um(points_um),
+        "lambda_um": _positive(lambda_um, "lambda_um"),
+        "y_amp_um": y_amp,
+        "v0": _finite(v0, "v0"),
+        "v_k": _finite(v_k, "v_k"),
+        "phase_deg": _finite(phase_deg, "phase_deg"),
+        "hand": _hand(hand),
+    }
+    if name is not None:
+        spec["name"] = str(name)
+    if speed_um_s is not None:
+        spec["speed_um_s"] = _positive(speed_um_s, "speed_um_s")
+    return spec
+
+
+def rect_spec(
+    *,
+    x_um: float,
+    y_um: float,
+    w_um: float,
+    h_um: float,
+    pitch_um: float,
+    voltage: float,
+    name: str | None = None,
+    fill: str | None = None,
+    speed_um_s: float | None = None,
+) -> dict[str, Any]:
+    """One ``{"kind": "region", "shape": "rect", ...}`` spec -- a raster-filled
+    rectangle, which is how an ERASE is written: the same tip, the same pass
+    primitive, a negative ``voltage`` over the area a wire already occupies.
+
+    ``x_um`` / ``y_um`` are the rectangle's origin and ``w_um`` / ``h_um`` its
+    size (all microns); ``pitch_um`` is the raster line spacing and ``fill``
+    the provider's fill strategy when a caller wants to override its default.
+    ``voltage`` is the tip bias for the whole region -- deliberately NOT
+    sign-checked, because an erase is exactly the negative case.
+
+    ``pitch_um`` must be at most **half the shorter side**: a raster whose
+    lines are further apart than that does not fill the rectangle, it draws a
+    couple of stripes across it -- an erase that does not erase. The provider
+    refuses the same thing (-32602); checking it here means finding out before
+    a pattern is half-chosen. Pitch should be no wider than the written line
+    itself (the twin's deposit stamp is ~0.26 um, so 0.05-0.1 um is the sane
+    band for an erase that actually clears a wire).
+    """
+    spec: dict[str, Any] = {
+        "kind": "region",
+        "shape": "rect",
+        "x_um": _finite(x_um, "x_um"),
+        "y_um": _finite(y_um, "y_um"),
+        "w_um": _positive(w_um, "w_um"),
+        "h_um": _positive(h_um, "h_um"),
+        "pitch_um": _positive(pitch_um, "pitch_um"),
+        "voltage": _finite(voltage, "voltage"),
+    }
+    limit = min(spec["w_um"], spec["h_um"]) / 2
+    if spec["pitch_um"] > limit:
+        raise ValueError(
+            f"pitch_um {spec['pitch_um']} is over half the shorter side of the "
+            f"{spec['w_um']} x {spec['h_um']} um region ({limit}): that raster "
+            f"does not fill the rectangle, it stripes it"
+        )
+    if name is not None:
+        spec["name"] = str(name)
+    if fill is not None:
+        spec["fill"] = str(fill)
+    if speed_um_s is not None:
+        spec["speed_um_s"] = _positive(speed_um_s, "speed_um_s")
+    return spec
+
+
+def validate_object_spec(spec: Any) -> dict[str, Any]:
+    """Validate ONE inline ``loadPattern`` object spec and return it normalized.
+
+    Dispatches on ``kind`` to :func:`chiral_spec` / :func:`rect_spec`, so a
+    hand-built dict gets exactly the checks (and the normalization) a spec
+    built by the helpers already has -- and passing a helper's own output back
+    through is a no-op. An unknown key is refused rather than forwarded: on
+    this wire an unrecognised key is a typo for a real one, and sending it
+    means discovering that at ``-32602`` time, with the previously loaded
+    pattern still in place and a caller who thinks it replaced it.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError(f"an object spec must be a dict, got {type(spec).__name__}")
+    kind = spec.get("kind")
+    if kind not in OBJECT_KINDS:
+        raise ValueError(f"object spec kind must be one of {OBJECT_KINDS}, got {kind!r}")
+    if kind == "region" and spec.get("shape", "rect") != "rect":
+        raise ValueError(f"the only region shape this driver builds is 'rect', "
+                         f"got {spec['shape']!r}")
+    builder = chiral_spec if kind == "chiral" else rect_spec
+    fields = {k: v for k, v in spec.items() if k not in ("kind", "shape")}
+    try:
+        return builder(**fields)
+    except TypeError as e:  # an unknown / missing key, named by Python itself
+        raise ValueError(f"invalid {kind} object spec: {e}") from None
 
 
 def read_address_for(address: str) -> str:
@@ -260,8 +543,7 @@ class AFMLitho(Instrument):
         name: FLEX instrument name.
         address: the **command** endpoint (ZMQ REP), default ``29180``.
         read_address: the read-only endpoint; defaults to ``address`` port + 1.
-        timeout: fallback for every per-call timeout. ``None`` uses the
-            link's own 5 s default.
+        timeout: floor for every per-call timeout. ``None`` uses FLEX's 5 s.
             Per-call timeouts are derived from the provider's published
             ``getCapabilities.method_bounds`` and are never *shorter* than a
             method's own bound.
@@ -282,9 +564,9 @@ class AFMLitho(Instrument):
         timeout: float | None = None,
         **kwargs: Any,
     ):
-        # `timeout` is omitted entirely when None so JsonRpcLink's own default
-        # stays the single source of that number -- a restated copy here would
-        # fork silently the day the link's default changes.
+        # `timeout` is omitted entirely when None so the base Instrument's own
+        # default stays the single source of that number -- a restated copy here
+        # would fork silently the day FLEX changes it.
         if timeout is None:
             super().__init__(address=address, name=name, **kwargs)
         else:
@@ -470,11 +752,19 @@ class AFMLitho(Instrument):
         return self._read_call("getTelemetry")
 
     def get_pattern(self) -> dict[str, Any]:
-        """The loaded design, one entry per object, with point *counts*."""
+        """The loaded design, one entry per object, with point *counts* and
+        each object's own ``segments`` (out-waves that object is actually
+        fired as -- more than its ``strokes`` for an object that CHAINS; see
+        :meth:`load_pattern`) and ``strokes`` (continuous tip paths)."""
         return self._read_call("getPattern")
 
     def get_written(self) -> dict[str, Any]:
-        """What this session has actually written."""
+        """What this session has actually written. **One entry per STROKE**,
+        not per object and not per fired out-wave: a filled shape that
+        expands into several disconnected strokes arrives as several
+        entries; a chaining object -- one continuous tip path fired as more
+        than one out-wave -- is still only ONE entry, because a chain chunk
+        is an arm, not a written piece."""
         return self._read_call("getWritten")
 
     # -- terminal run records -------------------------------------------------
@@ -607,14 +897,21 @@ class AFMLitho(Instrument):
         return self._token
 
     def require_token(self) -> str:
-        """The held token, or automatically acquire control if not already held."""
+        """The held token, or a clear ``RuntimeError`` -- the guard every
+        mutating helper (scan / write control) opens with.
+
+        **The one intentional difference from FLEX main's own copy of this
+        driver.** Pubudu's ``flex.inst.levylab.afm_litho`` *auto-acquires*
+        control here (``acquire_control(self.name, deadman_s=60)``) when no
+        token is held. This one RAISES instead: a script that is about to move
+        the tip must say so, by taking control explicitly, rather than have a
+        helper silently become the commander on its behalf. When this file is
+        copied back to FLEX main this is the single method whose body differs
+        on purpose -- see the README's "Sync to FLEX"."""
         if self._token is None:
-            try:
-                self.acquire_control(self.name, deadman_s=60.0)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"{self.name}: no control token held and auto-acquire failed ({exc})"
-                ) from exc
+            raise RuntimeError(
+                f"{self.name}: no control token held -- call acquire_control() first"
+            )
         return self._token
 
     def acquire_control(
@@ -647,7 +944,7 @@ class AFMLitho(Instrument):
         **Never raises** -- a stale or unknown token is `{ok: True, stale:
         True}` on the wire already. A transport failure (the provider
         unreachable, a timeout, a reset socket) is caught here -- broadly,
-        not just :class:`ZMQInstrumentError`: ``JsonRpcLink.call`` also
+        not just :class:`ZMQInstrumentError`: ``ZMQInstrument.call`` also
         raises a bare ``TimeoutError`` and re-raises ``zmq.ZMQError`` -- and
         folded into the same shape, because this call belongs in a
         ``finally`` block and a cleanup path that can itself throw is not a
@@ -745,6 +1042,32 @@ class AFMLitho(Instrument):
         hardware approach)."""
         return self._read_call("getMode")
 
+    def read_deflection(self) -> dict[str, Any]:
+        """``{defl_v, tip_state, mode, fresh}`` -- a FRESH cantilever deflection
+        read, **token-free and read-only**, on the **command** socket.
+
+        Not a telemetry field and not the read socket, deliberately. The
+        deflection this returns is the free-air baseline a *relative* engage is
+        resolved against (:meth:`start_approach`'s ``setpoint_relative_v``), so
+        it must be read from the instrument at the moment it is asked for, not
+        served from the cached telemetry frame :meth:`get_telemetry` answers
+        with -- a frame that can be a poll period old, taken before the tip was
+        withdrawn, or (with the bridge down) stale in a way nothing in it
+        announces. Hence the command socket, where the bridge I/O serialises
+        with everything else that touches the instrument, and hence ``fresh:
+        true`` in the reply: it is an assertion about THIS read.
+
+        Token-free like :meth:`withdraw` / :meth:`abort` -- it moves nothing and
+        arms nothing, so making an operator's own session the precondition for
+        reading a voltage would buy nothing.
+
+        The reply is ``{defl_v, tip_state, mode, fresh, backend}``.
+        ``tip_state`` is one of ``withdrawn`` / ``parked`` /
+        :data:`TIP_NOT_WITHDRAWN_STATES`; anything in that last set --
+        ``approaching`` included -- means this deflection is NOT a free-air
+        baseline, and a relative engage resolved against it would be wrong."""
+        return self._command_call("readDeflection", {})
+
     def set_mode(self, mode: str) -> dict[str, Any]:
         """Contact <-> AC. **Refused** (:class:`Refused`, -32021) while the
         tip is engaged, scanning or writing -- the vendor switch changes the
@@ -760,6 +1083,7 @@ class AFMLitho(Instrument):
         self,
         *,
         setpoint: float | None = None,
+        setpoint_relative_v: float | None = None,
         pgain: float | None = None,
         igain: float | None = None,
         settle_s: float | None = None,
@@ -771,11 +1095,85 @@ class AFMLitho(Instrument):
         engage fires ``safe_park`` server-side. Only the keywords actually
         given are sent, so the provider's own defaults apply to the rest.
         Prefer :meth:`approach` for a blocking call that already polls and
-        keeps the dead-man alive."""
+        keeps the dead-man alive.
+
+        ``setpoint_relative_v`` is the **relative** engage: an offset ABOVE the
+        free-air deflection rather than an absolute setpoint voltage. The
+        provider requires the tip withdrawn and contact mode, reads Deflection
+        fresh itself (the same read :meth:`read_deflection` serves), and
+        resolves ``setpoint = free_air_v + setpoint_relative_v``; its reply
+        reports all three (``free_air_v``, ``setpoint_relative_v``,
+        ``setpoint``) so a script can record what it actually engaged at. It is
+        **mutually exclusive with** ``setpoint`` -- passing both is a
+        client-side ``ValueError`` before anything is sent, because the
+        provider would only refuse it (-32021) after a round trip -- and must
+        be ``> 0`` and ``<= SETPOINT_RELATIVE_MAX_V``, checked here for the
+        same reason.
+
+        The provider refuses in a fixed order, and every refusal carries a
+        ``.reason`` worth surfacing rather than swallowing. ``-32602``:
+        ``bad_params`` (both setpoints) and ``offset_out_of_range`` (the same
+        ``0 < offset <= SETPOINT_RELATIVE_MAX_V`` bound checked above, so this
+        one should never come back). ``-32010``: no live bridge. ``-32021``
+        :class:`Refused`: ``engaged`` (the tip is down -- ``tip_state``
+        ``approaching`` counts), ``mode`` (not contact), ``tip_not_parked``
+        (**the last retract was not verified** -- the withdraw's own, or a
+        litho run's end-of-run one -- or Z is not at the park value, 0 V on
+        hardware and -10 V on the twin), ``free_air_jump`` (the fresh read
+        differs from the last ACCEPTED baseline by more than the guard's jump
+        fraction; ``data`` carries ``last_free_air_v`` and ``value_v``),
+        ``sum_lost`` / ``sum_read_failed``, ``free_air_unstable`` /
+        ``read_failed`` (the repeated-read stability guard), and
+        ``setpoint_over_sum`` (the resolved setpoint is over the detector-SUM
+        clamp; ``data`` carries ``sum_v``, ``clamp_v`` and ``value_v``).
+
+        ``tip_not_parked`` and ``free_air_jump`` are
+        :data:`HARD_STOP_REFUSALS`: both mean the tip is not where the
+        baseline assumed, so retrying engages on the same bad premise one
+        attempt later. A caller should :meth:`withdraw` explicitly and check
+        that reply's ``verified`` before coming here.
+
+        The reply's ``baseline_check`` says which of those happened:
+        ``"ok"`` when the fresh read agreed with the last accepted baseline,
+        ``"none"`` when there was no baseline to compare against (the first
+        relative approach after a service start).
+
+        The settle plus five repeated reads is why this verb's bound is ~9.5 s
+        rather than milliseconds; :meth:`timeout_for` takes it from the live
+        ``method_bounds`` and this driver never hard-codes it.
+
+        **Hard stop if the provider doesn't actually resolve the relative
+        engage.** When ``setpoint_relative_v=`` is sent, the reply MUST echo
+        :data:`APPROACH_RELATIVE_REQUIRED_KEYS` (``free_air_v``, ``setpoint``,
+        ``setpoint_relative_v``) -- a provider that doesn't implement this verb
+        has no reason to send them, since it just ignores the unknown param
+        rather than refusing it. If any are missing, this immediately
+        :meth:`withdraw`\\ s (bounded, token-free -- the approach may already
+        be descending against a setpoint nobody resolved) and raises
+        :class:`ProviderLacksCapability`: the tip would otherwise engage at
+        whatever the provider defaults to (an absolute setpoint, typically
+        1.0 V) while the caller believes it engaged at free-air plus the
+        requested offset."""
+        if setpoint is not None and setpoint_relative_v is not None:
+            raise ValueError(
+                f"{self.name}: start_approach takes setpoint= OR "
+                f"setpoint_relative_v=, not both -- an absolute setpoint and an "
+                f"offset above free air are two different engages"
+            )
+        if setpoint_relative_v is not None:
+            offset = _finite(setpoint_relative_v, "setpoint_relative_v")
+            if not 0 < offset <= SETPOINT_RELATIVE_MAX_V:
+                raise ValueError(
+                    f"{self.name}: setpoint_relative_v must be > 0 and <= "
+                    f"{SETPOINT_RELATIVE_MAX_V} V (the offset ABOVE free air that "
+                    f"becomes the engage force), got {setpoint_relative_v!r}"
+                )
         token = self.require_token()
         params: dict[str, Any] = {"token": token}
         if setpoint is not None:
             params["setpoint"] = float(setpoint)
+        if setpoint_relative_v is not None:
+            params["setpoint_relative_v"] = float(setpoint_relative_v)
         if pgain is not None:
             params["pgain"] = float(pgain)
         if igain is not None:
@@ -784,7 +1182,17 @@ class AFMLitho(Instrument):
             params["settle_s"] = float(settle_s)
         if mode is not None:
             params["mode"] = mode
-        return self._command_call("startApproach", params)
+        result = self._command_call("startApproach", params)
+        if setpoint_relative_v is not None:
+            missing = [key for key in APPROACH_RELATIVE_REQUIRED_KEYS if key not in result]
+            if missing:
+                self.withdraw()
+                raise ProviderLacksCapability(
+                    f"{self.name}: startApproach(setpoint_relative_v={setpoint_relative_v!r}) "
+                    f"reply is missing {missing} -- this provider does not implement "
+                    f"relative setpoints; use setpoint= or run a provider that does"
+                )
+        return result
 
     def withdraw(self) -> dict[str, Any]:
         """Blocking retract, from any state. **Deliberately the least gated
@@ -883,7 +1291,9 @@ class AFMLitho(Instrument):
     # All three refresh the dead-man when they carry a valid token, command
     # socket only, same as the rest of this family.
 
-    def load_pattern(self, source: str) -> dict[str, Any]:
+    def load_pattern(
+        self, source: str | None = None, *, objects: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """Compile and validate a design. **Arms nothing** -- no claim, no
         thread, no run record, and ``get_state()`` does not move; it only
         replaces ``hub.pattern``, the state the next :meth:`start_write` acts
@@ -899,13 +1309,111 @@ class AFMLitho(Instrument):
         shapes, open paths become wires; a design whose bounding box exceeds
         2000 um is refused before the flatten.
 
-        Raises :class:`PatternTooLarge` (-32602, ``.objects``) if any object
-        exceeds the 87,380-point out-wave cap -- the provider leaves whatever
-        was previously loaded in place on this refusal, so a half-replaced
-        pattern never becomes the next :meth:`start_write`'s target."""
+        The reply's ``objects`` is a **list**, one entry per object in
+        compile order (``{index, name, id, kind, vertices_um, points,
+        segments, strokes, profile?, properties}``) -- ``object_count``
+        carries the plain count. ``id`` is the stable identifier
+        :meth:`set_objects` and :meth:`start_write` address an object by
+        (a name-derived string, not the positional ``index``, which shifts
+        if the pattern is ever reloaded); ``properties`` is the object's
+        current ``{voltage, speed_um_s, enabled, chiral, fill}`` block --
+        ``chiral`` non-null only for a chiral wire, ``fill`` non-null only
+        for a filled region -- the same shape :meth:`set_objects` merges
+        into and :meth:`get_pattern` / :meth:`get_written` also report.
+
+        **No size refusal, and no lift inside a stroke: a big object simply
+        CHAINS at the DSP's out-wave cap, never refused and never split at
+        8,192 points the way it used to be** (Joe's decisions, 2026-09-11;
+        ``max_segment_points`` is GONE from this wire). The reply carries:
+
+        - ``strokes`` -- **continuous tip paths**: one stroke is one transit,
+          one ``litho_object_done`` and one :meth:`get_written` entry. More
+          than one only for a filled shape that expands into several
+          disconnected regions; a wire is one stroke however long.
+        - ``segments`` -- **the true out-wave count**: one arm per stroke,
+          plus one more per chain chunk where a stroke is over
+          ``max_outwave_points``, per object in ``objects[i]["segments"]``
+          and summed at the top level. There is deliberately no ``chunks``
+          key -- that counted ``ceil(points / 87,380)``, a number nothing
+          ever arms.
+        - ``multi_segment_objects`` -- ``[{name, points, segments, strokes,
+          chain_boundaries, max_outwave_points}]`` for each object **that
+          chains**; empty for a normal design.
+        - ``max_outwave_points`` (**87,000**, not the older 87,380) -- the
+          DSP's per-out-wave cap, advisory so a script does not have to
+          hard-code it.
+
+        The two kinds of seam are different in kind: between two *strokes*
+        the tip lifts, the bias goes to 0, and it costs a lift + move +
+        set-down (``strokes`` > 1); at a *chain boundary* the tip **stays
+        down** and the bias **stays live**, and it costs Igor re-binding
+        banks for a dwell (``multi_segment_objects``, ``segments`` >
+        ``strokes``). An object in ``multi_segment_objects`` is also named in
+        a WARNING log line on the provider side -- not because the seam
+        lifts, but because the chain path has never fired on the instrument
+        -- see ``docs/FLEX_PROVIDER.md`` ("Write control") in the afm-litho
+        repo. What still refuses a load: a design that cannot be read,
+        cannot be compiled, has no drawable geometry, or spans more than
+        2000 um -- the provider leaves whatever was previously loaded in
+        place on any such refusal, so a half-replaced pattern never becomes
+        the next :meth:`start_write`'s target.
+
+        ``objects`` is the INLINE alternative to ``source``: a list of object
+        specs built right here rather than a document to import -- a
+        :func:`chiral_spec` wire, a :func:`rect_spec` region, or a hand-built
+        dict of the same shape. **Mutually exclusive with** ``source``
+        (exactly one, or a client-side ``ValueError``), and every entry goes
+        through :func:`validate_object_spec` before anything is sent: an
+        invalid spec is a ``ValueError`` in the caller's frame, and if one
+        reaches the provider anyway it is ``-32602`` with the **previously
+        loaded pattern left in place**. The reply has the same shape as a
+        ``source`` load plus a per-object ``kind``, and for a chiral object a
+        ``profile`` block (``lambda_um``, ``y_amp_um``, ``v0``, ``v_k``,
+        ``phase_deg``, ``hand``, ``curvature_clamped``,
+        ``y_amp_built_um`` and ``curvature_clamped_fraction``) -- the last
+        three being the provider's own authoritative say on geometry it had to
+        soften: WHETHER it clamped, the amplitude it actually built, and HOW
+        MUCH of the path was clamped. Read off the reply, never assumed. Any
+        object entry may also carry ``speed_achieved_um_s`` when the tick clock
+        floored the speed that was asked for -- the wire was still written, but
+        slower than requested, and a dose-per-length conclusion drawn from the
+        requested number would be wrong.
+
+        Refusals: ``-32602`` for an invalid spec, a region whose ``pitch_um``
+        is over half its shorter side (an erase that would not erase --
+        :func:`rect_spec` catches that one first), an extent over 2000 um, or
+        more than 2,000,000 points in one object / 4,000,000 in the pattern --
+        all before anything is rendered. A build or compile that outruns the
+        verb's own bound is ``-32021`` :class:`Refused` with ``.reason`` of
+        ``build_timeout`` / ``compile_timeout``. **Every one of them leaves
+        the previously loaded pattern in place**, so a refused load never
+        becomes a half-replaced target for the next write."""
+        if (source is None) == (objects is None):
+            raise ValueError(
+                f"{self.name}: load_pattern takes exactly one of source= "
+                f"(a design name, an instrument-PC path, or inline SVG/GDS/OASIS "
+                f"text) or objects= (a list of inline object specs)"
+            )
         token = self.require_token()
+        if objects is not None:
+            if isinstance(objects, (str, bytes, dict)) or not isinstance(objects, (list, tuple)):
+                raise ValueError(
+                    f"{self.name}: load_pattern objects= must be a list of object "
+                    f"specs, got {type(objects).__name__}"
+                )
+            if not objects:
+                raise ValueError(
+                    f"{self.name}: load_pattern objects= is empty -- a pattern with "
+                    f"no drawable geometry is a refusal on the provider too"
+                )
+            params: dict[str, Any] = {
+                "token": token,
+                "objects": [validate_object_spec(spec) for spec in objects],
+            }
+        else:
+            params = {"token": token, "source": source}
         try:
-            return self._command_call("loadPattern", {"token": token, "source": source})
+            return self._command_call("loadPattern", params)
         except ZMQInstrumentError as e:
             data = e.data if isinstance(e.data, dict) else {}
             if e.code == INVALID_PARAMS and data.get("objects_over_cap") is not None:
@@ -916,37 +1424,90 @@ class AFMLitho(Instrument):
         """Load a sample scan file (e.g. 'SA40656B0000.ibw') into the twin."""
         token = self.require_token()
         try:
-            return self._command_call("loadSample", {"token": token, "file": file_name, "fresh": bool(fresh)}, timeout=10.0)
+            return self._command_call(
+                "loadSample",
+                {"token": token, "file": file_name, "fresh": bool(fresh)},
+                timeout=10.0,
+            )
         except ZMQInstrumentError as e:
             if "method not found" in str(e).lower():
                 import json
                 import urllib.request
                 req = urllib.request.Request(
                     "http://localhost:7461/api/sample/load",
-                    data=json.dumps({"file": file_name, "fresh": bool(fresh)}).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
+                    data=json.dumps(
+                        {"file": file_name, "fresh": bool(fresh)}
+                    ).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
                 )
                 with urllib.request.urlopen(req, timeout=10.0) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             raise
 
+    def set_objects(self, updates: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        """Merge property changes into an ALREADY-loaded pattern, by id --
+        :meth:`load_pattern` compiles geometry; this changes what gets
+        applied to it (``voltage``, ``speed_um_s``, ``enabled``, and the
+        per-kind ``chiral`` / ``fill`` knobs) without recompiling, so a
+        sweep can retune an object between writes rather than reloading the
+        whole design each time. Requires a held token, like
+        :meth:`load_pattern`.
+
+        ``updates`` is ``{id: {field: value, ...}, ...}`` with **merge**
+        semantics: only the fields named for each object change, everything
+        else already on it is left alone -- a bare ``{"voltage": 8}`` never
+        touches that object's ``chiral`` or ``fill`` block. Validated here
+        only for shape (a non-empty ``dict`` of ``str`` id -> ``dict`` of
+        field -> value); every id and field name is the provider's call to
+        validate, not this driver's -- an unknown id or an unknown/invalid
+        field is ``-32602`` naming ``data["id"]`` / ``data["field"]`` and
+        refuses the **whole call**, leaving the pattern exactly as it was
+        rather than a partial merge. A write in flight answers :class:`Busy`
+        (-32020): a pattern currently being fired is not a safe time to
+        change what it will apply.
+
+        Returns the same object listing :meth:`load_pattern` /
+        :meth:`get_pattern` report, with the merged properties reflected."""
+        if not isinstance(updates, dict) or not updates:
+            raise ValueError(
+                f"{self.name}: set_objects updates= must be a non-empty dict of "
+                f"id -> {{field: value}}, got {updates!r}"
+            )
+        for obj_id, fields in updates.items():
+            if not isinstance(obj_id, str):
+                raise ValueError(
+                    f"{self.name}: set_objects updates= keys must be object ids "
+                    f"(str), got {obj_id!r}"
+                )
+            if not isinstance(fields, dict):
+                raise ValueError(
+                    f"{self.name}: set_objects updates[{obj_id!r}] must be a dict "
+                    f"of field -> value, got {type(fields).__name__}"
+                )
+        token = self.require_token()
+        return self._command_call("setObjects", {"token": token, "updates": updates})
+
     def start_write(
         self,
-        objects: str | list[int] = "all",
+        objects: str | list[int | str] = "all",
         *,
         setpoint: float | None = None,
         amp_gain: float | None = None,
         deadman_s: float | None = None,
     ) -> dict[str, Any]:
         """START+POLL lithography, sub-second by construction:
-        ``{run_id, est_s, objects, state, backend}``. Poll ``get_state()``
-        until it leaves ``writing``, then fetch :meth:`get_write_result`.
-        Prefer :meth:`write` for a blocking call that already does both.
+        ``{run_id, est_s, objects, segments, state, backend}``. Poll
+        ``get_state()`` until it leaves ``writing``, then fetch
+        :meth:`get_write_result`. Prefer :meth:`write` for a blocking call
+        that already does both.
 
         ``objects`` is ``"all"`` (the default -- clears the per-session
         written set and writes every enabled object) or a list of integer
-        **indices** into the loaded design, written whether or not they have
-        been written before. **No pattern loaded is a refusal, not a demo**
+        indices *or* string **ids** (:meth:`load_pattern`'s ``id`` field,
+        also what :meth:`set_objects` addresses) into the loaded design,
+        written whether or not they have been written before -- the two
+        address the same objects and may be mixed in one call. **No pattern
+        loaded is a refusal, not a demo**
         (:class:`Refused`, ``.reason == "no_pattern"``) -- unlike the
         cockpit, the wire door never substitutes a demo design.
 
@@ -959,7 +1520,17 @@ class AFMLitho(Instrument):
         ``[5, 300]``, same rule as :meth:`acquire_control`) -- it does not
         make a long write safe **on its own**; heartbeat anyway (see the
         write-control section of ``docs/FLEX_PROVIDER.md`` and
-        :meth:`heartbeat_context`)."""
+        :meth:`heartbeat_context`).
+
+        ``segments`` is how many out-waves this write actually arms -- one
+        ARMFIRE per stroke, plus one per chain chunk -- summed over the
+        selected objects, so a script knows before it polls how many arms
+        the write contains (see :meth:`load_pattern`). ``est_s`` folds in a
+        per-STROKE transit allowance for disconnected strokes and a separate,
+        smaller per-CHAIN-BOUNDARY dwell allowance for a chaining object, on
+        top of the per-object estimate measured at :meth:`load_pattern` time
+        -- a one-stroke object pays neither, however long it is -- treat
+        ``est_s`` as a sleep hint, not a schedule."""
         token = self.require_token()
         params: dict[str, Any] = {"token": token, "objects": objects}
         if setpoint is not None:
@@ -1175,6 +1746,21 @@ class AFMLitho(Instrument):
         check. Raises :class:`ControlRevoked` untouched -- never ``abort()``
         -- if control was preempted or the dead-man expired mid-poll; see the
         section comment above.
+
+        The returned status carries :data:`APPROACH_RESOLUTION_KEYS`
+        (``free_air_v``, ``setpoint_relative_v``, ``setpoint``) copied from the
+        ``startApproach`` reply whenever the provider sent them -- a RELATIVE
+        engage (``setpoint_relative_v=``) resolves its absolute setpoint
+        server-side, and that resolution is reported on the start reply alone.
+        There is no ``getApproachResult`` to fetch it from afterwards, and
+        polling to a terminal state must not be the thing that loses it. Keys
+        the provider did not send are simply absent.
+
+        Inherits :meth:`start_approach`'s hard stop on
+        ``setpoint_relative_v=``: if the provider's reply doesn't echo
+        :data:`APPROACH_RELATIVE_REQUIRED_KEYS`, :meth:`start_approach` itself
+        withdraws and raises :class:`ProviderLacksCapability` before this
+        method ever starts polling.
         """
         self.require_token()
         result = self.start_approach(**params)
@@ -1184,6 +1770,9 @@ class AFMLitho(Instrument):
             verb="approach",
         )
         status = self.get_status()
+        for key in APPROACH_RESOLUTION_KEYS:
+            if key in result:
+                status[key] = result[key]
         if status.get("state") in ("parked", "fault"):
             raise RuntimeError(
                 f"{self.name}: approach {run_id!r} ended in {status['state']!r} "
@@ -1226,7 +1815,7 @@ class AFMLitho(Instrument):
 
     def write(
         self,
-        objects: str | list[int] = "all",
+        objects: str | list[int | str] = "all",
         *,
         timeout: float = 1800.0,
         poll: float = 0.5,

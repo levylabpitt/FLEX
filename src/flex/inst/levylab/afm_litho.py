@@ -1238,9 +1238,12 @@ class AFMLitho(Instrument):
     #: Keys `start_scan` accepts beyond the required set, sent only if given.
     #: `engage` / `setpoint` matter most: on hardware a `setpoint` sent
     #: without `engage: true` is rejected server-side (-32602) rather than
-    #: silently run at the current engagement force.
+    #: silently run at the current engagement force. `pgain` / `igain` are
+    #: the same story -- meaningful only with `engage=True`, same convention
+    #: as `set_zgain` (panel gains) -- and equally rejected without it.
     _SCAN_OPTIONAL: tuple[str, ...] = (
         "angle_deg", "direction", "trace_retrace", "mode", "setpoint", "engage", "chained",
+        "pgain", "igain",
     )
 
     def start_scan(self, **params: Any) -> dict[str, Any]:
@@ -1251,7 +1254,9 @@ class AFMLitho(Instrument):
         client-side before anything is sent; everything else
         (:data:`_SCAN_OPTIONAL`) is passed through only when given -- an
         unrecognised keyword is a client-side ``ValueError`` rather than a
-        silent typo on the wire. Prefer :meth:`scan` for a blocking call that
+        silent typo on the wire. ``pgain``/``igain`` override this scan's Z
+        loop gains only with ``engage=True``, same panel-gain convention as
+        :meth:`set_zgain`. Prefer :meth:`scan` for a blocking call that
         already polls and fetches the result."""
         token = self.require_token()
         missing = [k for k in self._SCAN_REQUIRED if k not in params]
@@ -1810,7 +1815,9 @@ class AFMLitho(Instrument):
         ``completed and aborted`` is a normal combination on the wire (a
         stopped run still persists a whole, shorter frame), but a script
         driving ``scan()`` as a single blocking call wants an exception here,
-        not a flag it has to remember to check afterwards.
+        not a flag it has to remember to check afterwards. ``pgain``/``igain``
+        pass straight through to :meth:`start_scan` -- only meaningful with
+        ``engage=True``, same convention as :meth:`set_zgain`.
         """
         self.require_token()
         result = self.start_scan(**params)

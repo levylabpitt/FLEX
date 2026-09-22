@@ -57,6 +57,33 @@ class Lockin(Instrument, DAQ):
         param = {'Channel': channel, 'Phase': value}
         self._send_command(cmd, param)
 
+    def getInputGain(self) -> list:
+        """Input gains on the AI channels, one value per channel, in channel order.
+
+        The app's `getInputGain` takes no params and returns a bare list.
+        """
+        response = self._send_command('getInputGain')
+        return response['result']
+
+    def setInputGain(self, gains: list) -> None:
+        """Set the input gain on every AI channel.
+
+        `gains` is one value per channel, in channel order; the app's
+        `setInputGain` takes the bare list as params (no channel key). To change
+        one channel, read with getInputGain(), edit that index, write the list back.
+        """
+        self._send_command('setInputGain', list(gains))
+
+    def getOutputGain(self) -> list:
+        """Output gains on the AO channels, one value per channel, in channel order."""
+        response = self._send_command('getOutputGain')
+        return response['result']
+
+    def setOutputGain(self, gains: list) -> None:
+        """Set the output gain on every AO channel; one value per channel, in
+        channel order, passed as a bare list (see setInputGain)."""
+        self._send_command('setOutputGain', list(gains))
+
     def setAO_Function(self, channel: int, value: str) -> None:
         """
         Set the function of the specified analog output (AO) channel.

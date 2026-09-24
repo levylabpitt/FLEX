@@ -163,7 +163,7 @@ class Lockin(Instrument, DAQ):
         time.sleep(0.5)
         self.setState('start sweep')
         # wait for the sweep time since it'll anyway take that long (saves processor resources)
-        wait_time = sweep_config.get("Sweep Time (s)") + sweep_config.get("Initial Wait (s)")
+        wait_time = sweep_config.get("sweepTime") + sweep_config.get("initialWaitTime")
         time.sleep(wait_time) 
         start_time = time.time()
         while self.getState() == 'sweeping':

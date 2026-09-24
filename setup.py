@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='flex',
-    version='1.1.0',
+    version='1.1.1',
     description='Framework for Laboratory EXperiments',
     author='Pubudu Wijesinghe',
     author_email='pubudu.wijesinghe@levylab.org',
@@ -27,6 +27,7 @@ setup(
         'nidaqmx',
         'pythonnet',
         'pyserial',
-        'pywin32'
+        'pywin32',
+        'nptdms'
     ],
 )

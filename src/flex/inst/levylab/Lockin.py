@@ -73,6 +73,31 @@ class Lockin(Instrument, DAQ):
         
         cmd = 'setAO_Function'
         param = {'Channel': channel, 'Function': value}
+        self._send_command(cmd, param)      
+
+    def setREF_Frequency(self, channel: int, value: float) -> None:
+        cmd = 'setREF_Frequency'
+        param = {'Channel': channel, 'Frequency': value}
+        self._send_command(cmd, param)
+
+    def setREF_Phase(self, channel: int, value: float) -> None:
+        cmd = 'setREF_Phase'
+        param = {'Channel': channel, 'Phase': value}
+        self._send_command(cmd, param)
+
+    def setREF_TC(self, channel: int, value: float) -> None:
+        cmd = 'setREF_TC'
+        param = {'Channel': channel, 'TC': value}
+        self._send_command(cmd, param)
+
+    def setREF_RollOff(self, channel: int, value: float) -> None:
+        cmd = 'setREF_TC'
+        param = {'Channel': channel, 'Roll-Off': value}
+        self._send_command(cmd, param)
+
+    def setSampling(self, freq: int, samples: float) -> None:
+        cmd = 'setREF_TC'
+        param = {'Fs': freq, '#s': samples}
         self._send_command(cmd, param)
 
     def getResults(self) -> dict:
@@ -105,16 +130,17 @@ class Lockin(Instrument, DAQ):
     def setSweep(self, sweep_config) -> None:
         '''
         sweep_config format:
-        sweep_config = {"Sweep Time (s)":sweep_time,
-                 "Initial Wait (s)":2,
-                 "Return to Start":False,
-                 "Channels":[{"Enable?":True,
-                              "Channel":channel,
-                              "Start":start,
-                              "End":stop,
-                              "Pattern": "Ramp /",
-                              "Table":[]},
-                              ]}
+        sweep_config = {'sweepTime': duration,
+                'initialWaitTime': initial_wait,
+                'returnToStart': False,
+                'sweepChannels': [{'Enable?': True,
+                                    'Channel': sweep_channel,
+                                    'Start': start,
+                                    'End': end,
+                                    'Pattern': "pattern",
+                                    'Table': [1]}
+                                    # add more channels here if needed
+                                    ]}
         '''
         self._send_command('setSweep', sweep_config)
 
@@ -180,21 +206,33 @@ class Lockin(Instrument, DAQ):
 
         print(f"Sweeping backgate from {current_bg:.2f} to {bg_target:.2f} V...")
 
-        sweep_config = {
-            "Sweep Time (s)": duration,
-            "Initial Wait (s)": initial_wait,
-            "Return to Start": False,
-            "Channels": [
-                {
-                    "Enable?": True,
-                    "Channel": bg_channel,
-                    "Start": current_bg,
-                    "End": bg_target,
-                    "Pattern": "Ramp /",
-                    "Table": []
-                },
-            ]
-        }
+        # deprecated from lockin v3.6.83
+        # sweep_config = {
+        #     "Sweep Time (s)": duration,
+        #     "Initial Wait (s)": initial_wait,
+        #     "Return to Start": False,
+        #     "Channels": [
+        #         {
+        #             "Enable?": True,
+        #             "Channel": bg_channel,
+        #             "Start": current_bg,
+        #             "End": bg_target,
+        #             "Pattern": "Ramp /",
+        #             "Table": []
+        #         },
+        #     ]
+        # }
+        sweep_config = {'sweepTime': duration,
+                'initialWaitTime': initial_wait,
+                'returnToStart': False,
+                'sweepChannels': [{'Enable?': True,
+                                    'Channel': bg_channel,
+                                    'Start': current_bg,
+                                    'End': bg_target,
+                                    'Pattern': "Ramp /",
+                                    'Table': []}
+                                    # add more channels here if needed
+                                    ]}
 
         self.lockin_sweep(sweep_config)
 

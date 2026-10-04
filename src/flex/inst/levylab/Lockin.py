@@ -24,19 +24,10 @@ os.makedirs(logpath, exist_ok=True)
 class Lockin(Instrument, DAQ):
     def __init__(self, address=_DEFAULT_ADDRESS):
         super().__init__(address, log_file=os.path.join(logpath, "Lockin.log"))
-          
-    def getAO(self, channel):
-        cmd = 'getAO'
-        params = {'channel': channel}
-        response = self._send_command(cmd, params)
-        return response['result']
     
-    def getAI(self, channel):
-        cmd = 'getAI'
-        params = {'channel': channel}
-        response = self._send_command(cmd, params)
-        return response['result']
-    
+    def setAO(self):
+        pass
+
     def setAO_Amplitude(self, channel: int, value: float) -> None:
         cmd = 'setAO_Amplitude'
         param = {'Channel': channel, 'Amplitude': value}
@@ -75,6 +66,9 @@ class Lockin(Instrument, DAQ):
         param = {'Channel': channel, 'Function': value}
         self._send_command(cmd, param)      
 
+    def setREF(self):
+        pass
+
     def setREF_Frequency(self, channel: int, value: float) -> None:
         cmd = 'setREF_Frequency'
         param = {'Channel': channel, 'Frequency': value}
@@ -91,41 +85,85 @@ class Lockin(Instrument, DAQ):
         self._send_command(cmd, param)
 
     def setREF_RollOff(self, channel: int, value: float) -> None:
-        cmd = 'setREF_TC'
+        cmd = 'setREF_Roll-Off'
         param = {'Channel': channel, 'Roll-Off': value}
         self._send_command(cmd, param)
+
+    def setDAQ(self):
+        pass
 
     def setSampling(self, freq: int, samples: float) -> None:
         cmd = 'setREF_TC'
         param = {'Fs': freq, '#s': samples}
         self._send_command(cmd, param)
 
-    def getResults(self) -> dict:
-        cmd = 'getResults'
-        return self._send_command(cmd)['result']
-    
     def setState(self, value: str) -> None:
         cmd = 'setState'
         param = {"State": value}
         self._send_command(cmd, param)
-    
+
     def getState(self) -> str:
         cmd = 'getState'
         return self._send_command(cmd)['result']
+
+    def getAO(self, channel):
+        cmd = 'getAO'
+        params = {'channel': channel}
+        response = self._send_command(cmd, params)
+        return response['result']
     
-    def setSweepTime(self, value: float) -> None:
-        cmd = 'setSweepTime'
-        param = value
-        self._send_command(cmd, param)
-    
-    def setSamplingMode(self, value: str) -> None:
-        cmd = 'setSamplingFsMode'
-        param = value
-        self._send_command(cmd, param)
-    
-    def getSweepWaveforms(self) -> dict:
-        cmd = 'getSweepWaveforms'
+    def getAI(self, channel):
+        cmd = 'getAI'
+        params = {'channel': channel}
+        response = self._send_command(cmd, params)
+        return response['result']
+
+    def getResults(self) -> dict:
+        cmd = 'getResults'
         return self._send_command(cmd)['result']
+
+    def getSampling(self):
+        pass
+
+    def getAOconfig(self):
+        pass
+
+    def getREFconfig(self):
+        pass
+
+    def setInputGain(self, gains: list) -> None:
+        """Set the input gain on every AI channel.
+
+        `gains` is one value per channel, in channel order; the app's
+        `setInputGain` takes the bare list as params (no channel key). To change
+        one channel, read with getInputGain(), edit that index, write the list back.
+        """
+        self._send_command('setInputGain', list(gains))
+
+    def setOutputGain(self, gains: list) -> None:
+        """Set the output gain on every AO channel; one value per channel, in
+        channel order, passed as a bare list (see setInputGain)."""
+        self._send_command('setOutputGain', list(gains))
+
+    def getInputGain(self) -> list:
+        """Input gains on the AI channels, one value per channel, in channel order.
+
+        The app's `getInputGain` takes no params and returns a bare list.
+        """
+        response = self._send_command('getInputGain')
+        return response['result']
+
+    def getOutputGain(self) -> list:
+        """Output gains on the AO channels, one value per channel, in channel order."""
+        response = self._send_command('getOutputGain')
+        return response['result']
+
+    def setSamplingFsMode(self):
+        pass
+
+    def getSamplingFsMode(self):
+        response = self._send_command('getSamplingFsMode')
+        return response['result']
 
     def setSweep(self, sweep_config) -> None:
         '''
@@ -143,6 +181,20 @@ class Lockin(Instrument, DAQ):
                                     ]}
         '''
         self._send_command('setSweep', sweep_config)
+
+    def setSweep_Time(self, value: float) -> None:
+        cmd = 'setSweep_Time'
+        param = {'SweepTime': value}
+        self._send_command(cmd, param)
+    
+    def setSamplingMode(self, value: str) -> None:
+        cmd = 'setSamplingFsMode'
+        param = value
+        self._send_command(cmd, param)
+    
+    def getSweepWaveforms(self) -> dict:
+        cmd = 'getSweepWaveforms'
+        return self._send_command(cmd)['result']
 
 
 # -------------- Custom functions ---------------->
@@ -206,22 +258,6 @@ class Lockin(Instrument, DAQ):
 
         print(f"Sweeping backgate from {current_bg:.2f} to {bg_target:.2f} V...")
 
-        # deprecated from lockin v3.6.83
-        # sweep_config = {
-        #     "Sweep Time (s)": duration,
-        #     "Initial Wait (s)": initial_wait,
-        #     "Return to Start": False,
-        #     "Channels": [
-        #         {
-        #             "Enable?": True,
-        #             "Channel": bg_channel,
-        #             "Start": current_bg,
-        #             "End": bg_target,
-        #             "Pattern": "Ramp /",
-        #             "Table": []
-        #         },
-        #     ]
-        # }
         sweep_config = {'sweepTime': duration,
                 'initialWaitTime': initial_wait,
                 'returnToStart': False,

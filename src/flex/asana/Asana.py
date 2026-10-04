@@ -1,7 +1,7 @@
 import asana
 from asana.rest import ApiException
 
-access_token_n8nio = '2/1209143437361178/1209900811683018:c9f650887bd79379c1ab13cf3f4eeed1'
+access_token_n8nio = ''
 
 class Asana:
     def __init__(self, access_token=access_token_n8nio):

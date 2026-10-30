@@ -276,6 +276,96 @@ def monitor(
         store.close()
 
 
+@app.command()
+def runner(
+    port: int = typer.Option(None, help="Command port (events on port+1); default [runner] port"),
+):
+    """Run submitted experiment scripts, one at a time, in subprocesses."""
+    from flex.config import load_config
+    from flex.runner import RunServer
+
+    cfg = load_config()
+    servers = cfg.runner.servers or [f"tcp://localhost:{cfg.server.port}"]
+    server = RunServer(servers, root=Path(cfg.data.root) / "runs", port=port if port is not None else cfg.runner.port)
+    console.print(f"[green]Runner[/] on port {server.port} (events on {server.pub_port}), "
+                  f"controlling {', '.join(servers)}. Ctrl-C to stop (aborts a running script).")
+    server.run()
+
+
+def _runner_client(address: str):
+    from flex.config import load_config
+    from flex.runner import RunClient
+
+    return RunClient(address or f"tcp://localhost:{load_config().runner.port}", timeout=3.0)
+
+
+@app.command()
+def run(
+    script: Path = typer.Argument(..., exists=True, dir_okay=False, help="Python file defining run(station, **params)"),
+    param: list[str] = typer.Option([], "--param", "-p", help="Parameter as key=value (value is JSON if it parses)"),
+    entry: str = typer.Option("run", help="Function to call"),
+    follow: bool = typer.Option(True, "--follow/--detach", help="Print the log until the run ends"),
+    address: str = typer.Option("", help="Runner address (default: the local runner)"),
+):
+    """Submit a script to the runner."""
+    import json
+
+    params = {}
+    for item in param:
+        key, _, raw = item.partition("=")
+        try:
+            params[key] = json.loads(raw)
+        except ValueError:
+            params[key] = raw
+    client = _runner_client(address)
+    try:
+        rec = client.submit(script.read_text(encoding="utf-8"), entry=entry, params=params, name=script.stem)
+        console.print(f"[green]Started[/] {rec['id']}")
+        if not follow:
+            return
+        try:
+            rec = client.wait(rec["id"], on_log=console.print)
+        except KeyboardInterrupt:
+            console.print(f"Detached; the run continues. `flex abort {rec['id']}` to stop it.")
+            return
+        color = "green" if rec["status"] == "done" else "red"
+        console.print(f"[{color}]{rec['status']}[/]" + (f": {rec['error']}" if rec["error"] else ""))
+    finally:
+        client.close()
+
+
+@app.command()
+def runs(
+    last: int = typer.Option(10, help="Number of runs to show"),
+    address: str = typer.Option("", help="Runner address (default: the local runner)"),
+):
+    """List recent runs."""
+    client = _runner_client(address)
+    try:
+        table = Table("Run", "Name", "Status", "Started", "Took")
+        for r in client.runs(last):
+            took = f"{(r['finished'] - r['started']):.0f}s" if r["finished"] else "-"
+            table.add_row(r["id"], r["name"] or r["entry"], r["status"],
+                          datetime.fromtimestamp(r["started"]).strftime("%m-%d %H:%M:%S"), took)
+        console.print(table)
+    finally:
+        client.close()
+
+
+@app.command()
+def abort(
+    run_id: str = typer.Argument(None, help="Run id (default: the running one)"),
+    address: str = typer.Option("", help="Runner address (default: the local runner)"),
+):
+    """Stop the running script (its finally-blocks get to run)."""
+    client = _runner_client(address)
+    try:
+        client.abort(run_id)
+        console.print("Abort requested.")
+    finally:
+        client.close()
+
+
 def _short(value, width: int = 60) -> str:
     text = repr(value)
     return text if len(text) <= width else f"{text[:width]}… ({len(text)} chars)"

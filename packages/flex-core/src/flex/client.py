@@ -154,6 +154,44 @@ class RemoteStation:
         return f"<RemoteStation '{self.name}': {', '.join(self.instruments) or 'empty'}>"
 
 
+class StationGroup(RemoteStation):
+    """Several station servers presented as one station. Instrument names
+    must be unique across the servers."""
+
+    def __init__(self, addresses: list[str], *, timeout: float = 5.0):
+        self.stations: list[RemoteStation] = []
+        self.instruments: dict[str, RemoteInstrument] = {}
+        self._subscriptions = []
+        try:
+            for address in addresses:
+                station = RemoteStation(address, timeout=timeout)
+                self.stations.append(station)
+                for name, inst in station.instruments.items():
+                    if name in self.instruments:
+                        raise ValueError(f"Instrument '{name}' is served by more than one station server")
+                    self.instruments[name] = inst
+        except Exception:
+            self.close()
+            raise
+        self.name = "+".join(s.name for s in self.stations)
+
+    def describe(self) -> dict:
+        return {s.name: s.describe() for s in self.stations}
+
+    def snapshot(self, *, read: bool = False) -> dict:
+        return {k: v for s in self.stations for k, v in s.snapshot(read=read).items()}
+
+    def subscribe(self, fn: Callable[[dict], None], events: tuple[str, ...] = ("parameter.update",)):
+        return [s.subscribe(fn, events) for s in self.stations]
+
+    def close(self) -> None:
+        for station in self.stations:
+            station.close()
+
+    def __repr__(self) -> str:
+        return f"<StationGroup '{self.name}': {', '.join(self.instruments) or 'empty'}>"
+
+
 def connect(address: str, *, timeout: float = 5.0) -> RemoteStation:
     """Connect to a Station server, e.g. ``flex.connect("tcp://bench-pc:29500")``."""
     return RemoteStation(address, timeout=timeout)

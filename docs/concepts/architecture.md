@@ -132,6 +132,26 @@ instrument); commands for the same instrument are serialized, since
 hardware isn't reentrant. Background DB logging and the live dashboard view
 are the next subscribers to be built on the stream.
 
+## The runner
+
+`flex runner` runs experiment scripts for a station, so a run outlives
+whoever started it. A script defines `run(station, **params)`; `station`
+connects to every server in `[runner] servers` (several PCs, one namespace —
+instrument names must be unique). Each run executes in its own subprocess,
+one at a time, and its script source, params, log and result are kept under
+`<data root>/runs/`.
+
+```
+flex run sweep.py -p points=50     # submit and follow the log
+flex runs                          # recent runs
+flex abort                         # Ctrl-Break: the script's finally-blocks run
+```
+
+Abort is graceful first (the script can leave the hardware safe), then a kill
+after 10 s. Stopping the runner aborts a running script; a runner that died
+mid-run marks the leftover record `interrupted`. Events (`run.status`,
+`run.log`) stream on port+1 (default 29510/29511).
+
 ## Installation
 
 None of these packages are on PyPI. The installer (`install.ps1`) and the

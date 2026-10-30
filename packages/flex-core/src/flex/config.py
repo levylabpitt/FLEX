@@ -88,6 +88,12 @@ class ServerConfig(_Section):
     port: int = 29500  # events published on port + 1
 
 
+class RunnerConfig(_Section):
+    port: int = 29510  # events published on port + 1
+    #: station servers that submitted scripts control; default: this PC's own
+    servers: list[str] = Field(default_factory=list)
+
+
 class InstrumentConfig(_Section):
     driver: str = ""
     address: str = ""
@@ -122,6 +128,7 @@ class FlexConfig(BaseModel):
     logs: LogsConfig = Field(default_factory=LogsConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    runner: RunnerConfig = Field(default_factory=RunnerConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
 

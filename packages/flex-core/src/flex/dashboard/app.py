@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from flex import __version__ as flex_version
-from flex import components
+from flex import components, daemon
 from flex.client import connect
 from flex.config import USER_CONFIG, FlexConfig, find_config, load_config
 from flex.log import get_logger
@@ -104,7 +104,8 @@ class _StationHub:
             self.drop(address)
 
 
-def create_app() -> FastAPI:
+def create_app(managed: bool = False) -> FastAPI:
+    """``managed``: run by the tray app, which owns this server's lifetime."""
     cfg = load_config()
     hub = _StationHub(cfg.ui.stations or [f"tcp://localhost:{cfg.server.port}"])
 
@@ -124,6 +125,9 @@ def create_app() -> FastAPI:
             host = host.rpartition(":")[0]
         if host not in _LOCAL_HOSTS:
             return JSONResponse({"detail": "Forbidden host"}, status_code=403)
+        # a JSON content type forces a CORS preflight, so other sites cannot trigger writes
+        if request.method in ("POST", "PUT") and "application/json" not in request.headers.get("content-type", ""):
+            return JSONResponse({"detail": "JSON required"}, status_code=403)
         return await call_next(request)
 
     # -- stations ------------------------------------------------------------
@@ -252,6 +256,19 @@ def create_app() -> FastAPI:
             }
         finally:
             store.close()
+
+    # -- station daemon -------------------------------------------------------
+
+    @app.get("/api/app")
+    def app_status():
+        return {**daemon.status(), "managed": managed}
+
+    @app.post("/api/app/{action}")
+    def app_control(action: str):
+        if action not in ("start", "stop", "restart"):
+            raise HTTPException(404, f"No action '{action}'")
+        getattr(daemon, action)()
+        return {"ok": True}
 
     # -- server control -------------------------------------------------------
 

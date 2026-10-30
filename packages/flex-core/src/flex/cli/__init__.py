@@ -201,14 +201,23 @@ def new_package(
 def serve(
     config: str = typer.Option(None, help="Config file (default: the active flex.toml)"),
     port: int = typer.Option(None, help="Command port (events on port+1); default [server] port"),
+    quiet: bool = typer.Option(False, "--quiet", help="No console output (background use); see serve.log"),
 ):
     """Host this PC's instruments as a station server, and run experiment scripts for it."""
+    import logging
+    import sys
+
+    from flex import daemon
     from flex.config import load_config
+    from flex.log import add_file_log, get_logger
     from flex.runner import RunServer
     from flex.server import StationServer
     from flex.station import Station
 
     cfg = load_config(config)
+    add_file_log(daemon.log_file(cfg), logging.INFO, max_bytes=2_000_000)  # no console when run by the app
+    sys.excepthook = lambda *exc: get_logger("serve").critical("flex serve crashed", exc_info=exc)
+    say = (lambda *args: None) if quiet else console.print
     station = Station.load(cfg)
     server = StationServer(station, port=port if port is not None else cfg.server.port)
     runner = None
@@ -224,18 +233,20 @@ def serve(
         table.add_row(name, type(inst).__name__, inst.address or "-", logged)
     for name, error in station.failed.items():
         table.add_row(name, f"[red]failed: {error}[/]", "-", "-")
-    console.print(table)
-    console.print(f"[green]Serving station '{station.name}'[/] on port {server.port} "
+    say(table)
+    say(f"[green]Serving station '{station.name}'[/] on port {server.port} "
                   f"(events on {server.pub_port}). Ctrl-C to stop.")
     if runner:
         scope = "the whole LAN, token required" if runner.token else "this PC only"
-        console.print(f"[green]Running scripts[/] on port {runner.port} ({scope}); "
+        say(f"[green]Running scripts[/] on port {runner.port} ({scope}); "
                       "stopping aborts a running script.")
+    stop = daemon.stop_file(cfg)
+    stop.unlink(missing_ok=True)
     server.start()
     if runner:
         runner.start()
     try:
-        while True:
+        while not stop.exists():
             time.sleep(0.5)
     except KeyboardInterrupt:
         pass
@@ -374,6 +385,14 @@ def abort(
 def _short(value, width: int = 60) -> str:
     text = repr(value)
     return text if len(text) <= width else f"{text[:width]}… ({len(text)} chars)"
+
+
+@app.command("app")
+def tray(port: int = typer.Option(8756, help="Dashboard port")):
+    """Run the FLEX tray app: keeps the station up and opens the dashboard from the tray icon."""
+    from flex.tray import run
+
+    run(port)
 
 
 @app.command()

@@ -43,6 +43,11 @@
   nav button:hover { color: var(--text); }
   nav button.active { color: var(--text); border-color: var(--accent); }
   .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-dim); }
+  .pdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--text-faint); }
+  .pdot.ok { background: var(--success); }
+  .pdot.warn { background: #d29922; }
+  .pdot.busy { background: var(--accent); }
   main { padding: 28px; max-width: 1180px; margin: 0 auto; }
   section + section { margin-top: 32px; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
@@ -132,7 +137,8 @@
   <div class="brand"><span class="dot"></span>FLEX</div>
   <nav id="nav"></nav>
   <div class="spacer"></div>
-  <button class="action danger" onclick="exitServer()">Exit</button>
+  <div class="status" id="status"></div>
+  <button class="action danger" id="exit" onclick="exitServer()">Exit</button>
 </header>
 <main id="main"></main>
 <div class="toast" id="toast"></div>
@@ -229,8 +235,11 @@ async function stationTab() {
     if (!s.ok) {
       return `<section><div class="section-head"><h2>${esc(s.address)}</h2></div>
         <div class="card"><p class="empty">Not reachable: ${esc(s.error)}<br>
-        <span class="hint">Start it with \`flex serve\` on that PC.</span></p></div></section>`;
+        <span class="hint">Start it from the FLEX tray icon (or \`flex serve\`) on that PC.</span></p></div></section>`;
     }
+    const failed = Object.entries(s.failed || {}).map(([name, why]) =>
+      `<section><div class="section-head"><h2>${esc(name)} — failed to load</h2></div>
+        <div class="card"><p class="empty">${esc(why)}</p></div></section>`).join("");
     const cards = Object.entries(s.instruments).map(([name, inst]) => {
       const rows = Object.entries(inst.parameters).map(([pname, meta], pi) =>
         paramRow(si, s.address, name, pname, meta, pi)).join("");
@@ -240,7 +249,7 @@ async function stationTab() {
         <tr><th>Parameter</th><th>Value</th><th>Unit</th><th></th></tr>${rows}</table></div></section>`;
     }).join("");
     return `<section><div class="section-head"><h2>Station: ${esc(s.station)}</h2>
-      <span class="hint">${esc(s.address)}</span></div></section>` + cards;
+      <span class="hint">${esc(s.address)}</span></div></section>` + cards + failed;
   }).join("");
   $("#main").innerHTML = sections || '<p class="empty">No stations configured.</p>';
   for (const bind of pendingBindings.splice(0)) bind();
@@ -430,8 +439,32 @@ async function detail(id) {
   $("#detail").innerHTML = html;
 }
 
+async function appControl(action, button) {
+  if (action !== "start" && !confirm(`${action === "stop" ? "Stop" : "Restart"} the station? A running experiment will be aborted.`)) return;
+  button.disabled = true;
+  try { await api(`/api/app/${action}`, { method: "POST" }); } catch (e) { toast(e.message, true); }
+  refreshStatus();
+}
+
+async function refreshStatus() {
+  let s;
+  try { s = await api("/api/app"); } catch (e) { $("#status").innerHTML = ""; return; }
+  if (s.managed) $("#exit")?.remove();  // the tray app owns this server
+  const dot = (cls) => `<span class="pdot ${cls}"></span>`;
+  const station = `<span>${dot(s.station ? (Object.keys(s.failed).length ? "warn" : "ok") : "")}Station ${s.station ? "running" : "stopped"}</span>`;
+  const runner = !s.runner_enabled ? "" :
+    `<span>${dot(s.run ? "busy" : s.runner ? "ok" : "")}Runner ${s.run ? "running " + esc(s.run.name) : s.runner ? "idle" : "stopped"}</span>`;
+  const buttons = s.station
+    ? `<button class="action" onclick="appControl('restart', this)">Restart</button>
+       <button class="action danger" onclick="appControl('stop', this)">Stop</button>`
+    : `<button class="action" onclick="appControl('start', this)">Start station</button>`;
+  $("#status").innerHTML = station + runner + buttons;
+}
+
 nav();
 show(current);
+refreshStatus();
+setInterval(refreshStatus, 3000);
 </script>
 </body>
 </html>

@@ -109,7 +109,7 @@ def test_shutdown_signals_process(client, monkeypatch):
     monkeypatch.setattr("flex.dashboard.app.signal.raise_signal", lambda sig: calls.append(sig))
     monkeypatch.setattr("flex.dashboard.app.time.sleep", lambda seconds: None)
 
-    response = client.post("/api/shutdown")
+    response = client.post("/api/shutdown", json={})
     assert response.status_code == 200
 
     for _ in range(50):
@@ -140,12 +140,12 @@ def test_probe_driver(client, monkeypatch):
     from flex.instrument import SimulatedInstrument
 
     monkeypatch.setattr("flex.components.resolve_driver", lambda name: SimulatedInstrument)
-    result = client.post("/api/drivers/levylab.lockin/probe").json()
+    result = client.post("/api/drivers/levylab.lockin/probe", json={}).json()
     assert result["ok"] and result["idn"]["model"] == "SimulatedInstrument"
 
 
 def test_probe_unresolvable_driver_reports_error(client):
-    result = client.post("/api/drivers/acme.widget/probe").json()
+    result = client.post("/api/drivers/acme.widget/probe", json={}).json()
     assert not result["ok"]
     assert "acme.widget" in result["error"]
 
@@ -169,3 +169,15 @@ def test_experiments_endpoints(client, tmp_path):
     assert any(n["text"] == "hello dashboard" for n in detail["notes"])
 
     assert client.get("/api/experiments/nope").status_code == 404
+
+
+def test_writes_need_a_json_content_type(client):
+    # another site's form post cannot send one without a CORS preflight
+    assert client.post("/api/app/stop", content=b"", headers={"content-type": "text/plain"}).status_code == 403
+
+
+def test_app_status_when_the_station_is_down(client):
+    status = client.get("/api/app").json()
+    assert status["station"] is False and status["runner"] is False
+    assert status["managed"] is False
+    assert client.post("/api/app/explode", json={}).status_code == 404

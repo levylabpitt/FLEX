@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _ROOT = "flex"
@@ -52,14 +53,16 @@ def enable_console(level: int | None = None) -> logging.Handler:
     return _console_handler
 
 
-def add_file_log(path: str | Path, level: int = logging.DEBUG) -> logging.Handler:
+def add_file_log(path: str | Path, level: int = logging.DEBUG, max_bytes: int = 0) -> logging.Handler:
     """Attach a file handler to the ``flex`` logger (e.g. one file per experiment).
+    With ``max_bytes`` the file rotates, keeping two old copies.
 
     Returns the handler; pass it to :func:`remove_log_handler` when done.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.FileHandler(path, encoding="utf-8")
+    handler = (RotatingFileHandler(path, maxBytes=max_bytes, backupCount=2, encoding="utf-8") if max_bytes
+               else logging.FileHandler(path, encoding="utf-8"))
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter(_FILE_FORMAT))
     logger = get_logger()

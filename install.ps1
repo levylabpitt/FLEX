@@ -252,7 +252,7 @@
     Write-Host ""
     Log "Installing FLEX packages (editable)..." 'Yellow'
     Write-Host "  ----------------------------- pip ----------------------------" -ForegroundColor DarkGray
-    $defaultPackages = 'flex-core[visa]', 'flex-exp', 'flex-drivers', 'flex'
+    $defaultPackages = 'flex-core[visa,app]', 'flex-exp', 'flex-drivers', 'flex'
     $pipArgs = @('-m', 'pip', 'install', '--upgrade')
     foreach ($pkg in $defaultPackages) { $pipArgs += @('-e', (Join-Path $srcRoot "packages\$pkg")) }
     $code = Invoke-ExeLive $py $pipArgs

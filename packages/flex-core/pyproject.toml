@@ -25,10 +25,12 @@ dependencies = [
 [project.optional-dependencies]
 visa = ["pyvisa>=1.14"]
 zmq = ["pyzmq>=25"]
+app = ["pystray>=0.19", "pillow>=10"]
 serial = ["pyserial>=3.5"]
 postgres = ["psycopg[binary]>=3.1"]
 tdms = ["npTDMS>=1.9"]
-all = ["pyvisa>=1.14", "pyzmq>=25", "pyserial>=3.5", "psycopg[binary]>=3.1", "npTDMS>=1.9"]
+all = ["pyvisa>=1.14", "pyzmq>=25", "pyserial>=3.5", "psycopg[binary]>=3.1", "npTDMS>=1.9",
+       "pystray>=0.19", "pillow>=10"]
 
 [project.scripts]
 flex = "flex.cli:app"

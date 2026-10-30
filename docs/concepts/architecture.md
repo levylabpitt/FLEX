@@ -159,6 +159,19 @@ this PC only. Set `[runner] token` to open it to the LAN (e.g. for a marimo
 hub on another machine); every call except the connect check must then carry
 the token (`RunClient(address, token=...)`).
 
+## The tray app
+
+`flex app` (install with `flex-core[app]`) puts a FLEX icon in the system
+tray; clicking it opens the dashboard. It starts `flex serve` in the
+background without a console window if it isn't already running, and shows
+the station and runner status (icon colour, and the dashboard header with
+Start / Restart / Stop). Quitting the tray app never touches the station or a
+run in progress; only stopping the station does, and that aborts the run
+first. "Start with Windows" in the tray menu adds it to the Startup folder.
+
+The daemon logs to `<data root>/serve.log`, including any crash. Start the
+app without a console by running it with `pythonw -m flex app`.
+
 ## Installation
 
 None of these packages are on PyPI. The installer (`install.ps1`) and the

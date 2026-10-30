@@ -1,7 +1,7 @@
 """The FLEX tray app: keeps this PC's station daemon up and opens the dashboard.
 
-Closing the app never touches the daemon (or a run in progress); only
-"Stop station" does.
+The app is the master: quitting it stops the station too (a run in progress is
+aborted first).
 """
 
 from __future__ import annotations
@@ -86,6 +86,7 @@ def run(port: int = 8756) -> None:
         return lambda: threading.Thread(target=fn, args=(cfg,), daemon=True).start()
 
     def quit_app(icon):
+        daemon.stop(cfg)
         server.should_exit = True
         icon.stop()
 
@@ -97,7 +98,7 @@ def run(port: int = 8756) -> None:
         pystray.MenuItem("Stop station", in_background(daemon.stop)),
         pystray.MenuItem("Start with Windows", _toggle_startup, visible=os.name == "nt",
                          checked=lambda item: _startup_script().exists()),
-        pystray.MenuItem("Quit (the station keeps running)", quit_app),
+        pystray.MenuItem("Quit FLEX", quit_app),
     )
     icon = pystray.Icon("flex", _image(_COLORS["down"]), "FLEX", menu)
 

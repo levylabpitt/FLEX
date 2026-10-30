@@ -171,9 +171,8 @@ station within 30 s. To take over, abort the run.
 tray; clicking it opens the dashboard. It starts `flex serve` in the
 background without a console window if it isn't already running, and shows
 the station and runner status (icon colour, and the dashboard header with
-Start / Restart / Stop). Quitting the tray app never touches the station or a
-run in progress; only stopping the station does, and that aborts the run
-first. "Start with Windows" in the tray menu adds it to the Startup folder.
+Start / Restart / Stop). The tray app is the master: "Quit FLEX" stops the
+station as well, aborting a run in progress first. "Start with Windows" in the tray menu adds it to the Startup folder.
 
 The daemon logs to `<data root>/serve.log`, including any crash. Start the
 app without a console by running it with `pythonw -m flex app`.

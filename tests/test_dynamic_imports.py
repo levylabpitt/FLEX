@@ -30,3 +30,27 @@ for name in instrument_names:
         print(f"Successfully instantiated {instrument}")
     else:
         print(f"Failed to instantiate for {name}")
+
+#%%
+from flex.inst.levylab.Lockin import Lockin
+from flex.inst.levylab.TransportServer import Transport
+from tqdm import tqdm
+
+l = Lockin()
+t = Transport()
+
+sweep_config = {'sweepTime': 10,
+        'initialWaitTime': 1,
+        'returnToStart': False,
+        'sweepChannels': [{'Enable?': True,
+                            'Channel': 3,
+                            'Start': 0,
+                            'End': 0.1,
+                            'Pattern': "Table",
+                            'Table': [0,0.1,0]},
+                            # add more channels here if needed
+                            ]}
+
+for _ in range(3):
+    t.LockinSweep('a','a',sweep_config)
+# %%

@@ -14,6 +14,7 @@ import os
 from datetime import datetime, timedelta
 from flex.db import db_dataviewer as dv
 from typing import Literal, Union
+from tqdm import tqdm
 
 _DEFAULT_ADDRESS = 'tcp://localhost:15260'
 
@@ -133,24 +134,36 @@ class Transport(Instrument):
 
 # -------------- Custom functions ---------------->
 
-    def LockinSweep(self, expt_folder:str, expt_comments:str, sweep_config: dict, run_continuous = False) -> dict:
-        """
-        Perform a lock-in sweep with the specified configuration.
-        """
+    def LockinSweep(self, expt_folder: str, expt_comments: str, sweep_config: dict, run_async: bool = False,):
+        """Perform a lock-in sweep."""
+
         self.setSweepConfig(sweep_config)
         self.setExptFolder(expt_folder)
         self.setExptComments(expt_comments)
 
         self.startTransport('LockinSweep')
-        time.sleep(2)  # Allow some time for the transport to start
-        if run_continuous:
-            print('Continuous Sweep Running Asynchronously...')
-            return None
-        else:
-            self.stopTransport()
+
+        if run_async:
+            print("Sweep running asynchronously...")
+            return
+
+        wait_time = (sweep_config['sweepTime'] + sweep_config['initialWaitTime'])
+
+        with tqdm(total=wait_time, desc="Running LockinSweep", bar_format="{desc}: {percentage:3.0f}%|{bar}|", leave=False) as pbar:
+            start = time.monotonic()
+            while pbar.n < wait_time:
+                time.sleep(min(0.2, wait_time - pbar.n))
+                pbar.n = min(time.monotonic() - start, wait_time)
+                pbar.refresh()
+
+            pbar.set_description("Waiting for the sweep to finish...")
+            pbar.refresh()
+
             while self.getStatus() != 'idle':
-                time.sleep(1)
-            print('Sweep Ended.')
+                time.sleep(0.5)
+
+            pbar.set_description("Sweep ended.")
+            pbar.refresh()
 
     def getExptDetails(self, show=False):
         folder = self.getExptFolder()

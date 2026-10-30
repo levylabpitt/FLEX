@@ -1,0 +1,15 @@
+# This PC's station for the lock-in + PPMS experiment: both LabVIEW apps
+# running (simulated mode is fine). Used by "Start FLEX Station.bat"; data
+# lands in the usual FLEX data folder.
+
+[lab]
+name = "levylab"
+station = "ppms"
+
+[instruments.lockin]
+driver = "levylab.lockin"
+address = "tcp://localhost:29170"
+
+[instruments.ppms]
+driver = "levylab.ppms"
+address = "tcp://localhost:29270"

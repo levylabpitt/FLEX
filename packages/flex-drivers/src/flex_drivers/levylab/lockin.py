@@ -98,12 +98,21 @@ class Lockin(ZMQInstrument):
 
     # -- custom functions -----------------------------------------------------
 
+    @staticmethod
+    def _result_key(channel: int, param: str, ref: int) -> str:
+        return f"AI{channel}.{param}" if param == "Mean" else f"AI{channel}.Ref{ref}.{param}"
+
     def get_lockin_result(self, channel: int, param: str, ref: int = 1) -> float | None:
         """Extract one value (e.g. ``X``, ``Theta``, ``Mean``) from ``getResults``."""
-        key = f"AI{channel}.{param}" if param == "Mean" else f"AI{channel}.Ref{ref}.{param}"
+        return self.get_lockin_results(channel, (param,), ref)[param]
+
+    def get_lockin_results(
+        self, channel: int, params: tuple[str, ...] = ("X", "Y", "R", "Theta"), ref: int = 1
+    ) -> dict[str, float | None]:
+        """Several values from a single ``getResults`` call, so they share one acquisition."""
         results = self.call("getResults")["Results (Dictionary)"]
-        results_dict = {item["key"]: item["value"] for item in results}
-        return results_dict.get(key)
+        by_key = {item["key"]: item["value"] for item in results}
+        return {p: by_key.get(self._result_key(channel, p, ref)) for p in params}
 
     def lockin_sweep(self, sweep_config: dict, timeout: float = 10) -> None:
         """Run a sweep and block until it finishes."""

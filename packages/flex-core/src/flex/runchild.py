@@ -36,7 +36,7 @@ def main(run_dir: str) -> int:
             raise NameError(f"The script defines no function '{spec['entry']}'")
         from flex.client import StationGroup
 
-        station = StationGroup(spec["servers"])
+        station = StationGroup(spec["servers"], timeout=spec["call_timeout"])
         outcome["result"] = fn(station, **spec["params"])
     except KeyboardInterrupt:
         outcome["error"] = "aborted"

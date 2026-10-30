@@ -92,6 +92,8 @@ class RunnerConfig(_Section):
     port: int = 29510  # events published on port + 1
     #: station servers that submitted scripts control; default: this PC's own
     servers: list[str] = Field(default_factory=list)
+    #: seconds a script waits for one station-server call (e.g. a blocking sweep)
+    call_timeout: float = 120.0
 
 
 class InstrumentConfig(_Section):

@@ -127,6 +127,9 @@ def test_lockin_state_and_results(server):
         assert li.get_lockin_result(1, "X", ref=1) == 0.5
         assert li.get_lockin_result(1, "Mean") == 0.1
         assert li.get_lockin_result(2, "Theta") is None
+        before = len(server.requests)
+        assert li.get_lockin_results(1, ("X", "Mean", "Y")) == {"X": 0.5, "Mean": 0.1, "Y": None}
+        assert len(server.requests) == before + 1  # one getResults for all of them
 
 
 def test_lockin_sweep_config(server):

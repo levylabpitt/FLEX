@@ -286,7 +286,8 @@ def runner(
 
     cfg = load_config()
     servers = cfg.runner.servers or [f"tcp://localhost:{cfg.server.port}"]
-    server = RunServer(servers, root=Path(cfg.data.root) / "runs", port=port if port is not None else cfg.runner.port)
+    server = RunServer(servers, root=Path(cfg.data.root) / "runs", call_timeout=cfg.runner.call_timeout,
+                       port=port if port is not None else cfg.runner.port)
     console.print(f"[green]Runner[/] on port {server.port} (events on {server.pub_port}), "
                   f"controlling {', '.join(servers)}. Ctrl-C to stop (aborts a running script).")
     server.run()

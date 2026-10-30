@@ -51,11 +51,12 @@ def _new_id() -> str:
 
 class RunServer:
     def __init__(self, servers: list[str], *, root: Path | str, port: int | None = None,
-                 bind: str = "tcp://*", abort_grace: float = 10.0):
+                 bind: str = "tcp://*", abort_grace: float = 10.0, call_timeout: float = 120.0):
         self.servers = servers
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.abort_grace = abort_grace
+        self.call_timeout = call_timeout
         self.log = get_logger("runner")
         self._db = sqlite3.connect(self.root / "runs.db", check_same_thread=False)
         self._db.execute(_SCHEMA)
@@ -158,7 +159,8 @@ class RunServer:
         run_dir.mkdir()
         (run_dir / "script.py").write_text(source, encoding="utf-8")
         (run_dir / "run.json").write_text(
-            json.dumps({"entry": entry, "params": p.get("params") or {}, "servers": self.servers}), encoding="utf-8")
+            json.dumps({"entry": entry, "params": p.get("params") or {}, "servers": self.servers,
+                        "call_timeout": self.call_timeout}), encoding="utf-8")
 
         with open(run_dir / "run.log", "wb") as logfile:
             proc = subprocess.Popen(
@@ -291,7 +293,8 @@ class RunClient:
         return self._link.call("abort", {"id": run_id})
 
     def wait(self, run_id: str, *, poll: float = 0.5, on_log=None) -> dict:
-        """Block until the run finishes, passing new log lines to ``on_log``."""
+        """Block until the run finishes, passing new log lines to ``on_log``.
+        Returns the final record with the complete log."""
         seen = 0
         while True:
             rec = self.run(run_id, seen)
@@ -300,7 +303,7 @@ class RunClient:
                 if on_log:
                     on_log(line)
             if rec["status"] in TERMINAL:
-                return rec
+                return self.run(run_id)
             time.sleep(poll)
 
     def subscribe(self, fn, events: tuple[str, ...] = ("run.status", "run.log")):

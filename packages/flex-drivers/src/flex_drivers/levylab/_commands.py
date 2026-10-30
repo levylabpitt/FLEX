@@ -18,9 +18,15 @@ class IFTemperatureCommands:
 
     call: Any  # provided by ZMQInstrument
 
-    def get_temperature(self, channel: int = 0) -> Any:
-        """Read the temperature of ``channel`` (IF ``getTemperature``)."""
+    def get_temperature_status(self, channel: int = 0) -> Any:
+        """The full ``getTemperature`` reply, e.g. ``{"temperature": 5, "status": "Stable",
+        "finished": True}`` on the PPMS."""
         return self.call("getTemperature", [channel])
+
+    def get_temperature(self, channel: int = 0) -> Any:
+        """Read the temperature of ``channel`` in kelvin."""
+        reply = self.get_temperature_status(channel)
+        return reply["temperature"] if isinstance(reply, dict) and "temperature" in reply else reply
 
     def set_temperature(
         self, setpoint: float, rate: float | None = None, *, channel: int = 0

@@ -27,7 +27,8 @@ class FakeBench:
 
     def get_temperature(self, _params):
         self.temp += (self.target - self.temp) * 0.7
-        return self.temp
+        status = "Stable" if abs(self.temp - self.target) < 0.05 else "Tracking"
+        return {"temperature": self.temp, "status": status, "finished": status == "Stable"}
 
     def set_temperature(self, params):
         self.target = params["temperature"]

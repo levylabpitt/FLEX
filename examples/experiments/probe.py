@@ -31,6 +31,7 @@ def run(station, lockin_channel=1):
 
     if "ppms" in station.instruments:
         pp = station.ppms
+        show("ppms.get_temperature_status()", pp.get_temperature_status)
         show("ppms.get_temperature()", pp.get_temperature)
         show("ppms.get_temperature_target()", pp.get_temperature_target)
         show("ppms.get_magnet()", pp.get_magnet)

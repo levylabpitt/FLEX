@@ -18,17 +18,15 @@ def run(station, ai_channel=1, ao_channel=1, amplitude=0.01, frequency=13.0,
     lockin, ppms = station.lockin, station.ppms
     setpoints = [start + (stop - start) * i / max(points - 1, 1) for i in range(points)]
 
-    def temperature():
-        value = ppms.get_temperature()
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"Unexpected PPMS temperature reply {value!r}; run probe.py to see the format")
-        return float(value)
+    def settled(setpoint):
+        reading = ppms.get_temperature_status()
+        return reading["status"] == "Stable" and abs(reading["temperature"] - setpoint) <= tolerance
 
     def go_to(setpoint):
         ppms.set_temperature(setpoint, rate)
         began, stable_since = time.monotonic(), None
         while True:
-            if abs(temperature() - setpoint) <= tolerance:
+            if settled(setpoint):
                 if stable_since is None:
                     stable_since = time.monotonic()
                 if time.monotonic() - stable_since >= settle:
@@ -55,7 +53,7 @@ def run(station, ai_channel=1, ao_channel=1, amplitude=0.01, frequency=13.0,
                 for setpoint in setpoints:
                     print(f"going to {setpoint:.2f} K", flush=True)
                     go_to(setpoint)
-                    t = temperature()
+                    t = ppms.get_temperature()
                     xy = lockin.get_lockin_results(ai_channel, ("X", "Y"))
                     m.add_row(T_set=setpoint, T=t, **xy)
                     result["T"].append(t)

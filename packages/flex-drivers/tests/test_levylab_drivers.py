@@ -357,3 +357,11 @@ def test_leiden_tc(server, cls):
 def test_aerotech_is_unavailable():
     with pytest.raises(NotImplementedError, match="Driver not available"):
         Aerotech()
+
+
+def test_ppms_temperature_reply_carries_status(server):
+    server.handlers["getTemperature"] = {"temperature": 5, "status": "Stable", "finished": True}
+    with PPMS(address=server.address) as ppms:
+        assert ppms.get_temperature() == 5
+        assert ppms.get_temperature_status()["status"] == "Stable"
+        assert ppms.parameters["temperature"].get() == 5

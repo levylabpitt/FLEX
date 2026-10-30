@@ -86,6 +86,12 @@
   .badge.ok { color: var(--success); background: var(--success-soft); }
   .badge.bad { color: var(--danger); background: var(--danger-soft); }
   .badge.dim { color: var(--text-faint); background: var(--panel-2); }
+  .badge.busy { color: var(--accent); background: var(--accent-soft); }
+  #run-detail { margin-top: 32px; }
+  pre.log {
+    margin: 0; padding: 12px 14px; max-height: 360px; overflow: auto;
+    font: 12px/1.45 ui-monospace, Consolas, monospace; color: var(--text-dim);
+  }
   .empty { color: var(--text-faint); padding: 32px 14px; text-align: center; font-size: 13px; }
   .hint { color: var(--text-faint); font-size: 12px; margin: 0 0 14px; }
   button.action {
@@ -144,7 +150,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const TABS = ["Station", "Config", "Drivers", "Experiments"];
+const TABS = ["Station", "Runs", "Config", "Drivers", "Experiments"];
 let current = "Station";
 
 const $ = (s) => document.querySelector(s);
@@ -177,10 +183,11 @@ function nav() {
 
 async function show(tab) {
   current = tab;
+  clearInterval(runsTimer);
   nav();
   $("#main").innerHTML = '<p class="empty">loading…</p>';
   try {
-    await ({ Station: stationTab, Config: configTab, Drivers: driversTab, Experiments: experiments }[tab])();
+    await ({ Station: stationTab, Runs: runsTab, Config: configTab, Drivers: driversTab, Experiments: experiments }[tab])();
   } catch (e) {
     if (tab !== current) return;  // a later tab switch already owns #main
     $("#main").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
@@ -392,6 +399,67 @@ async function probeDriver(button, name) {
       : `<span class="badge bad">${esc(result.error)}</span>`;
   } catch (e) { cell.innerHTML = `<span class="badge bad">${esc(e.message)}</span>`; }
   button.disabled = false;
+}
+
+// -- Runs ---------------------------------------------------------------------
+
+let runsTimer = null, selectedRun = null, runLog = [], runShown = "";
+const RUN_BADGE = { running: "busy", done: "ok", failed: "bad", aborted: "dim", interrupted: "dim" };
+
+async function runsTab() {
+  selectedRun = null;
+  runShown = "";
+  $("#main").innerHTML = `<section><div class="section-head"><h2>Runs</h2></div><div id="runs-list"></div></section>
+    <div id="run-detail"></div>`;
+  await updateRuns();
+  runsTimer = setInterval(() => updateRuns().catch(() => {}), 1000);
+}
+
+async function updateRuns() {
+  const runs = await api("/api/runs");
+  if (current !== "Runs") return;
+  if (!selectedRun && runs.length) selectedRun = (runs.find(r => r.status === "running") || runs[0]).id;
+  $("#runs-list").innerHTML = table(["Run", "Name", "Status", "Started", "Took"], runs.map(r => `
+    <tr><td><button class="link" onclick="selectRun('${esc(r.id)}')">${esc(r.id)}</button></td>
+    <td>${esc(r.name || r.entry)}</td><td><span class="badge ${RUN_BADGE[r.status]}">${r.status}</span></td>
+    <td>${new Date(r.started * 1000).toLocaleTimeString()}</td>
+    <td>${Math.round((r.finished || Date.now() / 1000) - r.started)} s</td></tr>`));
+  if (selectedRun) await updateRunDetail();
+}
+
+function selectRun(id) {
+  selectedRun = id;
+  runLog = [];
+  runShown = "";
+  updateRunDetail().catch((e) => toast(e.message, true));
+}
+
+async function updateRunDetail() {
+  const id = selectedRun;
+  const r = await api(`/api/runs/${encodeURIComponent(id)}?since=${runLog.length}`);
+  if (id !== selectedRun || current !== "Runs") return;
+  runLog.push(...r.log);
+  const key = `${id}|${r.status}|${runLog.length}`;
+  if (key === runShown) return;
+  runShown = key;
+  const series = Object.entries(r.result && typeof r.result === "object" ? r.result : {})
+    .filter(([, v]) => Array.isArray(v) && v.length > 1 && v.every(Number.isFinite));
+  $("#run-detail").innerHTML = `
+    <section><div class="section-head"><h2>${esc(r.name || r.entry)} — ${esc(r.id)}</h2>
+      ${r.status === "running" ? '<button class="action danger" onclick="abortRun(this)">Abort</button>' : ""}</div>
+    <div class="card"><pre class="log" id="run-log">${esc(runLog.join("\n"))}</pre>
+      ${r.error ? `<p class="empty">${esc(r.error)}</p>` : ""}</div></section>
+    ${series.map(([name, v], i) => `<section><div class="section-head"><h2>${esc(name)}</h2>
+      <span class="hint">${v.length} pts</span></div><div class="card" style="padding:10px">
+      <canvas id="rs-${i}" width="520" height="120" style="display:block"></canvas></div></section>`).join("")}`;
+  series.forEach(([, v], i) => drawTrace($(`#rs-${i}`), v));
+  const log = $("#run-log");
+  log.scrollTop = log.scrollHeight;
+}
+
+async function abortRun(button) {
+  button.disabled = true;
+  try { await api("/api/runs/abort", { method: "POST" }); } catch (e) { toast(e.message, true); }
 }
 
 // -- Experiments -------------------------------------------------------------

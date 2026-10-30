@@ -29,6 +29,8 @@ from flex import components, daemon
 from flex.client import connect
 from flex.config import USER_CONFIG, FlexConfig, find_config, load_config
 from flex.log import get_logger
+from flex.protocols.zmq import ZMQInstrumentError
+from flex.runner import RunClient
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
@@ -269,6 +271,29 @@ def create_app(managed: bool = False) -> FastAPI:
             raise HTTPException(404, f"No action '{action}'")
         getattr(daemon, action)()
         return {"ok": True}
+
+    # -- runs (this PC's runner) ------------------------------------------------
+
+    def _runner(call):
+        try:
+            with RunClient(f"tcp://127.0.0.1:{cfg.runner.port}", timeout=2.0, token=cfg.runner.token) as client:
+                return call(client)
+        except ZMQInstrumentError as e:
+            raise HTTPException(409, str(e)) from None
+        except Exception as e:
+            raise HTTPException(503, f"Runner not reachable: {e}") from None
+
+    @app.get("/api/runs")
+    def runs():
+        return _runner(lambda c: c.runs(30))
+
+    @app.get("/api/runs/{run_id}")
+    def run(run_id: str, since: int = 0):
+        return _runner(lambda c: c.run(run_id, since))
+
+    @app.post("/api/runs/abort")
+    def abort_run():
+        return _runner(lambda c: c.abort())
 
     # -- server control -------------------------------------------------------
 

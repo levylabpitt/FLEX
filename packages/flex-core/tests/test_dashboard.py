@@ -181,3 +181,32 @@ def test_app_status_when_the_station_is_down(client):
     assert status["station"] is False and status["runner"] is False
     assert status["managed"] is False
     assert client.post("/api/app/explode", json={}).status_code == 404
+
+
+def test_runs_endpoints(tmp_path, monkeypatch):
+    import time
+
+    from flex.runner import RunClient, RunServer
+
+    runner = RunServer([], root=tmp_path / "runs")
+    runner.start()
+    config = tmp_path / "flex.toml"
+    config.write_text(f'[data]\nroot = "{tmp_path.as_posix()}"\n[runner]\nport = {runner.port}\n', encoding="utf-8")
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
+    try:
+        assert client.get("/api/runs").json() == []
+        assert client.post("/api/runs/abort", json={}).status_code == 409  # nothing is running
+
+        with RunClient(f"tcp://127.0.0.1:{runner.port}", timeout=3.0) as submitter:
+            run_id = submitter.submit("def run(station):\n    print('hi')\n    return {'v': [1, 2, 3]}\n")["id"]
+            submitter.wait(run_id)
+        listed = client.get("/api/runs").json()
+        assert [r["id"] for r in listed] == [run_id] and listed[0]["status"] == "done"
+        detail = client.get(f"/api/runs/{run_id}").json()
+        assert detail["log"] == ["hi"] and detail["result"] == {"v": [1, 2, 3]}
+        assert client.get(f"/api/runs/{run_id}?since=1").json()["log"] == []  # only lines after `since`
+    finally:
+        runner.stop()
+    time.sleep(0.2)
+    assert client.get("/api/runs").status_code == 503

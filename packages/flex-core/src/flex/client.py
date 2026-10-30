@@ -29,23 +29,27 @@ from flex.protocols.zmq import ZMQInstrument
 class RemoteInstrument(Instrument):
     """Proxy for one instrument hosted by a Station server."""
 
-    def __init__(self, link: ZMQInstrument, name: str, info: dict):
+    def __init__(self, link: ZMQInstrument, name: str, info: dict, lease: str = ""):
         super().__init__(name)
         self._link = link
+        self._lease = lease
         self._remote_class = info["class"]
         self._address = f"{link.address}/{name}"
         for pname, meta in info["parameters"].items():
-            getter = (lambda pn=pname: link.call("get", {"instrument": name, "parameter": pn})) \
+            getter = (lambda pn=pname: self._rpc("get", {"instrument": name, "parameter": pn})) \
                 if meta["gettable"] else None
-            setter = (lambda v, pn=pname: link.call("set", {"instrument": name, "parameter": pn, "value": v})) \
+            setter = (lambda v, pn=pname: self._rpc("set", {"instrument": name, "parameter": pn, "value": v})) \
                 if meta["settable"] else None
             param = self.add_parameter(pname, getter=getter, setter=setter, unit=meta.get("unit", ""))
             if pname not in self.__dict__ and not hasattr(type(self), pname):
                 setattr(self, pname, param)
 
+    def _rpc(self, method: str, params: dict) -> Any:
+        return self._link.call(method, {**params, "lease": self._lease})
+
     def call(self, method: str, *args: Any, **kwargs: Any) -> Any:
         """Call any public method of the remote driver."""
-        return self._link.call(
+        return self._rpc(
             "call", {"instrument": self.name, "method": method, "args": list(args), "kwargs": kwargs}
         )
 
@@ -99,7 +103,7 @@ class Subscription:
 class RemoteStation:
     """Proxies for every instrument of a running Station server."""
 
-    def __init__(self, address: str, *, timeout: float = 5.0):
+    def __init__(self, address: str, *, timeout: float = 5.0, lease: str = ""):
         self._link = ZMQInstrument("link", address, timeout=timeout)
         info = self._link.call("describe")
         self.name = info["station"]
@@ -107,7 +111,7 @@ class RemoteStation:
         self._pub_address = f"tcp://{host}:{info['pub_port']}"
         self._subscriptions: list[Subscription] = []
         self.instruments = {
-            name: RemoteInstrument(self._link, name, entry)
+            name: RemoteInstrument(self._link, name, entry, lease)
             for name, entry in info["instruments"].items()
         }
 
@@ -158,13 +162,13 @@ class StationGroup(RemoteStation):
     """Several station servers presented as one station. Instrument names
     must be unique across the servers."""
 
-    def __init__(self, addresses: list[str], *, timeout: float = 5.0):
+    def __init__(self, addresses: list[str], *, timeout: float = 5.0, lease: str = ""):
         self.stations: list[RemoteStation] = []
         self.instruments: dict[str, RemoteInstrument] = {}
         self._subscriptions = []
         try:
             for address in addresses:
-                station = RemoteStation(address, timeout=timeout)
+                station = RemoteStation(address, timeout=timeout, lease=lease)
                 self.stations.append(station)
                 for name, inst in station.instruments.items():
                     if name in self.instruments:

@@ -147,8 +147,9 @@ def create_app(managed: bool = False) -> FastAPI:
                 hub.drop(address)
                 out.append({"address": address, "ok": False, "error": str(e)})
                 continue
-            out.append({"address": address, "ok": True,
-                        "station": info["station"], "instruments": info["instruments"]})
+            out.append({"address": address, "ok": True, "station": info["station"],
+                        "instruments": info["instruments"], "failed": info.get("failed", {}),
+                        "lease": info.get("lease")})
         return out
 
     @app.post("/api/stations/get")

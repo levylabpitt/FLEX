@@ -36,6 +36,7 @@ import zmq
 from flex.log import get_logger
 
 TERMINAL = ("done", "failed", "aborted", "interrupted")
+_LEASE_TTL = 30.0  # seconds a station stays leased without a renewal
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -162,20 +163,24 @@ class RunServer:
             raise RuntimeError(f"Busy: run {self._active['id']} is still running")
         source, entry = p["source"], p.get("entry") or "run"
         compile(source, "<submitted script>", "exec")  # fail fast on syntax errors
-        run_id = _new_id()
-        run_dir = self.root / run_id
-        run_dir.mkdir()
-        (run_dir / "script.py").write_text(source, encoding="utf-8")
-        (run_dir / "run.json").write_text(
-            json.dumps({"entry": entry, "params": p.get("params") or {}, "servers": self.servers,
-                        "call_timeout": self.call_timeout}), encoding="utf-8")
-
-        with open(run_dir / "run.log", "wb") as logfile:
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "flex.runchild", str(run_dir)], stdout=logfile, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"},
-            )
+        run_id, token = _new_id(), secrets.token_hex(8)
+        leases = self._take_leases(run_id, token)
+        try:
+            run_dir = self.root / run_id
+            run_dir.mkdir()
+            (run_dir / "script.py").write_text(source, encoding="utf-8")
+            (run_dir / "run.json").write_text(
+                json.dumps({"entry": entry, "params": p.get("params") or {}, "servers": self.servers,
+                            "call_timeout": self.call_timeout, "lease": token}), encoding="utf-8")
+            with open(run_dir / "run.log", "wb") as logfile:
+                proc = subprocess.Popen(
+                    [sys.executable, "-m", "flex.runchild", str(run_dir)], stdout=logfile,
+                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"},
+                )
+        except Exception:
+            self._drop_leases(leases, token)
+            raise
         self._db.execute(
             "INSERT INTO runs VALUES (?, ?, 'running', ?, ?, ?, ?, NULL, NULL, NULL, ?)",
             (run_id, p.get("name") or "", entry, json.dumps(p.get("params") or {}),
@@ -183,10 +188,36 @@ class RunServer:
         )
         self._db.commit()
         self._active = {"id": run_id, "proc": proc, "dir": run_dir, "offset": 0, "partial": b"",
-                        "aborting": False, "kill_at": 0.0}
+                        "aborting": False, "kill_at": 0.0, "leases": leases, "token": token,
+                        "renew_at": time.monotonic() + _LEASE_TTL / 3}
         self.log.info("Run %s started (%s)", run_id, p.get("name") or entry)
         self._publish("run.status", run=run_id, status="running")
         return self._record(run_id)
+
+    # -- station leases ------------------------------------------------------
+    # A run owns every station server it controls while it lasts; the servers
+    # refuse writes from anyone else. The lease expires on its own if we die.
+
+    def _take_leases(self, run_id: str, token: str) -> list:
+        from flex.protocols.zmq import ZMQInstrument
+
+        links = []
+        try:
+            for address in self.servers:
+                links.append(ZMQInstrument("lease", address, timeout=3.0))
+                links[-1].call("leaseAcquire", {"holder": run_id, "token": token, "ttl": _LEASE_TTL})
+        except Exception as e:  # all or nothing
+            self._drop_leases(links, token)
+            raise RuntimeError(f"Cannot start: {e}") from None
+        return links
+
+    def _drop_leases(self, links: list, token: str) -> None:
+        for link in links:
+            try:
+                link.call("leaseRelease", {"token": token})
+            except Exception as e:
+                self.log.warning("Could not release a station lease (it will expire): %s", e)
+            link.close()
 
     def _abort(self, run_id: str | None) -> dict:
         if not self._active or (run_id and run_id != self._active["id"]):
@@ -236,7 +267,15 @@ class RunServer:
         if rc is None:
             if a["aborting"] and time.monotonic() > a["kill_at"]:
                 a["proc"].kill()
+            if time.monotonic() > a["renew_at"]:
+                a["renew_at"] = time.monotonic() + _LEASE_TTL / 3
+                for link in a["leases"]:
+                    try:
+                        link.call("leaseAcquire", {"holder": a["id"], "token": a["token"], "ttl": _LEASE_TTL})
+                    except Exception as e:
+                        self.log.warning("Could not renew a station lease: %s", e)
             return
+        self._drop_leases(a["leases"], a["token"])
         self._tail(a, final=True)
         error, result = None, None
         outcome = a["dir"] / "result.json"

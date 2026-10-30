@@ -376,3 +376,39 @@ def test_describe_reports_failed_instruments(served):
     station, _, remote = served
     station.failed["lockin"] = "no device"
     assert remote.describe()["failed"] == {"lockin": "no device"}
+
+
+def test_a_lease_blocks_writes_but_not_reads(served):
+    from flex.client import RemoteStation
+    from flex.protocols.zmq import ZMQInstrumentError
+
+    station, server, remote = served
+    address = f"tcp://127.0.0.1:{server.port}"
+    remote._link.call("leaseAcquire", {"holder": "run-1", "token": "t1", "ttl": 30})
+    assert remote.describe()["lease"] == "run-1"
+
+    assert remote.bench.gate() == 0.0  # reads pass
+    assert remote.bench.idn()["model"] == "SimulatedInstrument"
+    with pytest.raises(ZMQInstrumentError, match="bench is in use by run-1"):
+        remote.bench.gate(1.0)
+    with pytest.raises(ZMQInstrumentError, match="in use by run-1"):
+        remote.bench.write("anything")
+    with pytest.raises(ZMQInstrumentError, match="in use by run-1"):  # a second holder cannot take it
+        remote._link.call("leaseAcquire", {"holder": "run-2", "token": "t2", "ttl": 30})
+
+    with RemoteStation(address, timeout=3.0, lease="t1") as owner:  # the holder's own token passes
+        owner.bench.gate(1.5)
+    assert station.bench.values["gate"] == 1.5
+
+    remote._link.call("leaseRelease", {"token": "wrong"})  # only the holder can release
+    assert remote.describe()["lease"] == "run-1"
+    remote._link.call("leaseRelease", {"token": "t1"})
+    remote.bench.gate(0.5)
+    assert remote.describe()["lease"] is None
+
+
+def test_a_lease_expires_without_renewal(served):
+    _, _, remote = served
+    remote._link.call("leaseAcquire", {"holder": "run-1", "token": "t1", "ttl": 0.2})
+    time.sleep(0.4)
+    remote.bench.gate(1.0)  # the holder went quiet, so the station is free again

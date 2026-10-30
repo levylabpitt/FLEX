@@ -176,7 +176,21 @@ def test_writes_need_a_json_content_type(client):
     assert client.post("/api/app/stop", content=b"", headers={"content-type": "text/plain"}).status_code == 403
 
 
-def test_app_status_when_the_station_is_down(client):
+def test_app_status_when_the_station_is_down(tmp_path, monkeypatch):
+    import socket
+
+    ports = []
+    for _ in range(2):  # ports nothing is listening on, whatever else runs on this PC
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            ports.append(s.getsockname()[1])
+    config = tmp_path / "flex.toml"
+    config.write_text(
+        f'[data]\nroot = "{tmp_path.as_posix()}"\n[server]\nport = {ports[0]}\n[runner]\nport = {ports[1]}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
     status = client.get("/api/app").json()
     assert status["station"] is False and status["runner"] is False
     assert status["managed"] is False
@@ -210,3 +224,15 @@ def test_runs_endpoints(tmp_path, monkeypatch):
         runner.stop()
     time.sleep(0.2)
     assert client.get("/api/runs").status_code == 503
+
+
+def test_station_tab_shows_failed_instruments_and_the_lease(served_station):
+    from flex.protocols.zmq import ZMQInstrument
+
+    server, _ = served_station
+    server.station.failed["lockin"] = "no device"
+    with ZMQInstrument("holder", f"tcp://127.0.0.1:{server.port}", timeout=3.0) as link:
+        link.call("leaseAcquire", {"holder": "run-7", "token": "t", "ttl": 30})
+        with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+            (info,) = client.get("/api/stations").json()
+    assert info["failed"] == {"lockin": "no device"} and info["lease"] == "run-7"

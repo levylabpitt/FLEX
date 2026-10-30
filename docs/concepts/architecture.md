@@ -159,6 +159,12 @@ this PC only. Set `[runner] token` to open it to the LAN (e.g. for a marimo
 hub on another machine); every call except the connect check must then carry
 the token (`RunClient(address, token=...)`).
 
+While a run lasts it holds a lease on every station server it controls: those
+servers refuse writes (parameter sets and driver methods not named `get*`,
+`read*`, `idn*`) from anyone but the run, and say which run holds them. Reads
+stay open. The run renews the lease as it goes, so a crashed runner frees the
+station within 30 s. To take over, abort the run.
+
 ## The tray app
 
 `flex app` (install with `flex-core[app]`) puts a FLEX icon in the system

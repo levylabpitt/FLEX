@@ -14,6 +14,9 @@ Every parameter update is published on the PUB socket as
 gaps. The event stream is monitoring, not the data record — files and the
 metadata store remain authoritative.
 
+Leases: a run (see flex.runner) can lease the whole station; while leased,
+writes without the holder's token are refused and reads still pass.
+
 Background logging: an ``[instruments.*] log`` list makes the server read
 those parameters every ``log_interval`` seconds and write every update to
 the configured database (``flex_monitor`` table). The reads go through the
@@ -40,7 +43,9 @@ from flex.log import get_logger
 from flex.metadata import MonitorRecord
 from flex.station import Station
 
-_METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "listInstruments", "get", "set", "call")
+_METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "listInstruments", "get", "set", "call",
+            "leaseAcquire", "leaseRelease")
+_READS = ("get", "read", "idn")  # driver methods with these prefixes may run while the station is leased
 
 
 def _jsonable(obj: Any) -> Any:
@@ -94,6 +99,7 @@ class StationServer:
         self._waker = self._context.socket(zmq.PULL)
         self._waker.bind(self._wake_addr)
         self._local = threading.local()
+        self._lease: dict | None = None  # {"holder", "token", "expires"}: a run owns the station
         for event in EVENTS:
             station.events.subscribe(event, self._forward_event, name="server")
 
@@ -208,6 +214,10 @@ class StationServer:
                 have = ", ".join(self._workers) or "none"
                 self._replies.put((identity, self._error(req_id, -32602, f"No instrument '{name}' (loaded: {have})")))
                 return
+            holder = self._held_against(method, params)
+            if holder:
+                self._replies.put((identity, self._error(req_id, -32002, f"{name} is in use by {holder}")))
+                return
             self._workers[name][1].put((identity, request))
             return
         try:
@@ -221,6 +231,20 @@ class StationServer:
             self._replies.put((identity, self._reply(req_id, result)))
 
     # -- methods -----------------------------------------------------------
+
+    def _lease_now(self) -> dict | None:
+        if self._lease and time.monotonic() > self._lease["expires"]:
+            self._lease = None
+        return self._lease
+
+    def _held_against(self, method: str, params: dict) -> str | None:
+        """The holder to wait for, if this request may not run while the station is leased."""
+        lease = self._lease_now()
+        if lease is None or method == "get" or params.get("lease") == lease["token"]:
+            return None
+        if method == "call" and str(params.get("method", "")).startswith(_READS):
+            return None
+        return lease["holder"]
 
     def _station_method(self, method: str, params: dict) -> Any:
         if method == "ACK":
@@ -236,6 +260,16 @@ class StationServer:
             return self.station.snapshot(read=bool(params.get("read")))
         if method == "describe":
             return self._describe()
+        if method == "leaseAcquire":  # also renews, for the same token
+            if self._lease_now() and self._lease["token"] != params["token"]:
+                raise RuntimeError(f"Station '{self.station.name}' is in use by {self._lease['holder']}")
+            self._lease = {"holder": params["holder"], "token": params["token"],
+                           "expires": time.monotonic() + float(params.get("ttl", 30))}
+            return True
+        if method == "leaseRelease":
+            if self._lease and self._lease["token"] == params.get("token"):
+                self._lease = None
+            return True
         return _UNKNOWN
 
     def _describe(self) -> dict:
@@ -252,7 +286,8 @@ class StationServer:
                 },
             }
         return {"station": self.station.name, "pub_port": self.pub_port, "instruments": instruments,
-                "failed": self.station.failed}
+                "failed": self.station.failed,
+                "lease": self._lease["holder"] if self._lease_now() else None}
 
     def _work(self, name: str, q: queue.Queue) -> None:
         inst = self.station.instruments[name]

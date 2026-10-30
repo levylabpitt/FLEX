@@ -9,3 +9,4 @@ dist/
 
 *.aliases
 *.lvlps
+__marimo__/

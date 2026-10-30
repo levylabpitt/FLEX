@@ -256,7 +256,7 @@ async function stationTab() {
         <tr><th>Parameter</th><th>Value</th><th>Unit</th><th></th></tr>${rows}</table></div></section>`;
     }).join("");
     return `<section><div class="section-head"><h2>Station: ${esc(s.station)}</h2>
-      <span class="hint">${esc(s.address)}</span></div></section>` + cards + failed;
+      <span class="hint">${s.lease ? `<span class="badge busy">in use by run ${esc(s.lease)}</span> ` : ""}${esc(s.address)}</span></div></section>` + cards + failed;
   }).join("");
   $("#main").innerHTML = sections || '<p class="empty">No stations configured.</p>';
   for (const bind of pendingBindings.splice(0)) bind();

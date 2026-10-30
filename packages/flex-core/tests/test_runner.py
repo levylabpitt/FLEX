@@ -188,3 +188,48 @@ def test_stopping_the_runner_aborts_a_run_with_its_cleanup(stack):
     runner.stop()  # the station is still up, so the script's finally block can reach it
     assert station.bench.values["gate"] == 0
     assert "cleaned up" in (Path(rec["dir"]) / "run.log").read_text()
+
+
+def test_a_run_holds_the_station_until_it_ends(stack):
+    from flex.client import connect
+
+    station, runner, client, _ = stack
+    station.bench.parameters["gate"].set(2.0)
+    rec = client.submit(LONG)
+    _wait_for_line(client, rec["id"], "started")
+    with connect(runner.servers[0], timeout=3.0) as other:
+        assert other.bench.gate() == 2.0  # reads pass
+        with pytest.raises(ZMQInstrumentError, match=f"in use by {rec['id']}"):
+            other.bench.gate(1.0)
+        client.abort(rec["id"])
+        client.wait(rec["id"])  # the script's own cleanup wrote through its lease
+        assert other.bench.gate() == 0
+        other.bench.gate(1.0)  # and the station is free again
+
+
+def test_submit_is_all_or_nothing_across_servers(tmp_path):
+    stations = [Station({"a": SimulatedInstrument("a")}, name="pc-a"),
+                Station({"b": SimulatedInstrument("b")}, name="pc-b")]
+    servers = [StationServer(s) for s in stations]
+    for s in servers:
+        s.start()
+    addresses = [f"tcp://127.0.0.1:{s.port}" for s in servers]
+    runner = RunServer(addresses, root=tmp_path / "runs")
+    runner.start()
+    try:
+        from flex.protocols.zmq import ZMQInstrument
+
+        with ZMQInstrument("other", addresses[1], timeout=3.0) as other:
+            other.call("leaseAcquire", {"holder": "someone", "token": "x", "ttl": 30})
+            with RunClient(f"tcp://127.0.0.1:{runner.port}", timeout=3.0) as client:
+                with pytest.raises(ZMQInstrumentError, match="Cannot start.*in use by someone"):
+                    client.submit("def run(station): pass\n")
+                assert client.runs() == []
+            with ZMQInstrument("first", addresses[0], timeout=3.0) as first:  # pc-a was released again
+                assert first.call("leaseAcquire", {"holder": "me", "token": "y", "ttl": 30}) is True
+    finally:
+        runner.stop()
+        for s in servers:
+            s.stop()
+        for st in stations:
+            st.close()

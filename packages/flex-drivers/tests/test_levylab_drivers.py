@@ -35,14 +35,31 @@ HANDLERS = {
     },
     "setState": "ok",
     "getState": "idle",
-    "setSweepTime": "ok",
+    "setSweep_Time": "ok",
+    "setREF_Frequency": "ok",
+    "setREF_Phase": "ok",
+    "setREF_TC": "ok",
+    "setREF_Roll-Off": "ok",
+    "getInputGain": [1, 10],
+    "setInputGain": "ok",
+    "getOutputGain": [1, 1],
+    "setOutputGain": "ok",
+    "getSamplingFsMode": "Continuous",
     "setSamplingFsMode": "ok",
     "getSweepWaveforms": {"waveforms": []},
     "setSweep": "ok",
     # Krohn-Hite
     "setAllChannels": "ok",
     "setChannel": "ok",
-    "getChannel": {"channel": 3, "gain": "10"},
+    "getChannel": {"allChannelProperties": [{"channel": 3, "gain": "10"}]},
+    "getAllChannels": {
+        "allChannelProperties": [
+            {"channel": 1, "gain": "1", "input": "SE+", "shunt": "0", "couple": "AC", "filter": "OFF"},
+            {"channel": 2, "gain": "1", "input": "SE+", "shunt": "0", "couple": "AC", "filter": "OFF"},
+        ]
+    },
+    "getShuntResistor": {"ShuntResistor": ["0", "50"]},
+    "getChassis": {"Chassis": "7008"},
     # Transport Server
     "startTransport": "started",
     "stopTransport": "stopped",
@@ -134,10 +151,10 @@ def test_lockin_state_and_results(server):
 
 def test_lockin_sweep_config(server):
     config = {
-        "Sweep Time (s)": 1.0,
-        "Initial Wait (s)": 2,
-        "Return to Start": False,
-        "Channels": [
+        "sweepTime": 1.0,
+        "initialWaitTime": 2,
+        "returnToStart": False,
+        "sweepChannels": [
             {
                 "Enable?": True,
                 "Channel": 1,
@@ -152,26 +169,59 @@ def test_lockin_sweep_config(server):
         li.set_sweep(config)
         assert last(server) == ("setSweep", config)
         li.set_sweep_time(12.5)
-        assert last(server) == ("setSweepTime", 12.5)  # v1 sends a bare value
+        assert last(server) == ("setSweep_Time", {"SweepTime": 12.5})
         li.set_sampling_mode("Continuous")
         assert last(server) == ("setSamplingFsMode", "Continuous")
+        assert li.get_sampling_mode() == "Continuous"
         assert li.get_sweep_waveforms() == {"waveforms": []}
+
+
+def test_lockin_reference_and_gain(server):
+    with Lockin(address=server.address) as li:
+        li.set_ref_frequency(1, 13.0)
+        assert last(server) == ("setREF_Frequency", {"Channel": 1, "Frequency": 13.0})
+        li.set_ref_phase(1, 45.0)
+        assert last(server) == ("setREF_Phase", {"Channel": 1, "Phase": 45.0})
+        li.set_ref_tc(1, 0.3)
+        assert last(server) == ("setREF_TC", {"Channel": 1, "TC": 0.3})
+        li.set_ref_roll_off(1, 24)
+        assert last(server) == ("setREF_Roll-Off", {"Channel": 1, "Roll-Off": 24})
+        assert li.get_input_gain() == [1, 10]
+        li.set_input_gain([1, 100])
+        assert last(server) == ("setInputGain", [1, 100])  # a bare list, no channel key
+        assert li.get_output_gain() == [1, 1]
+        li.set_output_gain([2, 2])
+        assert last(server) == ("setOutputGain", [2, 2])
 
 
 # -- Krohn-Hite 7008 -----------------------------------------------------------
 
 
 def test_krohn_hite_channels(server):
-    config = [
-        {"channel": 1, "gain": "10", "input": "DIFF", "shunt": "10M", "couple": "AC", "filter": "OFF"}
-    ]
     with KrohnHite7008(address=server.address) as kh:
-        kh.set_kh_channel(config)
-        assert last(server) == ("setAllChannels", {"allChannelProperties": config})
-        kh.set_kh_channel_single(config)
-        assert last(server) == ("setChannel", {"allChannelProperties": config})
         assert kh.get_channel(3) == {"channel": 3, "gain": "10"}
         assert last(server) == ("getChannel", {"channel": 3})
+        assert len(kh.get_all_channels()) == 2
+        assert kh.get_shunt_resistor() == ["0", "50"]
+        assert kh.get_chassis() == "7008"
+        config = [{"channel": 1, "gain": "10"}]
+        kh.set_channel_config(config)
+        assert last(server) == ("setAllChannels", {"allChannelProperties": config})
+        kh.set_channel(config[0])
+        assert last(server) == ("setChannel", {"ChannelProperties": config[0]})
+
+
+def test_krohn_hite_update_keeps_the_other_channels(server):
+    with KrohnHite7008(address=server.address) as kh:
+        kh.set_gain(2, 100)
+        method, params = last(server)
+        one, two = params["allChannelProperties"]
+        assert method == "setAllChannels"
+        assert one["gain"] == "1" and (two["channel"], two["gain"]) == (2, "100")
+        kh.set_filter(1, True)
+        assert last(server)[1]["allChannelProperties"][0]["filter"] == "ON"
+        with pytest.raises(ValueError, match="Channel 9 not found"):
+            kh.set_coupling(9, "DC")
 
 
 # -- Transport Server ----------------------------------------------------------
@@ -214,6 +264,18 @@ def test_transport_server_expt_param_validation(server):
             ts.set_expt_param("bad", {"nested": 1})
         with pytest.raises(TypeError, match="must be str, int, float, or list"):
             ts.set_expt_param("bad", True)
+
+
+def test_transport_server_lockin_sweep(server):
+    sweep = {"sweepTime": 0.01, "initialWaitTime": 0.01}
+    with TransportServer(address=server.address) as ts:
+        ts.lockin_sweep("C:/data/x", "iv", sweep)
+        methods = [r["method"] for r in server.requests]
+        assert methods[-3:] == ["setExptComments", "startTransport", "getStatus"]
+        assert "stopTransport" not in methods  # the app ends the sweep itself
+        before = len(server.requests)
+        ts.lockin_sweep("C:/data/x", "iv", sweep, run_async=True)
+        assert [r["method"] for r in server.requests[before:]][-1] == "startTransport"
 
 
 def test_transport_server_refresh_and_sweep_config(server):

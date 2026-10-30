@@ -24,14 +24,55 @@ class KrohnHite7008(ZMQInstrument):
     def __init__(self, name: str = "kh7008", address: str = "tcp://localhost:29160", **kwargs):
         super().__init__(name, address, **kwargs)
 
-    def set_kh_channel(self, config: list[dict]) -> None:
-        """Configure several channels at once (IF ``setAllChannels``)."""
-        self.call("setAllChannels", {"allChannelProperties": config})
+    def get_channel(self, channel: int) -> dict:
+        """Configuration of one channel."""
+        return self.call("getChannel", {"channel": channel})["allChannelProperties"][0]
 
-    def set_kh_channel_single(self, config: list[dict]) -> None:
-        """Configure a single channel (IF ``setChannel``)."""
-        self.call("setChannel", {"allChannelProperties": config})
+    def get_all_channels(self) -> list[dict]:
+        """Configuration of every channel."""
+        return self.call("getAllChannels", {})["allChannelProperties"]
 
-    def get_channel(self, channel: int) -> Any:
-        """Read the configuration of one channel (IF ``getChannel``)."""
-        return self.call("getChannel", {"channel": channel})
+    def set_channel(self, config: dict) -> Any:
+        """Set one channel from a complete configuration dict.
+
+        The IF app's ``setChannel`` is currently broken; use ``update_channel``.
+        """
+        return self.call("setChannel", {"ChannelProperties": config})
+
+    def set_channel_config(self, config: list[dict]) -> Any:
+        """Set the configuration of all channels (IF ``setAllChannels``)."""
+        return self.call("setAllChannels", {"allChannelProperties": config})
+
+    def get_shunt_resistor(self) -> Any:
+        return self.call("getShuntResistor", {})["ShuntResistor"]
+
+    def get_chassis(self) -> Any:
+        return self.call("getChassis", {})["Chassis"]
+
+    # -- custom functions -----------------------------------------------------
+
+    def update_channel(self, channel: int, **changes: Any) -> Any:
+        """Change some properties of one channel and leave the rest as they are."""
+        channels = self.get_all_channels()
+        for i, current in enumerate(channels):
+            if current["channel"] == channel:
+                channels[i] = {**current, **changes}
+                return self.set_channel_config(channels)
+        raise ValueError(f"Channel {channel} not found")
+
+    def set_gain(self, channel: int, gain: int) -> Any:
+        return self.update_channel(channel, gain=str(gain))
+
+    def set_input(self, channel: int, input_type: str) -> Any:
+        """``OFF``, ``SE+``, ``SE-`` or ``DIFF``."""
+        return self.update_channel(channel, input=input_type)
+
+    def set_shunt(self, channel: int, shunt: int | str) -> Any:
+        return self.update_channel(channel, shunt=shunt)
+
+    def set_coupling(self, channel: int, coupling: str) -> Any:
+        """``AC`` or ``DC``."""
+        return self.update_channel(channel, couple=coupling)
+
+    def set_filter(self, channel: int, enabled: bool) -> Any:
+        return self.update_channel(channel, filter="ON" if enabled else "OFF")

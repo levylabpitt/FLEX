@@ -79,20 +79,23 @@ class TransportServer(ZMQInstrument):
         expt_folder: str,
         expt_comments: str,
         sweep_config: dict,
-        run_continuous: bool = False,
+        run_async: bool = False,
         timeout: float = 10,
     ) -> None:
-        """Perform a lock-in sweep with the specified configuration."""
+        """Run a lock-in sweep (``sweep_config`` as in ``Lockin.set_sweep``).
+
+        Blocks until the transport is idle again, or returns right after the
+        start with ``run_async``. ``timeout`` is the allowance for the app to
+        finish once the sweep time and initial wait have elapsed.
+        """
         self.set_sweep_config(sweep_config)
         self.set_expt_folder(expt_folder)
         self.set_expt_comments(expt_comments)
 
         self.start_transport("LockinSweep")
-        time.sleep(2)  # Allow some time for the transport to start
-        if run_continuous:
-            self.log.info("Continuous Sweep Running Asynchronously...")
+        if run_async:
             return
-        self.stop_transport()
+        time.sleep(sweep_config["sweepTime"] + sweep_config["initialWaitTime"])
         start_time = time.time()
         while self.get_status() != "idle":
             if time.time() - start_time > timeout:

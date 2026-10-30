@@ -53,6 +53,36 @@ class Lockin(ZMQInstrument):
             )
         self.call("setAO_Function", {"Channel": channel, "Function": value})
 
+    def set_ref_frequency(self, channel: int, value: float) -> None:
+        self.call("setREF_Frequency", {"Channel": channel, "Frequency": value})
+
+    def set_ref_phase(self, channel: int, value: float) -> None:
+        self.call("setREF_Phase", {"Channel": channel, "Phase": value})
+
+    def set_ref_tc(self, channel: int, value: float) -> None:
+        """Set the time constant of reference ``channel``."""
+        self.call("setREF_TC", {"Channel": channel, "TC": value})
+
+    def set_ref_roll_off(self, channel: int, value: float) -> None:
+        self.call("setREF_Roll-Off", {"Channel": channel, "Roll-Off": value})
+
+    def get_input_gain(self) -> list:
+        """Gains of the AI channels, one per channel in channel order."""
+        return self.call("getInputGain")
+
+    def set_input_gain(self, gains: list) -> None:
+        """Set every AI gain at once; the app takes the bare list. To change one
+        channel, edit that index of ``get_input_gain()`` and write the list back."""
+        self.call("setInputGain", list(gains))
+
+    def get_output_gain(self) -> list:
+        """Gains of the AO channels, one per channel in channel order."""
+        return self.call("getOutputGain")
+
+    def set_output_gain(self, gains: list) -> None:
+        """Set every AO gain at once (see ``set_input_gain``)."""
+        self.call("setOutputGain", list(gains))
+
     def get_results(self) -> dict:
         return self.call("getResults")
 
@@ -63,11 +93,14 @@ class Lockin(ZMQInstrument):
         return self.call("getState")
 
     def set_sweep_time(self, value: float) -> None:
-        self.call("setSweepTime", value)
+        self.call("setSweep_Time", {"SweepTime": value})
 
     def set_sampling_mode(self, value: str) -> None:
         """Set the sampling mode (IF method ``setSamplingFsMode``)."""
         self.call("setSamplingFsMode", value)
+
+    def get_sampling_mode(self) -> Any:
+        return self.call("getSamplingFsMode")
 
     def get_sweep_waveforms(self) -> dict:
         return self.call("getSweepWaveforms")
@@ -77,16 +110,16 @@ class Lockin(ZMQInstrument):
 
         sweep_config format::
 
-            sweep_config = {"Sweep Time (s)": sweep_time,
-                            "Initial Wait (s)": 2,
-                            "Return to Start": False,
-                            "Channels": [{"Enable?": True,
-                                          "Channel": channel,
-                                          "Start": start,
-                                          "End": stop,
-                                          "Pattern": "Ramp /",
-                                          "Table": []},
-                                         ]}
+            sweep_config = {"sweepTime": sweep_time,
+                            "initialWaitTime": 2,
+                            "returnToStart": False,
+                            "sweepChannels": [{"Enable?": True,
+                                               "Channel": channel,
+                                               "Start": start,
+                                               "End": stop,
+                                               "Pattern": "Ramp /",
+                                               "Table": []},
+                                              ]}
         """
         self.call("setSweep", sweep_config)
 
@@ -124,7 +157,7 @@ class Lockin(ZMQInstrument):
         time.sleep(0.5)
         self.set_state("start sweep")
         # wait for the sweep time since it'll anyway take that long (saves processor resources)
-        wait_time = sweep_config["Sweep Time (s)"] + sweep_config["Initial Wait (s)"]
+        wait_time = sweep_config["sweepTime"] + sweep_config["initialWaitTime"]
         time.sleep(wait_time)
         start_time = time.time()
         while self.get_state() == "sweeping":
@@ -164,10 +197,10 @@ class Lockin(ZMQInstrument):
         self.log.info("Sweeping backgate from %.2f to %.2f V...", current_bg, bg_target)
 
         sweep_config = {
-            "Sweep Time (s)": duration,
-            "Initial Wait (s)": initial_wait,
-            "Return to Start": False,
-            "Channels": [
+            "sweepTime": duration,
+            "initialWaitTime": initial_wait,
+            "returnToStart": False,
+            "sweepChannels": [
                 {
                     "Enable?": True,
                     "Channel": bg_channel,

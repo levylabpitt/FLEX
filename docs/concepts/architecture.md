@@ -186,7 +186,7 @@ docs use plain pip/uv against the GitHub repo:
 - inside a clone of this repo (a uv workspace), packages install **editable**
   from `packages/<name>`;
 - everywhere else, from GitHub:
-  `git+https://github.com/levylabpitt/flex.git@v3#subdirectory=packages/<name>`.
+  `git+https://github.com/levylabpitt/flex.git@v2#subdirectory=packages/<name>`.
 
 Extras pass through: `flex-core[postgres]` installs the base package with
 its PostgreSQL dependencies.

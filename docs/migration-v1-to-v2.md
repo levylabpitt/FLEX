@@ -57,7 +57,7 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 - `flex.lv` LabVIEW call helpers, `exp/pund.py` (experiment logic, not
   framework — rewrite as a `Scan` script), `exp/experiment_bak`.
 - Newport/Ophir/Sphere drivers that require .NET or COM — tracked in
-  [`packages/flex-drivers/DEFERRED.md`](https://github.com/levylabpitt/flex/blob/v3/packages/flex-drivers/DEFERRED.md).
+  [`packages/flex-drivers/DEFERRED.md`](https://github.com/levylabpitt/flex/blob/v2/packages/flex-drivers/DEFERRED.md).
 
 ## Postgres note
 

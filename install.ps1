@@ -10,7 +10,7 @@
 #   `pip install -e` away from the same checkout, no network needed.
 #
 #   Optional environment overrides (set before piping):
-#     $env:FLEX_SOURCE_REF = 'develop'   # install from a specific branch/tag (default: v3)
+#     $env:FLEX_SOURCE_REF = 'develop'   # install from a specific branch/tag (default: v2)
 # ==============================================================================
 
 & {
@@ -226,7 +226,7 @@
 
     # --- 5. Clone or update a persistent local checkout -------------------------
     $branch = $env:FLEX_SOURCE_REF
-    if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'v3' }
+    if ([string]::IsNullOrWhiteSpace($branch)) { $branch = 'v2' }
     $srcRoot = Join-Path $env:LOCALAPPDATA 'flex\src'
 
     Write-Host ""

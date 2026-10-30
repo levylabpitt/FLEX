@@ -10,7 +10,7 @@ data directory.
 
 - The **config file** holds the service settings for this machine — database,
   storage, data format, hooks. A lab typically keeps a shared example in the
-  repo ([examples/levylab.toml](https://github.com/levylabpitt/flex/blob/v3/examples/levylab.toml))
+  repo ([examples/levylab.toml](https://github.com/levylabpitt/flex/blob/v2/examples/levylab.toml))
   that each PC copies and adjusts.
 - An **instrument entry** names a driver and an address. The entries are
   inherently per-machine — your bench's addresses are not your neighbor's:

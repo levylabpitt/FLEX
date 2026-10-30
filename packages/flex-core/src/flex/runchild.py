@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import _thread
 import json
 import runpy
-import signal
 import sys
+import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -14,15 +16,15 @@ def _jsonable(obj):
     return obj.tolist() if hasattr(obj, "tolist") else str(obj)
 
 
-def _interrupt(signum, frame):
-    raise KeyboardInterrupt
+def _watch_for_abort(flag: Path) -> None:
+    while not flag.exists():
+        time.sleep(0.2)
+    _thread.interrupt_main()  # KeyboardInterrupt in the script's thread
 
 
 def main(run_dir: str) -> int:
     d = Path(run_dir)
-    for name in ("SIGBREAK", "SIGTERM"):
-        if hasattr(signal, name):
-            signal.signal(getattr(signal, name), _interrupt)
+    threading.Thread(target=_watch_for_abort, args=(d / "abort",), daemon=True).start()
     spec = json.loads((d / "run.json").read_text(encoding="utf-8"))
     outcome: dict = {}
     station = None

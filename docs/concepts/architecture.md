@@ -144,7 +144,7 @@ one at a time, and its script source, params, log and result are kept under
 ```
 flex run sweep.py -p points=50     # submit and follow the log
 flex runs                          # recent runs
-flex abort                         # Ctrl-Break: the script's finally-blocks run
+flex abort                         # the script's finally-blocks run
 ```
 
 Abort is graceful first (the script can leave the hardware safe), then a kill

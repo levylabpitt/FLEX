@@ -7,9 +7,11 @@ by name. The runner keeps the script source, params, log and result of every
 run under ``<data root>/runs/``, publishes ``run.status`` / ``run.log`` events,
 and runs one script at a time.
 
-Aborting sends Ctrl-Break / SIGTERM, which the child turns into
-``KeyboardInterrupt`` so ``finally`` blocks can leave the hardware safe;
-after a grace period the process is killed.
+Aborting drops an ``abort`` file in the run directory; the child sees it and
+raises ``KeyboardInterrupt`` so ``finally`` blocks can leave the hardware
+safe. After a grace period the process is killed. (A flag file, not a
+signal: Windows console signals need a shared console, which a background
+runner doesn't have.)
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ import itertools
 import json
 import os
 import secrets
-import signal
 import sqlite3
 import subprocess
 import sys
@@ -159,11 +160,10 @@ class RunServer:
         (run_dir / "run.json").write_text(
             json.dumps({"entry": entry, "params": p.get("params") or {}, "servers": self.servers}), encoding="utf-8")
 
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         with open(run_dir / "run.log", "wb") as logfile:
             proc = subprocess.Popen(
                 [sys.executable, "-m", "flex.runchild", str(run_dir)], stdout=logfile, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL, creationflags=flags,
+                stdin=subprocess.DEVNULL,
                 env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"},
             )
         self._db.execute(
@@ -190,11 +190,7 @@ class RunServer:
             return
         a["aborting"] = True
         a["kill_at"] = time.monotonic() + self.abort_grace
-        sig = signal.CTRL_BREAK_EVENT if os.name == "nt" else signal.SIGTERM
-        try:
-            a["proc"].send_signal(sig)
-        except OSError:
-            pass
+        (a["dir"] / "abort").touch()
         self.log.info("Aborting run %s", a["id"])
 
     # -- records -----------------------------------------------------------

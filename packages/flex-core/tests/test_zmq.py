@@ -1,4 +1,7 @@
+import threading
+
 import pytest
+import zmq
 
 from flex.protocols import ZMQInstrument, ZMQInstrumentError
 from flex.protocols.testing import FakeIFServer
@@ -64,3 +67,20 @@ def test_connect_check_fails_fast():
 def test_no_connect_check():
     inst = ZMQInstrument("dev", "tcp://127.0.0.1:9", timeout=0.2, connect_check=False)
     inst.close()
+
+
+def test_bare_null_reply_is_a_result():
+    sock = zmq.Context.instance().socket(zmq.REP)
+    port = sock.bind_to_random_port("tcp://127.0.0.1")
+
+    def answer_null():
+        for _ in range(2):  # the connect-time ACK, then the call
+            sock.recv()
+            sock.send(b"null")
+
+    thread = threading.Thread(target=answer_null, daemon=True)
+    thread.start()
+    with ZMQInstrument("dev", f"tcp://127.0.0.1:{port}") as inst:
+        assert inst.call("setAO_Function", {"Channel": 1, "Function": "Sine"}) is None
+    thread.join(2)
+    sock.close(linger=0)

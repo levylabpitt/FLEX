@@ -102,6 +102,8 @@ class ZMQInstrument(Instrument):
 
         self.log.debug("<- %s", raw)
         response = json.loads(raw)
+        if not isinstance(response, dict):
+            return response  # some IF apps answer a setter with a bare null
         error = response.get("error")
         if error:
             raise ZMQInstrumentError(

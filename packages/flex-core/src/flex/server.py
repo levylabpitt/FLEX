@@ -251,7 +251,8 @@ class StationServer:
                     for p in inst.parameters.values()
                 },
             }
-        return {"station": self.station.name, "pub_port": self.pub_port, "instruments": instruments}
+        return {"station": self.station.name, "pub_port": self.pub_port, "instruments": instruments,
+                "failed": self.station.failed}
 
     def _work(self, name: str, q: queue.Queue) -> None:
         inst = self.station.instruments[name]

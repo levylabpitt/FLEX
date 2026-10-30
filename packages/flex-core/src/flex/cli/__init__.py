@@ -202,14 +202,21 @@ def serve(
     config: str = typer.Option(None, help="Config file (default: the active flex.toml)"),
     port: int = typer.Option(None, help="Command port (events on port+1); default [server] port"),
 ):
-    """Host this PC's instruments as a station server."""
+    """Host this PC's instruments as a station server, and run experiment scripts for it."""
     from flex.config import load_config
+    from flex.runner import RunServer
     from flex.server import StationServer
     from flex.station import Station
 
     cfg = load_config(config)
     station = Station.load(cfg)
     server = StationServer(station, port=port if port is not None else cfg.server.port)
+    runner = None
+    if cfg.runner.enabled:
+        runner = RunServer(
+            cfg.runner.servers or [f"tcp://localhost:{server.port}"], root=Path(cfg.data.root) / "runs",
+            port=cfg.runner.port, call_timeout=cfg.runner.call_timeout, token=cfg.runner.token,
+        )
     table = Table("Instrument", "Class", "Address", "Logged")
     for name, inst in station.instruments.items():
         params, interval = server.monitor.get(name, ([], 0))
@@ -220,9 +227,22 @@ def serve(
     console.print(table)
     console.print(f"[green]Serving station '{station.name}'[/] on port {server.port} "
                   f"(events on {server.pub_port}). Ctrl-C to stop.")
+    if runner:
+        scope = "the whole LAN, token required" if runner.token else "this PC only"
+        console.print(f"[green]Running scripts[/] on port {runner.port} ({scope}); "
+                      "stopping aborts a running script.")
+    server.start()
+    if runner:
+        runner.start()
     try:
-        server.run()
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
     finally:
+        if runner:
+            runner.stop()  # first: an aborted script's cleanup still needs the station
+        server.stop()
         station.close()
 
 
@@ -276,28 +296,12 @@ def monitor(
         store.close()
 
 
-@app.command()
-def runner(
-    port: int = typer.Option(None, help="Command port (events on port+1); default [runner] port"),
-):
-    """Run submitted experiment scripts, one at a time, in subprocesses."""
-    from flex.config import load_config
-    from flex.runner import RunServer
-
-    cfg = load_config()
-    servers = cfg.runner.servers or [f"tcp://localhost:{cfg.server.port}"]
-    server = RunServer(servers, root=Path(cfg.data.root) / "runs", call_timeout=cfg.runner.call_timeout,
-                       port=port if port is not None else cfg.runner.port)
-    console.print(f"[green]Runner[/] on port {server.port} (events on {server.pub_port}), "
-                  f"controlling {', '.join(servers)}. Ctrl-C to stop (aborts a running script).")
-    server.run()
-
-
 def _runner_client(address: str):
     from flex.config import load_config
     from flex.runner import RunClient
 
-    return RunClient(address or f"tcp://localhost:{load_config().runner.port}", timeout=3.0)
+    cfg = load_config()
+    return RunClient(address or f"tcp://localhost:{cfg.runner.port}", timeout=3.0, token=cfg.runner.token)
 
 
 @app.command()

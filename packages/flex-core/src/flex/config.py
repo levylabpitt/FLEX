@@ -89,7 +89,10 @@ class ServerConfig(_Section):
 
 
 class RunnerConfig(_Section):
+    enabled: bool = True  # `flex serve` also runs scripts for this station
     port: int = 29510  # events published on port + 1
+    #: without a token only this PC can reach the runner; with one, the whole LAN can
+    token: str = ""
     #: station servers that submitted scripts control; default: this PC's own
     servers: list[str] = Field(default_factory=list)
     #: seconds a script waits for one station-server call (e.g. a blocking sweep)

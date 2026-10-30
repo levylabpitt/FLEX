@@ -17,6 +17,7 @@ runner doesn't have.)
 from __future__ import annotations
 
 import hashlib
+import hmac
 import itertools
 import json
 import os
@@ -51,12 +52,16 @@ def _new_id() -> str:
 
 class RunServer:
     def __init__(self, servers: list[str], *, root: Path | str, port: int | None = None,
-                 bind: str = "tcp://*", abort_grace: float = 10.0, call_timeout: float = 120.0):
+                 bind: str | None = None, abort_grace: float = 10.0, call_timeout: float = 120.0,
+                 token: str = ""):
         self.servers = servers
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.abort_grace = abort_grace
         self.call_timeout = call_timeout
+        self.token = token
+        if bind is None:  # without a token only this PC may talk to the runner
+            bind = "tcp://*" if token else "tcp://127.0.0.1"
         self.log = get_logger("runner")
         self._db = sqlite3.connect(self.root / "runs.db", check_same_thread=False)
         self._db.execute(_SCHEMA)
@@ -129,6 +134,9 @@ class RunServer:
             request = json.loads(payload)
             req_id = request.get("id")
             method, params = request.get("method"), request.get("params") or {}
+            if method != "ACK" and self.token and not hmac.compare_digest(
+                    str(params.get("token", "")), self.token):
+                return self._error(req_id, -32001, "Unauthorized: wrong or missing runner token")
             if method == "ACK":
                 result: Any = "ACK"
             elif method == "submit":
@@ -269,28 +277,32 @@ class RunServer:
 class RunClient:
     """Submit and watch runs on a :class:`RunServer`."""
 
-    def __init__(self, address: str, *, timeout: float = 5.0):
+    def __init__(self, address: str, *, timeout: float = 5.0, token: str = ""):
         from urllib.parse import urlsplit
 
         from flex.protocols.zmq import ZMQInstrument
 
         self._link = ZMQInstrument("runner", address, timeout=timeout)
+        self._token = token
         parts = urlsplit(address)
         self._pub_address = f"tcp://{parts.hostname or 'localhost'}:{(parts.port or 0) + 1}"
 
+    def _call(self, method: str, **params):
+        return self._link.call(method, {**params, "token": self._token})
+
     def submit(self, source: str, *, entry: str = "run", params: dict | None = None, name: str = "") -> dict:
         """Run ``entry(station, **params)`` from the script text ``source``."""
-        return self._link.call("submit", {"source": source, "entry": entry, "params": params or {}, "name": name})
+        return self._call("submit", source=source, entry=entry, params=params or {}, name=name)
 
     def runs(self, limit: int = 20) -> list[dict]:
-        return self._link.call("runs", {"limit": limit})
+        return self._call("runs", limit=limit)
 
     def run(self, run_id: str, since: int = 0) -> dict:
         """The run record, plus its log lines after line ``since``."""
-        return self._link.call("run", {"id": run_id, "since": since})
+        return self._call("run", id=run_id, since=since)
 
     def abort(self, run_id: str | None = None) -> dict:
-        return self._link.call("abort", {"id": run_id})
+        return self._call("abort", id=run_id)
 
     def wait(self, run_id: str, *, poll: float = 0.5, on_log=None) -> dict:
         """Block until the run finishes, passing new log lines to ``on_log``.

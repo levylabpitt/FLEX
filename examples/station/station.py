@@ -40,12 +40,12 @@ def _(mo):
     _cfg = load_config()
     _servers = _cfg.runner.servers or [f"tcp://127.0.0.1:{_cfg.server.port}"]
     try:
-        client = RunClient(f"tcp://127.0.0.1:{_cfg.runner.port}", timeout=3.0)
+        client = RunClient(f"tcp://127.0.0.1:{_cfg.runner.port}", timeout=3.0, token=_cfg.runner.token)
         group = StationGroup(_servers, timeout=5.0)
     except Exception as _e:
         mo.stop(True, mo.callout(
             mo.md(f"**Station not reachable:** {_e}<br>Start it with `Start FLEX Station.bat` "
-                  "(`flex serve` and `flex runner` must be running)."), kind="danger"))
+                  "(`flex serve` must be running)."), kind="danger"))
     mo.md(f"Connected: station **{group.name}**, instruments **{', '.join(group.instruments) or 'none'}**")
     return client, group
 

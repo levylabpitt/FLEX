@@ -370,3 +370,9 @@ def test_monitor_store_roundtrip_array(tmp_path):
         assert row.value == [0.0, 0.25, 0.5, 0.75, 1.0]
     finally:
         store.close()
+
+
+def test_describe_reports_failed_instruments(served):
+    station, _, remote = served
+    station.failed["lockin"] = "no device"
+    assert remote.describe()["failed"] == {"lockin": "no device"}

@@ -1,6 +1,7 @@
 """Experiment runner tests: real subprocesses against a real station server."""
 
 import time
+from pathlib import Path
 
 import pytest
 
@@ -161,3 +162,29 @@ def test_station_group_merges_servers_and_rejects_duplicates():
     finally:
         ta.stop()
         tb.stop()
+
+
+def test_token_guards_every_call_but_ack(tmp_path):
+    runner = RunServer([], root=tmp_path / "runs", token="s3cret")
+    runner.start()
+    address = f"tcp://127.0.0.1:{runner.port}"
+    try:
+        with RunClient(address, timeout=3.0) as anonymous:  # connecting (ACK) needs no token
+            with pytest.raises(ZMQInstrumentError, match="Unauthorized"):
+                anonymous.runs()
+            with pytest.raises(ZMQInstrumentError, match="Unauthorized"):
+                anonymous.submit("def run(station): pass\n")
+        with RunClient(address, timeout=3.0, token="s3cret") as client:
+            assert client.runs() == []
+    finally:
+        runner.stop()
+
+
+def test_stopping_the_runner_aborts_a_run_with_its_cleanup(stack):
+    station, runner, client, _ = stack
+    station.bench.parameters["gate"].set(2.0)
+    rec = client.submit(LONG)
+    _wait_for_line(client, rec["id"], "started")
+    runner.stop()  # the station is still up, so the script's finally block can reach it
+    assert station.bench.values["gate"] == 0
+    assert "cleaned up" in (Path(rec["dir"]) / "run.log").read_text()

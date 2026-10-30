@@ -134,8 +134,9 @@ are the next subscribers to be built on the stream.
 
 ## The runner
 
-`flex runner` runs experiment scripts for a station, so a run outlives
-whoever started it. A script defines `run(station, **params)`; `station`
+`flex serve` also runs experiment scripts for its station (`[runner] enabled`,
+on by default; turn it off on a PC that only hosts instruments), so a run
+outlives whoever started it. A script defines `run(station, **params)`; `station`
 connects to every server in `[runner] servers` (several PCs, one namespace —
 instrument names must be unique). Each run executes in its own subprocess,
 one at a time, and its script source, params, log and result are kept under
@@ -148,9 +149,15 @@ flex abort                         # the script's finally-blocks run
 ```
 
 Abort is graceful first (the script can leave the hardware safe), then a kill
-after 10 s. Stopping the runner aborts a running script; a runner that died
-mid-run marks the leftover record `interrupted`. Events (`run.status`,
-`run.log`) stream on port+1 (default 29510/29511).
+after 10 s. Stopping `flex serve` aborts a running script while the station
+still answers; a server that died mid-run marks the leftover record
+`interrupted`. Events (`run.status`, `run.log`) stream on port+1 (default
+29510/29511).
+
+The runner executes whatever script it is sent, so by default it listens on
+this PC only. Set `[runner] token` to open it to the LAN (e.g. for a marimo
+hub on another machine); every call except the connect check must then carry
+the token (`RunClient(address, token=...)`).
 
 ## Installation
 

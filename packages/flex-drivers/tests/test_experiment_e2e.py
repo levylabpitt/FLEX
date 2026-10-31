@@ -11,7 +11,9 @@ from flex.runner import RunClient, RunServer
 from flex.server import StationServer
 from flex.station import Station
 from flex_drivers.levylab.lockin import Lockin
+from flex_drivers.levylab.oxford import Oxford1820
 from flex_drivers.levylab.ppms import PPMS
+from flex_drivers.levylab.transport_server import TransportServer
 
 EXAMPLES = Path(__file__).parents[3] / "examples" / "experiments"
 
@@ -124,3 +126,68 @@ def test_abort_midway_still_switches_the_excitation_off(stack):
     assert done["status"] == "aborted"
     amplitudes = [r["params"]["Amplitude"] for r in lockin_app.requests if r["method"] == "setAO_Amplitude"]
     assert amplitudes[-1] == 0
+
+
+@pytest.fixture
+def mnk(tmp_path, monkeypatch):
+    config = tmp_path / "flex.toml"
+    config.write_text(f'[data]\nroot = "{(tmp_path / "data").as_posix()}"\n[db]\nbackend = "sqlite"\n')
+    monkeypatch.setenv("FLEX_CONFIG", str(config))
+
+    field = {"now": 0.0}
+
+    def set_magnet(params):
+        field["now"] = params["field"]
+        return "ok"
+
+    magnet_app = FakeIFServer({"setMagnet": set_magnet, "getMagnet": lambda _p: {"field": field["now"]}})
+    transport_app = FakeIFServer({"setSweepConfig": "ok", "setExptFolder": "ok", "setExptComments": "ok",
+                                  "startTransport": "ok", "stopTransport": "ok",
+                                  "getStatus": {"Status": "idle"}})
+    station = Station({"magnet": Oxford1820(address=magnet_app.address),
+                       "transport": TransportServer(address=transport_app.address)}, name="mnk")
+    server = StationServer(station)
+    server.start()
+    runner = RunServer([f"tcp://127.0.0.1:{server.port}"], root=tmp_path / "runs")
+    runner.start()
+    with RunClient(f"tcp://127.0.0.1:{runner.port}", timeout=3.0) as client:
+        yield magnet_app, transport_app, client, tmp_path
+    runner.stop()
+    server.stop()
+    station.close()
+    magnet_app.stop()
+    transport_app.stop()
+
+
+def test_mnk_vsg5_vs_b(mnk):
+    magnet_app, transport_app, client, tmp_path = mnk
+    params = {"b_end": 0.2, "b_step": 0.1, "sg_time": 0.05, "sg_wait": 0.0, "poll": 0.05, "folder": "99-test"}
+    done = client.wait(client.submit((EXAMPLES / "mnk_vsg5_vs_b.py").read_text(), params=params)["id"])
+    assert done["status"] == "done", done["log"]
+    assert done["result"] == {"B": [0.0, 0.1, 0.2]}
+
+    fields = [r["params"]["field"] for r in magnet_app.requests if r["method"] == "setMagnet"]
+    assert fields == [0.0, 0.1, 0.2]
+    sweeps = [r for r in transport_app.requests if r["method"] == "startTransport"]
+    assert len(sweeps) == 3 and sweeps[0]["params"] == {"method": "LockinSweep"}
+    config_call = next(r for r in transport_app.requests if r["method"] == "setSweepConfig")
+    assert config_call["params"]["sweepChannels"][0]["Channel"] == 5
+    folders = {r["params"]["folder"] for r in transport_app.requests if r["method"] == "setExptFolder"}
+    assert folders == {"99-test"}
+    assert any(p.suffix in (".h5", ".hdf5") for p in (tmp_path / "data").rglob("*"))
+
+
+def test_mnk_abort_stops_the_running_sweep(mnk):
+    _, transport_app, client, _ = mnk
+    params = {"b_end": 0.2, "sg_time": 60, "sg_wait": 0.0, "poll": 0.05}
+    run = client.submit((EXAMPLES / "mnk_vsg5_vs_b.py").read_text(), params=params)
+    def started():
+        return any("[1/3]" in line for line in client.run(run["id"])["log"])
+
+    deadline = time.monotonic() + 60
+    while not started() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert started(), "the script never started"
+    client.abort(run["id"])
+    assert client.wait(run["id"])["status"] == "aborted"
+    assert transport_app.requests[-1]["method"] == "stopTransport"

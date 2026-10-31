@@ -22,8 +22,22 @@ def _watch_for_abort(flag: Path) -> None:
     _thread.interrupt_main()  # KeyboardInterrupt in the script's thread
 
 
+def _abortable_sleep() -> None:
+    """Make ``time.sleep`` give way to an abort: on Windows a long sleep otherwise
+    ignores the interrupt until it ends, past the kill deadline."""
+    real = time.sleep
+
+    def sleep(seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while (left := end - time.monotonic()) > 0:
+            real(min(left, 0.2))
+
+    time.sleep = sleep
+
+
 def main(run_dir: str) -> int:
     d = Path(run_dir)
+    _abortable_sleep()
     threading.Thread(target=_watch_for_abort, args=(d / "abort",), daemon=True).start()
     spec = json.loads((d / "run.json").read_text(encoding="utf-8"))
     outcome: dict = {}

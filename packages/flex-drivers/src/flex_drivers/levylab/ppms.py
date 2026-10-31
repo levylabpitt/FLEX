@@ -42,7 +42,7 @@ class PPMS(ZMQInstrument, IFTemperatureCommands, IFMagnetCommands):
     def __init__(self, name: str = "ppms", address: str = "tcp://localhost:29270", **kwargs):
         super().__init__(name, address, **kwargs)
         self.add_parameter("temperature", getter=self.get_temperature, unit="K")
-        self.add_parameter("field", getter=self.get_magnet, unit="T")
+        self.add_parameter("field", getter=self.get_field, unit="T")
 
     def get_lhe_level(self) -> Any:
         """Read the liquid-helium level (IF ``getLHeLevel``)."""

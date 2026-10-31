@@ -427,3 +427,10 @@ def test_ppms_temperature_reply_carries_status(server):
         assert ppms.get_temperature() == 5
         assert ppms.get_temperature_status()["status"] == "Stable"
         assert ppms.parameters["temperature"].get() == 5
+
+
+def test_field_unwraps_the_magnet_reply():
+    with FakeIFServer({"getMagnet": {"field": 1.5}}) as app, Oxford1820(address=app.address) as ox:
+        assert ox.get_magnet() == {"field": 1.5}
+        assert ox.get_field() == 1.5
+        assert ox.parameters["field"].get() == 1.5

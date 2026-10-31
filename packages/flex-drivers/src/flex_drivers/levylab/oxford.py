@@ -21,7 +21,7 @@ class Oxford1820(ZMQInstrument, IFMagnetCommands):
 
     def __init__(self, name: str = "oxford1820", address: str = "tcp://localhost:21212", **kwargs):
         super().__init__(name, address, **kwargs)
-        self.add_parameter("field", getter=self.get_magnet, unit="T")
+        self.add_parameter("field", getter=self.get_field, unit="T")
 
 
 class OxfordVRM(ZMQInstrument, IFMagnetCommands):
@@ -34,4 +34,4 @@ class OxfordVRM(ZMQInstrument, IFMagnetCommands):
 
     def __init__(self, name: str = "oxford_vrm", address: str = "tcp://localhost:21213", **kwargs):
         super().__init__(name, address, **kwargs)
-        self.add_parameter("field", getter=self.get_magnet, unit="T")
+        self.add_parameter("field", getter=self.get_field, unit="T")

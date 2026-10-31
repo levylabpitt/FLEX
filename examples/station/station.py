@@ -116,7 +116,8 @@ def _(EXPERIMENTS, mo):
 
 @app.cell
 def _(mo, script_choice, scripts):
-    _defaults = {"lockin_vs_temperature": '{"points": 3}'}
+    _defaults = {"lockin_vs_temperature": '{"points": 3}',
+                 "mnk_vsg5_vs_b": '{"b_end": 0.2, "sg_time": 10}'}  # a short trial; the script's own defaults are the full 0-18 T
     code_editor = mo.ui.code_editor(scripts[script_choice.value].read_text(encoding="utf-8"),
                                     language="python", min_height=220)
     params_text = mo.ui.text(_defaults.get(script_choice.value, "{}"), label="Params (JSON)", full_width=True)

@@ -1,0 +1,18 @@
+# The MNK fridge PC: lock-in, Transport Server and the Oxford 1820 magnet,
+# each a LabVIEW app already running. Point FLEX_CONFIG here to use it.
+
+[lab]
+name = "levylab"
+station = "mnk"
+
+[instruments.lockin]
+driver = "levylab.lockin"
+address = "tcp://localhost:29170"
+
+[instruments.transport]
+driver = "levylab.transport_server"
+address = "tcp://localhost:15260"
+
+[instruments.magnet]
+driver = "levylab.oxford1820"
+address = "tcp://localhost:21212"

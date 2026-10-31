@@ -91,7 +91,7 @@ class ZMQInstrument(Instrument):
             if not self._socket.poll(wait_ms, zmq.POLLIN):
                 raise TimeoutError
             raw = self._socket.recv_string()
-        except (TimeoutError, zmq.ZMQError) as e:
+        except BaseException as e:  # an unanswered request leaves a REQ socket unusable, Ctrl-C included
             self._reset()
             if isinstance(e, TimeoutError):
                 raise TimeoutError(

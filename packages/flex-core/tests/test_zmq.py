@@ -1,3 +1,4 @@
+import _thread
 import threading
 
 import pytest
@@ -57,6 +58,17 @@ def test_timeout_then_recovery(server):
         server.delay = 0.0
         # the late reply from the timed-out request must not confuse the next call
         assert inst.call("getResults", timeout=3.0) == {"X": [1.0, 2.0]}
+
+
+def test_interrupt_then_recovery(server):
+    """An aborted script was left holding a REQ socket that refused its next call."""
+    with ZMQInstrument("dev", server.address, timeout=3.0) as inst:
+        server.delay = 0.5
+        threading.Timer(0.1, _thread.interrupt_main).start()
+        with pytest.raises(KeyboardInterrupt):
+            inst.call("getResults")
+        server.delay = 0.0
+        assert inst.call("getResults") == {"X": [1.0, 2.0]}
 
 
 def test_connect_check_fails_fast():

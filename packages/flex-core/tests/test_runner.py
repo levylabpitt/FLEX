@@ -114,6 +114,26 @@ def test_abort_runs_the_scripts_cleanup(stack):
     assert station.bench.values["gate"] == 0  # the finally block ran
 
 
+def test_abort_cuts_a_long_sleep_short(stack):
+    _, _, client, _ = stack
+    script = (
+        "import time\n"
+        "def run(station):\n"
+        "    try:\n"
+        "        print('waiting', flush=True)\n"
+        "        time.sleep(120)\n"
+        "    finally:\n"
+        "        print('cleaned up', flush=True)\n"
+    )
+    rec = client.submit(script)
+    _wait_for_line(client, rec["id"], "waiting")
+    began = time.monotonic()
+    client.abort(rec["id"])
+    done = client.wait(rec["id"])
+    assert done["status"] == "aborted" and "cleaned up" in done["log"]
+    assert time.monotonic() - began < 8  # well inside the 10 s kill deadline
+
+
 def test_events_stream_status_and_log(stack):
     _, runner, client, _ = stack
     events = []

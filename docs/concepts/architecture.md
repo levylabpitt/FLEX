@@ -149,7 +149,9 @@ flex abort                         # the script's finally-blocks run
 ```
 
 Abort is graceful first (the script can leave the hardware safe), then a kill
-after 10 s. Stopping `flex serve` aborts a running script while the station
+after 10 s. Commands to one instrument queue behind each other, so a driver method that
+blocks for minutes (`lockin_sweep`) also blocks the abort's own cleanup calls to that
+instrument: start long operations without blocking and wait for them in the script. Stopping `flex serve` aborts a running script while the station
 still answers; a server that died mid-run marks the leftover record
 `interrupted`. Events (`run.status`, `run.log`) stream on port+1 (default
 29510/29511).

@@ -73,8 +73,9 @@ class IFMagnetCommands:
     # -- flex_drivers.levylab.capabilities.Magnet aliases -------------------------
 
     def get_field(self) -> Any:
-        """Canonical capability alias for :meth:`get_magnet`."""
-        return self.get_magnet()
+        """The field in tesla: ``get_magnet`` with the ``{"field": ...}`` reply unwrapped."""
+        reply = self.get_magnet()
+        return reply["field"] if isinstance(reply, dict) and "field" in reply else reply
 
     def set_field(self, setpoint: float, *, rate: float | None = None) -> None:
         """Canonical capability alias for :meth:`set_magnet` (Z axis)."""

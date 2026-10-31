@@ -10,5 +10,9 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["flex-core[visa,zmq,serial]"]
 
+[project.optional-dependencies]
+# Newport (.NET) and Ophir (COM) drivers
+windows = ["pythonnet>=3.0; sys_platform == 'win32'", "pywin32>=306; sys_platform == 'win32'"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/flex_drivers"]

@@ -3,16 +3,17 @@
 All logic lives in flex-core (config, components, metadata); the dashboard
 only exposes it to the bundled single-page frontend.
 
-The Station tab is the UI shell for station servers: the dashboard connects
-to every address in ``[ui] stations`` (default: this PC's own server),
-auto-generates an instrument panel from each server's ``describe``, and
-bridges the ZMQ event stream to the browser over a WebSocket.
+The Station tab is the UI shell for a station server: the dashboard connects
+to this PC's own server or to any other PC's (host and port typed in the
+tab), auto-generates an instrument panel from its ``describe``, and bridges
+the ZMQ event stream to the browser over a WebSocket.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import signal
 import threading
 import time
@@ -33,6 +34,7 @@ from flex.protocols.zmq import ZMQInstrumentError
 from flex.runner import RunClient
 
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+_HOST = re.compile(r"^[\w.\-]+$")
 
 
 class ConfigText(BaseModel):
@@ -54,8 +56,7 @@ class _StationHub:
     websocket clients. One ZMQ link per server, guarded by a lock (REQ is
     lockstep and dashboard requests run on a thread pool)."""
 
-    def __init__(self, addresses: list[str]):
-        self.addresses = addresses
+    def __init__(self):
         self.loop: asyncio.AbstractEventLoop | None = None
         self.log = get_logger("dashboard.stations")
         self._connections: dict[str, tuple[Any, threading.Lock]] = {}
@@ -63,8 +64,6 @@ class _StationHub:
         self._lock = threading.Lock()
 
     def connection(self, address: str):
-        if address not in self.addresses:
-            raise HTTPException(404, f"Unknown station '{address}'")
         with self._lock:
             entry = self._connections.get(address)
             if entry is None:
@@ -109,7 +108,7 @@ class _StationHub:
 def create_app(managed: bool = False) -> FastAPI:
     """``managed``: run by the tray app, which owns this server's lifetime."""
     cfg = load_config()
-    hub = _StationHub(cfg.ui.stations or [f"tcp://localhost:{cfg.server.port}"])
+    hub = _StationHub()
 
     @contextlib.asynccontextmanager
     async def _lifespan(app: FastAPI):
@@ -135,27 +134,29 @@ def create_app(managed: bool = False) -> FastAPI:
     # -- stations ------------------------------------------------------------
 
     @app.get("/api/stations")
-    def stations():
-        """Describe every configured station server (or its connection error)."""
-        out = []
-        for address in hub.addresses:
-            try:
-                conn, lock = hub.connection(address)
-                with lock:
-                    info = conn.describe()
-            except Exception as e:
-                hub.drop(address)
-                out.append({"address": address, "ok": False, "error": str(e)})
-                continue
-            out.append({"address": address, "ok": True, "station": info["station"],
-                        "instruments": info["instruments"], "failed": info.get("failed", {}),
-                        "lease": info.get("lease")})
-        return out
+    def station(host: str = "", port: int = 0):
+        """Describe a station server: the one at ``host:port``, or this PC's own."""
+        host, port = host or "localhost", port or cfg.server.port
+        view = {"host": host, "port": port,
+                "local": host in ("localhost", "127.0.0.1") and port == cfg.server.port}
+        address = f"tcp://{host}:{port}"
+        try:
+            if not _HOST.match(host) or not 0 < port < 65536:
+                raise ValueError("Not a valid address")
+            conn, lock = hub.connection(address)
+            with lock:
+                info = conn.describe()
+        except Exception as e:
+            hub.drop(address)
+            return {**view, "address": address, "ok": False, "error": str(e)}
+        return {**view, "address": address, "ok": True, "station": info["station"],
+                "instruments": info["instruments"], "failed": info.get("failed", {}),
+                "lease": info.get("lease")}
 
     @app.post("/api/stations/get")
     def station_get(op: ParamOp):
-        conn, lock = hub.connection(op.address)
         try:
+            conn, lock = hub.connection(op.address)
             with lock:
                 value = conn.instruments[op.instrument].parameters[op.parameter].get()
         except KeyError as e:
@@ -166,8 +167,8 @@ def create_app(managed: bool = False) -> FastAPI:
 
     @app.post("/api/stations/set")
     def station_set(op: ParamSet):
-        conn, lock = hub.connection(op.address)
         try:
+            conn, lock = hub.connection(op.address)
             with lock:
                 conn.instruments[op.instrument].parameters[op.parameter].set(op.value)
         except KeyError as e:

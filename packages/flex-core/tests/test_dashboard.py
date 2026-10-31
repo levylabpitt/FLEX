@@ -31,7 +31,7 @@ def served_station(tmp_path, monkeypatch):
     config = tmp_path / "flex.toml"
     config.write_text(
         f'[data]\nroot = "{tmp_path.as_posix()}"\n'
-        f'[ui]\nstations = ["tcp://127.0.0.1:{server.port}"]\n',
+        f'[server]\nport = {server.port}\n',
         encoding="utf-8",
     )
     monkeypatch.setenv("FLEX_CONFIG", str(config))
@@ -42,10 +42,10 @@ def served_station(tmp_path, monkeypatch):
 
 def test_station_tab_end_to_end(served_station):
     server, sim = served_station
-    address = f"tcp://127.0.0.1:{server.port}"
     with TestClient(create_app(), base_url="http://127.0.0.1") as client:
-        (info,) = client.get("/api/stations").json()
-        assert info["ok"] and info["station"] == "uistation"
+        info = client.get("/api/stations").json()  # this PC's own server by default
+        assert info["ok"] and info["station"] == "uistation" and info["local"]
+        address = info["address"]
         assert info["instruments"]["bench"]["parameters"]["gate"]["settable"]
 
         with client.websocket_connect("/ws/events") as ws:
@@ -71,18 +71,20 @@ def test_station_tab_end_to_end(served_station):
         assert r.status_code == 404
 
 
-def test_station_tab_reports_unreachable_server(tmp_path, monkeypatch):
-    config = tmp_path / "flex.toml"
-    config.write_text(
-        f'[data]\nroot = "{tmp_path.as_posix()}"\n'
-        '[ui]\nstations = ["tcp://127.0.0.1:1"]\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("FLEX_CONFIG", str(config))
+def test_station_tab_connects_to_any_address(served_station):
+    server, _ = served_station
     with TestClient(create_app(), base_url="http://127.0.0.1") as client:
-        (info,) = client.get("/api/stations").json()
-        assert not info["ok"]
-        assert info["error"]
+        info = client.get(f"/api/stations?host=127.0.0.1&port={server.port}").json()
+        assert info["ok"] and info["station"] == "uistation" and info["local"]
+        assert info["address"] == f"tcp://127.0.0.1:{server.port}"
+
+
+def test_station_tab_reports_unreachable_server(client):
+    info = client.get("/api/stations?host=127.0.0.1&port=1").json()
+    assert not info["ok"] and not info["local"]
+    assert info["error"]
+    assert not client.get("/api/stations?host=bad host&port=1").json()["ok"]
+    assert not client.get("/api/stations?host=127.0.0.1&port=70000").json()["ok"]
 
 
 def test_index_serves_frontend(client):
@@ -234,5 +236,5 @@ def test_station_tab_shows_failed_instruments_and_the_lease(served_station):
     with ZMQInstrument("holder", f"tcp://127.0.0.1:{server.port}", timeout=3.0) as link:
         link.call("leaseAcquire", {"holder": "run-7", "token": "t", "ttl": 30})
         with TestClient(create_app(), base_url="http://127.0.0.1") as client:
-            (info,) = client.get("/api/stations").json()
+            info = client.get("/api/stations").json()
     assert info["failed"] == {"lockin": "no device"} and info["lease"] == "run-7"

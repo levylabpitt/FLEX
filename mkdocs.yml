@@ -74,6 +74,7 @@ nav:
       - Dashboard & CLI: concepts/dashboard.md
   - Tutorials:
       - Write a driver: tutorials/write-a-driver.md
+      - Add instruments (IF, VISA, serial): tutorials/add-instruments.md
       - LevyLab setup: levylab.md
   - Reference:
       - Drivers: reference/drivers/

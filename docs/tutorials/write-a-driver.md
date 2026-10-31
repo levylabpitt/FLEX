@@ -6,6 +6,8 @@ fictitious `Acme4000` source-meter and ends with the optional steps —
 registration, LevyLab integration, hardware-free tests.
 
 Background on the pieces: [Instruments & drivers](../concepts/instruments.md).
+For how drivers fit into the station, with an IF, a VISA and a serial example,
+see [Add instruments](add-instruments.md).
 
 ## 1. Pick the protocol base
 

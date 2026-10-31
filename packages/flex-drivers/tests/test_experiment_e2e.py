@@ -115,9 +115,10 @@ def test_abort_midway_still_switches_the_excitation_off(stack):
     params = {"points": 2, "start": 100.0, "stop": 90.0, "amplitude": 0.5, "tolerance": 0.01,
               "settle": 60.0, "poll": 0.1, "timeout": 120}
     run = client.submit((EXAMPLES / "lockin_vs_temperature.py").read_text(), params=params)
-    deadline = time.monotonic() + 20
+    deadline = time.monotonic() + 60
     while "going to 100.00 K" not in client.run(run["id"])["log"] and time.monotonic() < deadline:
         time.sleep(0.1)
+    assert "going to 100.00 K" in client.run(run["id"])["log"], "the script never started"
     client.abort(run["id"])
     done = client.wait(run["id"])
     assert done["status"] == "aborted"

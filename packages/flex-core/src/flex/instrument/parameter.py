@@ -1,8 +1,4 @@
-"""Parameters: named, unit-carrying get/set handles on instruments.
-
-Parameters give sweeps and measurements a uniform way to address "things to
-set and read" — with names and units recorded automatically in data files.
-"""
+"""Parameters: named, unit-carrying get/set handles, and their validators."""
 
 from __future__ import annotations
 
@@ -73,7 +69,7 @@ class Parameter:
         self.instrument = instrument
         self.unit = unit
         self.vals = vals
-        self.__doc__ = doc or f"Parameter {name}" + (f" [{unit}]" if unit else "")
+        self.__doc__ = doc
         self._getter = getter
         self._setter = setter
         self.cache: Any = None

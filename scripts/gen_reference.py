@@ -1,12 +1,5 @@
-"""Generate the reference section at mkdocs build time.
-
-Driver pages come from the live ``flex_drivers.CATALOG`` and integration
-pages from a static table below, so a new driver shows up on the site
-without touching the docs. Also publishes ``install.ps1`` at the site root so
-``irm flex.levylab.org/install.ps1 | iex`` works.
-"""
-
-from pathlib import Path
+"""Generate the reference section at mkdocs build time: driver pages from the live
+``flex_drivers.CATALOG``, integration pages from the table below."""
 
 import mkdocs_gen_files
 
@@ -25,13 +18,6 @@ INTEGRATIONS = {
     },
 }
 
-ROOT = Path(__file__).resolve().parents[1]
-
-# -- install.ps1 at the site root -------------------------------------------
-
-with mkdocs_gen_files.open("install.ps1", "w", encoding="utf-8", newline="") as f:
-    f.write((ROOT / "install.ps1").read_text(encoding="utf-8"))
-
 # -- drivers -----------------------------------------------------------------
 
 drivers: dict[str, list[tuple[str, str, type]]] = {}  # vendor -> [(name, ref, cls)]
@@ -49,8 +35,8 @@ with mkdocs_gen_files.open("reference/drivers/index.md", "w") as f:
     f.write("# Drivers\n\n")
     f.write(
         "Every driver in `flex-drivers`, generated from the package's live\n"
-        "`CATALOG` at build time. The **name** column is what goes in a\n"
-        "station's `driver = ...` key.\n\n"
+        "`CATALOG` at build time. The **name** column is what goes in an\n"
+        "`[instruments.*]` entry's `driver` key.\n\n"
     )
     for vendor, entries in sorted(drivers.items()):
         f.write(f"## {vendor}\n\n")
@@ -88,7 +74,7 @@ nav_lines = ["- [Overview](index.md)"]
 for pkg, meta in sorted(INTEGRATIONS.items()):
     with mkdocs_gen_files.open(f"reference/integrations/{pkg}.md", "w") as f:
         f.write(f"# `{pkg}`\n\n{meta['summary']}\n\n")
-        f.write(f"```\npip install {pkg}\n```\n\n")
+        f.write(f"```\npip install -e packages/{pkg}\n```\n\n")
         refs = [
             (name, ref)
             for registry in meta["registries"]

@@ -1,11 +1,5 @@
-"""Comms backends: external notifications for the experiment lifecycle.
-
-Same shape as the ``db``/``writer``/``storage`` layers -- one config key
-(``[comms] backend``) resolved through the package catalog, default a
-no-op. A backend that fails must never break a running experiment; see
-:class:`~flex_exp.experiment.Experiment`, which calls these methods wrapped
-in try/except and only logs failures.
-"""
+"""Comms backends (``[comms] backend``): experiment lifecycle notifications to external
+systems. Experiment wraps every call, so a failing backend never breaks a run."""
 
 from __future__ import annotations
 

@@ -39,7 +39,6 @@ def test_defaults_without_config(monkeypatch, tmp_path):
     assert cfg.db.backend == "sqlite"
     assert cfg.data.writer == "hdf5"
     assert cfg.storage.backend == "local"
-    assert cfg.exp.handler == "default"
     assert cfg.comms.backend == "none"
     assert cfg.logs.mirror_to_db is False
     assert cfg.logs.level == "WARNING"

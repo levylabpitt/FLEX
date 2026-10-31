@@ -1,13 +1,5 @@
-"""ZMQ instruments: JSON-RPC 2.0 over a REQ socket.
-
-This is the remote-API dialect of the LevyLab Instrument Framework (LabVIEW
-apps exposing ACK / IDN / HELP plus instrument-specific methods), but works
-with any JSON-RPC-over-ZMQ endpoint.
-
-A JSON-RPC ``error`` response raises :class:`ZMQInstrumentError`; a timeout
-recreates the REQ socket (a REQ socket that missed its reply is stuck forever
-otherwise) so the next call works again.
-"""
+"""ZMQ instruments: JSON-RPC 2.0 over a REQ socket, the LevyLab Instrument-Framework
+dialect (ACK / IDN / HELP plus app methods)."""
 
 from __future__ import annotations
 
@@ -33,7 +25,6 @@ class ZMQInstrument(Instrument):
     """Base class for instruments speaking JSON-RPC 2.0 over ZMQ REQ/REP.
 
     Args:
-        name: Instrument name used in logs, snapshots, and experiments.
         address: ZMQ endpoint, e.g. ``"tcp://localhost:29170"``.
         timeout: Seconds to wait for each reply.
         connect_check: Send an ``ACK`` on connect to verify the endpoint.
@@ -144,7 +135,6 @@ class ZMQInstrument(Instrument):
         self._socket.connect(self._address)
 
     def _reset(self) -> None:
-        """Recreate the REQ socket after a missed reply (avoids the stuck state)."""
         self.log.warning("Resetting connection to %s", self._address)
         if self._socket is not None:
             self._socket.close(linger=0)

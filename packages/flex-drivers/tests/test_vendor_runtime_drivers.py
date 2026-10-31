@@ -23,36 +23,36 @@ class FakeConex:
         self.position = 1.25
         self.last = None
 
-    def OpenInstrument(self, port):  # noqa: N802 - the vendor library's name
+    def OpenInstrument(self, port):
         return self.open_status
 
-    def CloseInstrument(self):  # noqa: N802
+    def CloseInstrument(self):
         self.closed = True
         return 0
 
-    def VE(self, addr):  # noqa: N802
+    def VE(self, addr):
         return 0, "CONEX-AGP 1.0"
 
-    def TP(self, addr):  # noqa: N802
+    def TP(self, addr):
         return 0, self.position
 
-    def PA_Set(self, addr, position):  # noqa: N802
+    def PA_Set(self, addr, position):
         if position > 10:
             return -1, "limit reached"
         self.position, self.last = position, ("PA", position)
         return 0, ""
 
-    def PR_Set(self, addr, delta):  # noqa: N802
+    def PR_Set(self, addr, delta):
         self.position += delta
         return 0, ""
 
-    def ST(self, addr):  # noqa: N802
+    def ST(self, addr):
         return 0
 
-    def OR(self, addr, err):  # noqa: N802
+    def OR(self, addr, err):
         return 0, ""
 
-    def TS(self, addr, code, state, err):  # noqa: N802
+    def TS(self, addr, code, state, err):
         return 0, "0", "READY", ""
 
 
@@ -94,7 +94,7 @@ class FakeBuilder:
     def __init__(self, size):
         self.text = ""
 
-    def ToString(self):  # noqa: N802
+    def ToString(self):
         return self.text
 
 
@@ -104,22 +104,22 @@ class FakeUSB:
     def __init__(self, _flag):
         self.sent, self.closed, self.motion = [], False, iter(["0", "0", "1"])
 
-    def OpenDevices(self, _a, _b):  # noqa: N802
+    def OpenDevices(self, _a, _b):
         return True
 
-    def GetDeviceTable(self):  # noqa: N802
+    def GetDeviceTable(self):
         table = type("Table", (), {"Count": self.devices})()
         table.GetEnumerator = lambda: type("Enum", (), {"MoveNext": lambda s: True, "Key": "8742-1"})()
         return table
 
-    def Query(self, key, command, reply):  # noqa: N802
+    def Query(self, key, command, reply):
         self.sent.append(command)
         reply.text = {"*IDN?": "New_Focus 8742", "1TP?": "1200", "1VA?": "2000"}.get(command, "")
         if command.endswith("MD?"):
             reply.text = next(self.motion)
         return True
 
-    def CloseDevices(self):  # noqa: N802
+    def CloseDevices(self):
         self.closed = True
 
 
@@ -173,25 +173,25 @@ class FakeOphir:
     def __init__(self):
         self.calls = []
 
-    def StopAllStreams(self):  # noqa: N802
+    def StopAllStreams(self):
         self.calls.append("stop")
 
-    def CloseAll(self):  # noqa: N802
+    def CloseAll(self):
         self.calls.append("close")
 
-    def ScanUSB(self):  # noqa: N802
+    def ScanUSB(self):
         return self.serials
 
-    def OpenUSBDevice(self, serial):  # noqa: N802
+    def OpenUSBDevice(self, serial):
         return 7
 
-    def IsSensorExists(self, handle, channel):  # noqa: N802
+    def IsSensorExists(self, handle, channel):
         return True
 
-    def StartStream(self, handle, channel):  # noqa: N802
+    def StartStream(self, handle, channel):
         self.calls.append("start")
 
-    def GetData(self, handle, channel):  # noqa: N802
+    def GetData(self, handle, channel):
         return [[0.001, 0.002]]
 
 
@@ -227,41 +227,41 @@ class FakeDScanLib:
     def __init__(self):
         self.insertion, self.fail_next, self.destroyed = 12.3456, False, False
 
-    def dscan_INVALID_HANDLE(self):  # noqa: N802
+    def dscan_INVALID_HANDLE(self):
         return 0xFFFFFFFF
 
-    def dscan_ERROR_MESSAGE_BUFFER_LEN(self):  # noqa: N802
+    def dscan_ERROR_MESSAGE_BUFFER_LEN(self):
         return 64
 
-    def dscan_GetLastStatusMessage(self, buffer, size):  # noqa: N802
+    def dscan_GetLastStatusMessage(self, buffer, size):
         buffer.value = b"wedge jammed  "
 
-    def dscan_Create(self, serial, handle_ref):  # noqa: N802
+    def dscan_Create(self, serial, handle_ref):
         handle_ref._obj.value = 7
         return 0
 
-    def dscan_Connect(self, handle):  # noqa: N802
+    def dscan_Connect(self, handle):
         return 0
 
-    def dscan_Disconnect(self, handle):  # noqa: N802
+    def dscan_Disconnect(self, handle):
         return 0
 
-    def dscan_Destroy(self, handle):  # noqa: N802
+    def dscan_Destroy(self, handle):
         self.destroyed = True
         return 0
 
-    def dscan_IsConnected(self, handle):  # noqa: N802
+    def dscan_IsConnected(self, handle):
         return 1
 
-    def dscanComp_GetFullInsertionRange(self, handle, start, stop):  # noqa: N802
+    def dscanComp_GetFullInsertionRange(self, handle, start, stop):
         start._obj.value, stop._obj.value = 0.0, 20.0
         return 0
 
-    def dscanComp_GetInsertion(self, handle, out):  # noqa: N802
+    def dscanComp_GetInsertion(self, handle, out):
         out._obj.value = self.insertion
         return 0
 
-    def dscanComp_SetInsertion(self, handle, value):  # noqa: N802
+    def dscanComp_SetInsertion(self, handle, value):
         if self.fail_next:
             return 1
         self.insertion = value.value

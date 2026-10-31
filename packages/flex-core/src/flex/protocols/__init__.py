@@ -13,8 +13,7 @@ instrument is connected::
                 get_parser=float, unit="V",
             )
 
-Protocol dependencies (pyvisa, pyzmq, pyserial) are imported lazily so only
-the protocols you use need to be installed.
+pyvisa and pyserial are optional extras, imported on first use.
 """
 
 from importlib import import_module
@@ -27,35 +26,30 @@ if TYPE_CHECKING:
     from flex.protocols.zmq import ZMQInstrument as ZMQInstrument
     from flex.protocols.zmq import ZMQInstrumentError as ZMQInstrumentError
 
-__version__ = "3.0.0a1"
-
 __all__ = [
     "SerialInstrument", "TCPInstrument", "VISAInstrument",
     "ZMQInstrument", "ZMQInstrumentError",
 ]
 
-_LAZY = {
-    "VISAInstrument": ("flex.protocols.visa", "pyvisa", "visa"),
-    "TCPInstrument": ("flex.protocols.tcp", None, None),
-    "SerialInstrument": ("flex.protocols.serial", "pyserial", "serial"),
-    "ZMQInstrument": ("flex.protocols.zmq", "pyzmq", "zmq"),
-    "ZMQInstrumentError": ("flex.protocols.zmq", "pyzmq", "zmq"),
+_LAZY = {  # name -> (module, flex-core extra providing its dependency)
+    "VISAInstrument": ("flex.protocols.visa", "visa"),
+    "TCPInstrument": ("flex.protocols.tcp", None),
+    "SerialInstrument": ("flex.protocols.serial", "serial"),
+    "ZMQInstrument": ("flex.protocols.zmq", None),
+    "ZMQInstrumentError": ("flex.protocols.zmq", None),
 }
 
 
 def __getattr__(name: str):
-    if name in _LAZY:
-        module, dependency, extra = _LAZY[name]
-        try:
-            return getattr(import_module(module), name)
-        except ImportError as e:
-            if dependency and e.name in (dependency, extra):
-                raise ImportError(
-                    f"{name} requires {dependency}. Install it with: "
-                    f"pip install flex-core[{extra}]"
-                ) from e
-            raise
-    raise AttributeError(f"module 'flex.protocols' has no attribute '{name}'")
+    if name not in _LAZY:
+        raise AttributeError(f"module 'flex.protocols' has no attribute '{name}'")
+    module, extra = _LAZY[name]
+    try:
+        return getattr(import_module(module), name)
+    except ImportError as e:
+        if extra and not (e.name or "").startswith("flex"):
+            raise ImportError(f"{name} needs the [{extra}] extra: pip install flex-core[{extra}]") from e
+        raise
 
 
 def __dir__() -> list[str]:

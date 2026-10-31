@@ -10,13 +10,8 @@ from flex_asana.sync import ExperimentSync
 
 
 class AsanaComms(CommsBackend):
-    """Creates an Asana task when an experiment starts (stamped with the
-    start time, assigned to the user) and fills in the end time when it
-    ends. See :class:`~flex_asana.sync.ExperimentSync` for the env vars
-    this reads (``ASANA_ACCESS_TOKEN``, ``ASANA_WORKSPACE_GID``,
-    ``ASANA_EXPERIMENTS_PROJECT_GID``, ``ASANA_START_FIELD``, ``ASANA_END_FIELD``).
-    Any argument here overrides the matching env var.
-    """
+    """Creates a task at experiment start (start time, assigned to the user) and fills in the
+    end time at the end. Arguments override the ASANA_* environment variables."""
 
     def __init__(
         self,

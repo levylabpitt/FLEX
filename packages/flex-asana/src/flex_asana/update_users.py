@@ -1,9 +1,5 @@
-"""Regenerates ``flex_asana._generated_users.User`` from the Asana workspace's
-member list, for IDE autocomplete on ``Experiment(user=...)``. Run whenever
-people join or leave:
-
-    python -m flex_asana.update_users
-"""
+"""``python -m flex_asana.update_users``: regenerate ``User`` (see flex_asana.users) from the
+workspace member list. Run when people join or leave."""
 
 from __future__ import annotations
 

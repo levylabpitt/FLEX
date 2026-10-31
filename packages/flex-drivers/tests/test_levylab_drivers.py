@@ -1,14 +1,13 @@
 """Smoke tests for every LevyLab driver against FakeIFServer.
 
-Each test asserts that the ported snake_case methods emit the exact v1
-JSON-RPC method names and param-dict key spellings.
+Each test asserts that the snake_case methods emit the IF apps' exact JSON-RPC
+method names and key spellings.
 """
 
 import pytest
 
 from flex.protocols.testing import FakeIFServer
 from flex_drivers.levylab import capabilities
-from flex_drivers.levylab.aerotech import Aerotech
 from flex_drivers.levylab.cryostation import Cryostation
 from flex_drivers.levylab.krohn_hite import KrohnHite7008
 from flex_drivers.levylab.lockin import Lockin
@@ -411,14 +410,6 @@ def test_leiden_tc(server, cls):
         assert last(server) == ("getHeater", [1])
         with pytest.raises(NotImplementedError, match="passive cooling system"):
             tc.set_temperature(0.05)
-
-
-# -- Aerotech (stub) --------------------------------------------------------------
-
-
-def test_aerotech_is_unavailable():
-    with pytest.raises(NotImplementedError, match="Driver not available"):
-        Aerotech()
 
 
 def test_ppms_temperature_reply_carries_status(server):

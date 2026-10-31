@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -12,11 +12,10 @@ import numpy as np
 
 @dataclass
 class ColumnSpec:
-    """One column of tabular measurement data."""
+    """One float column of tabular measurement data."""
 
     name: str
     unit: str = ""
-    dtype: Any = float
 
 
 class DataWriter(ABC):
@@ -27,7 +26,6 @@ class DataWriter(ABC):
     being called early (aborted measurements) and must flush what they have.
     """
 
-    format_name: str = ""
     suffix: str = ""
 
     @abstractmethod
@@ -51,19 +49,15 @@ class DataWriter(ABC):
         """Flush and close the file. Must be safe to call more than once."""
 
 
-@dataclass
 class RowBuffer:
-    """Utility for writers: buffers rows per column, flushing in blocks."""
+    """Buffers rows per column for a writer, which flushes them in blocks."""
 
-    columns: list[ColumnSpec]
-    block_size: int = 1000
-    _pending: dict[str, list] = field(default_factory=dict)
-
-    def __post_init__(self):
-        self._pending = {c.name: [] for c in self.columns}
+    def __init__(self, columns: list[ColumnSpec], block_size: int = 1000):
+        self.block_size = block_size
+        self._pending: dict[str, list] = {c.name: [] for c in columns}
 
     def add(self, row: dict[str, Any]) -> bool:
-        """Buffer one row; returns True when a flush is due."""
+        """Buffer one row; True when a flush is due."""
         unknown = set(row) - set(self._pending)
         if unknown:
             raise KeyError(f"Unknown column(s): {', '.join(sorted(unknown))}")
@@ -72,8 +66,10 @@ class RowBuffer:
         return len(next(iter(self._pending.values()), [])) >= self.block_size
 
     def drain(self) -> dict[str, np.ndarray]:
-        """Return and clear the buffered block as {column: array}."""
-        block = {name: np.asarray(values) for name, values in self._pending.items()}
+        """Return and clear the buffered block as {column: array}; {} when nothing is pending."""
+        if not next(iter(self._pending.values()), []):
+            return {}
+        block = {name: np.asarray(values, dtype=float) for name, values in self._pending.items()}
         for values in self._pending.values():
             values.clear()
         return block

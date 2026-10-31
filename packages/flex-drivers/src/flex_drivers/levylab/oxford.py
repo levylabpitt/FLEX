@@ -25,10 +25,7 @@ class Oxford1820(ZMQInstrument, IFMagnetCommands):
 
 
 class OxfordVRM(ZMQInstrument, IFMagnetCommands):
-    """Oxford VRM Magnet subsystem (CF900 fridge).
-
-    v1 note: "Not intended for direct use - use MNK class instead."
-    """
+    """Oxford VRM Magnet subsystem (CF900 fridge)."""
 
     lv_class = "Instrument.OxfordVRM.lvclass"
 

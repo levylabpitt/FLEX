@@ -32,13 +32,8 @@ def is_interactive() -> bool:
 
 
 def enable_console(level: int | None = None) -> logging.Handler:
-    """Attach a single rich console handler to the ``flex`` logger. Idempotent.
-
-    Interactive sessions (Jupyter / VS Code Interactive Window) default to
-    WARNING: routine per-instrument INFO chatter reads fine in a terminal but
-    clutters a notebook cell, where the point is one glanceable HTML summary
-    instead (see Experiment._repr_html_ / CESession._repr_html_).
-    """
+    """Attach one rich console handler to the ``flex`` logger. Idempotent.
+    Notebooks default to WARNING so the HTML card isn't buried in INFO lines."""
     global _console_handler
     logger = get_logger()
     logger.setLevel(logging.DEBUG)
@@ -54,11 +49,8 @@ def enable_console(level: int | None = None) -> logging.Handler:
 
 
 def add_file_log(path: str | Path, level: int = logging.DEBUG, max_bytes: int = 0) -> logging.Handler:
-    """Attach a file handler to the ``flex`` logger (e.g. one file per experiment).
-    With ``max_bytes`` the file rotates, keeping two old copies.
-
-    Returns the handler; pass it to :func:`remove_log_handler` when done.
-    """
+    """Attach a file handler to the ``flex`` logger; with ``max_bytes`` it rotates, keeping
+    two old copies. Detach it with :func:`remove_log_handler`."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     handler = (RotatingFileHandler(path, maxBytes=max_bytes, backupCount=2, encoding="utf-8") if max_bytes
@@ -78,12 +70,7 @@ def remove_log_handler(handler: logging.Handler) -> None:
 
 
 class DBLogHandler(logging.Handler):
-    """Mirrors emitted records into a metadata store via a callback.
-
-    Kept generic (no ``flex.metadata``/``flex.db`` import here) -- the caller
-    supplies ``sink(level, logger_name, message, exc_text)``; ``Experiment``
-    wires it to ``self.db.record_log``.
-    """
+    """Forwards records to ``sink(level, logger_name, message, exc_text)``."""
 
     def __init__(self, sink, level: int = logging.WARNING):
         super().__init__(level)
@@ -100,7 +87,7 @@ class DBLogHandler(logging.Handler):
 
 
 def add_db_log_handler(sink, level: int | str = logging.WARNING) -> logging.Handler:
-    """Attach a :class:`DBLogHandler` to the ``flex`` logger. Idempotent per call site."""
+    """Attach a :class:`DBLogHandler` to the ``flex`` logger."""
     if isinstance(level, str):
         level = logging.getLevelName(level)
     handler = DBLogHandler(sink, level=level)

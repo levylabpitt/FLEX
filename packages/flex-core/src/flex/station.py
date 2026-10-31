@@ -29,34 +29,23 @@ class Station:
         self.name = name or self.config.lab.station or socket.gethostname()
         self.events = EventBus()
         self.instruments: dict[str, Instrument] = {}
-        #: name -> error message, for [instruments.*] entries that failed to
-        #: build via Station.load() (unplugged hardware, bad config, ...)
-        self.failed: dict[str, str] = {}
+        self.failed: dict[str, str] = {}  # name -> why it failed to load
         self.log = get_logger(f"station.{self.name}")
         for inst_name, inst in (instruments or {}).items():
             self.add_instrument(inst, inst_name)
 
     @classmethod
-    def load(cls, config: FlexConfig | str | Path | None = None, *names: str) -> Station:
-        """Build a Station from the active config's [instruments.*] entries
-        (all of them, or just the given names)."""
+    def load(cls, config: FlexConfig | str | Path | None = None) -> Station:
+        """Build every [instruments.*] entry. One that fails (unplugged, misconfigured) is
+        recorded in ``failed`` instead of taking the rest offline."""
         cfg = config if isinstance(config, FlexConfig) else load_config(config)
-        configured = cfg.instruments
-        if not configured:
+        if not cfg.instruments:
             raise ValueError("No [instruments.*] defined in the active configuration")
-        unknown = [n for n in names if n not in configured]
-        if unknown:
-            raise KeyError(
-                f"Not in the configuration: {', '.join(unknown)}"
-                f" (configured: {', '.join(configured)})"
-            )
         station = cls(config=cfg)
-        for name in names or configured:
+        for name, spec in cfg.instruments.items():
             try:
-                instrument = configured[name].build(name)
+                instrument = spec.build(name)
             except Exception as e:
-                # one bad instrument (unplugged, misconfigured) must not take
-                # the rest of the bench offline
                 station.log.error("Instrument '%s' failed to load: %s", name, e)
                 station.failed[name] = str(e)
                 continue
@@ -71,12 +60,6 @@ class Station:
         instrument.events = self.events
         self.log.info("Instrument added: %s (%s)", name, type(instrument).__name__)
         return instrument
-
-    def get(self, name: str) -> Instrument:
-        if name not in self.instruments:
-            have = ", ".join(self.instruments) or "none"
-            raise KeyError(f"No instrument '{name}' (loaded: {have})")
-        return self.instruments[name]
 
     def snapshot(self, *, read: bool = False) -> dict[str, Any]:
         return {name: inst.snapshot(read=read) for name, inst in self.instruments.items()}

@@ -1,8 +1,5 @@
-"""flex.db (FLEX v2)."""
+"""Metadata store backends."""
 
-__version__ = "3.0.0a1"
-
-#: DB backend name -> "module:Class" reference.
 DB_BACKENDS: dict[str, str] = {
     "sqlite": "flex.db.sqlite:SQLiteStore",
     "postgres": "flex.db.postgres:PostgresStore",

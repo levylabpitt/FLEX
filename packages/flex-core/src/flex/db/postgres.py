@@ -1,25 +1,10 @@
-"""PostgreSQL metadata store (psycopg 3).
-
-Creates the FLEX core schema (``flex_experiments``, ``flex_measurements``,
-``flex_notes``, ``flex_cells``, ``flex_logs``, ``flex_instruments``) in the
-configured database. Configuration::
-
-    [db]
-    backend = "postgres"
-    dsn = "postgresql://user@db.example.org/lab"
-
-.. note::
-    The pre-v2 LevyLab tables (``exp``, ``meas``, ``cell_log``) are a
-    separate, coordinated migration to plan with the lab if ever needed —
-    this store's ``flex_``-prefixed tables never touch them, so both can
-    coexist in the same database.
-"""
+"""PostgreSQL metadata store (``[db] backend = "postgres"``, ``dsn = ...``). Tables are
+``flex_``-prefixed, so they coexist with the lab's legacy ``exp``/``meas``/``cell_log`` tables."""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -115,7 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_flex_instruments_exp ON flex_instruments(experime
 
 
 class PostgresStore(MetadataStore):
-    def __init__(self, *, dsn: str, data_root: str | Path | None = None, **_options: Any):
+    def __init__(self, *, dsn: str, **_options: Any):
         self._dsn = dsn
         self._conn = psycopg.connect(dsn, autocommit=True)
         with self._conn.cursor() as cur:
@@ -124,7 +109,7 @@ class PostgresStore(MetadataStore):
 
     # -- writing ----------------------------------------------------------
 
-    def record_experiment_start(self, record: ExperimentRecord, **extra: Any) -> None:
+    def record_experiment_start(self, record: ExperimentRecord) -> None:
         self._execute(
             """INSERT INTO flex_experiments
                    (id, "user", name, start_time, end_time, station, host, flex_version, config)
@@ -143,12 +128,12 @@ class PostgresStore(MetadataStore):
             ),
         )
 
-    def record_experiment_end(self, experiment_id: str, end_time: datetime, **extra: Any) -> None:
+    def record_experiment_end(self, experiment_id: str, end_time: datetime) -> None:
         self._execute(
             "UPDATE flex_experiments SET end_time = %s WHERE id = %s", (end_time, experiment_id)
         )
 
-    def record_measurement_start(self, record: MeasurementRecord, **extra: Any) -> None:
+    def record_measurement_start(self, record: MeasurementRecord) -> None:
         self._execute(
             """INSERT INTO flex_measurements (id, experiment_id, name, start_time, end_time, aborted)
                VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
@@ -171,7 +156,6 @@ class PostgresStore(MetadataStore):
         *,
         writer: str | None = None,
         rows: int | None = None,
-        **extra: Any,
     ) -> None:
         self._execute(
             "UPDATE flex_measurements"
@@ -190,13 +174,13 @@ class PostgresStore(MetadataStore):
             ),
         )
 
-    def record_note(self, record: NoteRecord, **extra: Any) -> None:
+    def record_note(self, record: NoteRecord) -> None:
         self._execute(
             "INSERT INTO flex_notes (experiment_id, measurement_id, time, text) VALUES (%s, %s, %s, %s)",
             (record.experiment_id, record.measurement_id, record.time, record.text),
         )
 
-    def record_cell(self, record: CellRecord, **extra: Any) -> None:
+    def record_cell(self, record: CellRecord) -> None:
         self._execute(
             "INSERT INTO flex_cells (experiment_id, time, execution_count, source, success, error)"
             " VALUES (%s, %s, %s, %s, %s, %s)",
@@ -210,14 +194,14 @@ class PostgresStore(MetadataStore):
             ),
         )
 
-    def record_log(self, record: LogEntryRecord, **extra: Any) -> None:
+    def record_log(self, record: LogEntryRecord) -> None:
         self._execute(
             "INSERT INTO flex_logs (experiment_id, time, level, logger_name, message, exc_text)"
             " VALUES (%s, %s, %s, %s, %s, %s)",
             (record.experiment_id, record.time, record.level, record.logger_name, record.message, record.exc_text),
         )
 
-    def record_instrument(self, record: InstrumentRecord, **extra: Any) -> None:
+    def record_instrument(self, record: InstrumentRecord) -> None:
         self._execute(
             "INSERT INTO flex_instruments (experiment_id, name, driver, address, options, connected_at)"
             " VALUES (%s, %s, %s, %s, %s, %s)",
@@ -231,7 +215,7 @@ class PostgresStore(MetadataStore):
             ),
         )
 
-    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
+    def record_monitor(self, record: MonitorRecord) -> None:
         self._execute(
             "INSERT INTO flex_monitor (time, station, parameter, value, unit) VALUES (%s, %s, %s, %s, %s)",
             (record.time, record.station, record.parameter, _dump_value(record.value), record.unit),
@@ -309,15 +293,12 @@ class PostgresStore(MetadataStore):
             for r in rows
         ]
 
-    def list_logs(self, experiment_id: str, *, level: str | None = None) -> list[LogEntryRecord]:
+    def list_logs(self, experiment_id: str) -> list[LogEntryRecord]:
         sql = (
             "SELECT experiment_id, time, level, logger_name, message, exc_text FROM flex_logs"
             " WHERE experiment_id = %s"
         )
         params: tuple = (experiment_id,)
-        if level:
-            sql += " AND level = %s"
-            params = (*params, level)
         sql += " ORDER BY id"
         rows = self._query(sql, params)
         return [
@@ -339,27 +320,18 @@ class PostgresStore(MetadataStore):
                 name=r[1],
                 driver=r[2],
                 address=r[3],
-                options=r[4] if isinstance(r[4], dict) else json.loads(r[4] or "{}"),
+                options=r[4],
                 connected_at=r[5],
             )
             for r in rows
         ]
 
-    def list_monitor(
-        self,
-        parameter: str | None = None,
-        *,
-        since: datetime | None = None,
-        limit: int = 100,
-    ) -> list[MonitorRecord]:
+    def list_monitor(self, parameter: str | None = None, *, limit: int = 100) -> list[MonitorRecord]:
         sql = "SELECT time, station, parameter, value, unit FROM flex_monitor"
         clauses, params = [], []
         if parameter:
             clauses.append("parameter = %s")
             params.append(parameter)
-        if since:
-            clauses.append("time >= %s")
-            params.append(since)
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY id DESC LIMIT %s"
@@ -367,7 +339,7 @@ class PostgresStore(MetadataStore):
         return [
             MonitorRecord(
                 time=r[0], station=r[1], parameter=r[2],
-                value=r[3] if not isinstance(r[3], str) else json.loads(r[3]),
+                value=r[3],  # psycopg decodes JSONB
                 unit=r[4] or "",
             )
             for r in rows
@@ -378,23 +350,23 @@ class PostgresStore(MetadataStore):
 
     # -- internals ---------------------------------------------------------
 
-    def _execute(self, sql: str, params: tuple) -> None:
-        try:
-            with self._conn.cursor() as cur:
-                cur.execute(sql, params)
-        except psycopg.OperationalError:
-            self._conn = psycopg.connect(self._dsn, autocommit=True)
-            with self._conn.cursor() as cur:
-                cur.execute(sql, params)
+    def _execute(self, sql: str, params: tuple) -> list[tuple] | None:
+        """Run one statement, reconnecting once if the connection dropped."""
+        for attempt in (0, 1):
+            try:
+                with self._conn.cursor() as cur:
+                    cur.execute(sql, params)
+                    return cur.fetchall() if cur.description else None
+            except psycopg.OperationalError:
+                if attempt:
+                    raise
+                self._conn = psycopg.connect(self._dsn, autocommit=True)
 
     def _query(self, sql: str, params: tuple) -> list[tuple]:
-        with self._conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
+        return self._execute(sql, params)
 
     @staticmethod
     def _experiment(row: tuple) -> ExperimentRecord:
-        config = row[8] if isinstance(row[8], dict) else json.loads(row[8] or "{}")
         return ExperimentRecord(
             id=row[0],
             user=row[1],
@@ -404,5 +376,5 @@ class PostgresStore(MetadataStore):
             station=row[5],
             host=row[6],
             flex_version=row[7],
-            config=config,
+            config=row[8],
         )

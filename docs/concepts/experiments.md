@@ -19,8 +19,9 @@ instrument.
 
 ```python
 with Experiment("jane") as exp:
-    lockin = exp.add(SR7270, "lockin", "USB0::...")   # construct + register
-    exp.lockin                                        # attribute access by name
+    lockin = exp.add(SR7270, "lockin", serial="12345")   # construct + register
+    exp.lockin                                           # attribute access by name
+    exp.note("sample B, 4 K")                            # free-text note
 ```
 
 IDs are sortable and collision-safe: `YYYYMMDDHHMMSS-<4 hex chars>`.
@@ -73,8 +74,8 @@ a network failure can never corrupt a live measurement.
 ## Scan and sweep
 
 `sweep(target, values, delay=...)` describes one axis — a `Parameter` or any
-one-argument callable, its values, and pacing (plus optional `before`/`after`
-per-pass callbacks). `Scan(*axes)` iterates them as a grid (first axis
+one-argument callable, its values, and pacing (plus an optional `after`
+callback when a pass ends). `Scan(*axes)` iterates them as a grid (first axis
 outermost) and records a row per point:
 
 ```python
@@ -108,7 +109,7 @@ holds the canonical `FilePointer`.
 
 ## Metadata records
 
-The metadata store (from `[db] backend`; SQLite by default) keeps six
+The metadata store (from `[db] backend`; SQLite by default) keeps seven
 `flex_`-prefixed tables, normalized one entity per table:
 
 - **flex_experiments** — id, user, name, start/end, station, host,
@@ -117,13 +118,16 @@ The metadata store (from `[db] backend`; SQLite by default) keeps six
   format, row count, file pointer (uri/backend/size).
 - **flex_instruments** — one row per `exp.add()`/`add_instrument()` call:
   name, driver class, address, options.
-- **flex_notes** — free-text notes (`exp.note(...)`).
+- **flex_notes** — free-text notes (`exp.note(...)`, `m.add_note(...)`).
 - **flex_cells** — one row per executed Jupyter cell (source, execution
   count, success/error) — see `cell_log` above.
 - **flex_logs** — an opt-in mirror of the `flex` logger namespace; empty
   unless `[logs] mirror_to_db = true` (default level `"WARNING"`, override
   with `[logs] level`). Kept separate from `flex_notes`/`flex_cells` since
   it's off by default and can be high-volume.
+- **flex_monitor** — parameter values `flex serve` logs in the background
+  (time, station, parameter, value, unit); not tied to an experiment — see
+  [Background logging](configuration.md#background-logging).
 
 The `flex_` prefix keeps this schema unambiguous in a database that may also
 hold unrelated or legacy tables. Browse the tables with `flex experiments` /

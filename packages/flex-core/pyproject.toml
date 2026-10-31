@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flex-core"
-version = "3.0.0a1"
+version = "2.0.0a1"
 description = "FLEX core: instrument model, protocol bases, data & metadata services, station configuration, CLI"
 license = "MIT"
 requires-python = ">=3.11"
@@ -14,23 +14,20 @@ dependencies = [
     "typer>=0.12",
     "rich>=13",
     "platformdirs>=4",
-    "tqdm>=4.66",
-    "tomlkit>=0.12",
+    "pyzmq>=25",
     "fastapi>=0.110",
     "uvicorn>=0.29",
-    "websockets>=12",
+    "websockets>=12",  # uvicorn's WebSocket support (dashboard event stream)
     "h5py>=3.10",
 ]
 
 [project.optional-dependencies]
 visa = ["pyvisa>=1.14"]
-zmq = ["pyzmq>=25"]
 app = ["pystray>=0.19", "pillow>=10"]
 serial = ["pyserial>=3.5"]
 postgres = ["psycopg[binary]>=3.1"]
 tdms = ["npTDMS>=1.9"]
-all = ["pyvisa>=1.14", "pyzmq>=25", "pyserial>=3.5", "psycopg[binary]>=3.1", "npTDMS>=1.9",
-       "pystray>=0.19", "pillow>=10"]
+all = ["flex-core[visa,serial,postgres,tdms,app]"]
 
 [project.scripts]
 flex = "flex.cli:app"

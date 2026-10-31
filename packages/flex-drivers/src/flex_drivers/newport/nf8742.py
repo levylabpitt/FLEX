@@ -1,6 +1,6 @@
 """Newport New Focus 8742 Picomotor controller, through the vendor USB library.
 
-Needs ``pythonnet`` and the New Focus Picomotor application installed (it
+Needs ``pythonnet`` (``flex-drivers[windows]``) and the New Focus Picomotor application installed (it
 supplies ``UsbDllWrap``). The library is loaded when the driver is created, not
 at import. One instance drives one axis (1-4) of the first controller on USB.
 """

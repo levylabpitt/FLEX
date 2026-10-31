@@ -1,4 +1,4 @@
-"""The default FLEX experiment handler."""
+"""Experiment: one session's instruments, measurements, notes and records."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ import getpass
 import secrets
 import socket
 from datetime import datetime
-from importlib.metadata import PackageNotFoundError, version
+from html import escape
 from pathlib import Path
 from typing import Any, TypeVar, overload
 
+from flex import __version__ as flex_version
 from flex.config import FlexConfig, load_config
-from flex.display import auto_display, refresh_display
+from flex.display import auto_display, card, refresh_display, table
 from flex.instrument import Instrument
 from flex.log import (
     add_db_log_handler,
@@ -20,13 +21,11 @@ from flex.log import (
     get_logger,
     remove_log_handler,
 )
-from flex.metadata import ExperimentRecord, InstrumentRecord, NoteRecord
+from flex.metadata import ExperimentRecord, InstrumentRecord, LogEntryRecord, NoteRecord
+from flex_exp.celllog import CellLogger
 
 try:
-    # A Literal of known Asana handles once generated (see flex_asana.users),
-    # purely for `user=` autocomplete -- falls back to plain str if
-    # flex-asana isn't installed, or hasn't generated one yet.
-    from flex_asana.users import User
+    from flex_asana.users import User  # see flex_asana.users
 except ImportError:
     User = str
 
@@ -37,13 +36,6 @@ InstT = TypeVar("InstT", bound=Instrument)
 def new_id() -> str:
     """Sortable, collision-safe id: timestamp + 4 hex chars."""
     return datetime.now().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(2)
-
-
-def _flex_version() -> str | None:
-    try:
-        return version("flex-core")
-    except PackageNotFoundError:
-        return None
 
 
 class Experiment:
@@ -58,7 +50,7 @@ class Experiment:
     Usage::
 
         with Experiment("jane") as exp:
-            lockin = exp.add(SR7270, "lockin", "USB0::...")
+            lockin = exp.add(SR7270, "lockin", serial="12345")
             with exp.measurement("IV curve") as m:
                 m.add_row(voltage=0.1, current=2.5e-9)
 
@@ -73,7 +65,6 @@ class Experiment:
         user: User | str = "",
         *,
         name: str = "",
-        notes: str = "",
         config: FlexConfig | str | Path | None = None,
         cell_log: bool = True,
         notify: bool = True,
@@ -93,15 +84,19 @@ class Experiment:
         self._log_handler = add_file_log(log_path)
         self.log = get_logger("exp")
 
-        self.storage = self.config.build_storage()
-        self.events = self.config.build_bus()
-        self.db = None
         try:
-            self.db = self.config.build_db()
-        except Exception as e:
-            if self.config.exp.strict_metadata:
-                raise
-            self.log.warning("Metadata store unavailable (%s) - continuing without it", e)
+            self.storage = self.config.build_storage()
+            self.events = self.config.build_bus()
+            self.db = None
+            try:
+                self.db = self.config.build_db()
+            except Exception as e:
+                if self.config.exp.strict_metadata:
+                    raise
+                self.log.warning("Metadata store unavailable (%s) - continuing without it", e)
+        except Exception:
+            remove_log_handler(self._log_handler)  # a notebook retry must not stack handlers
+            raise
 
         self.comms = None
         if notify:
@@ -119,15 +114,13 @@ class Experiment:
                     start_time=self.start_time,
                     station=self.config.lab.station or None,
                     host=self.host,
-                    flex_version=_flex_version(),
+                    flex_version=flex_version,
                     config=self.config.model_dump(mode="json"),
                 )
             )
         )
         self.events.emit("experiment.start", experiment=self)
         self.log.info("Experiment %s started (user: %s)", self.id, self.user)
-        if notes:
-            self.note(notes)
 
         self._db_log_handler = None
         if self.db is not None and self.config.logs.mirror_to_db:
@@ -140,11 +133,7 @@ class Experiment:
             except Exception as e:
                 self.log.warning("Comms notify_start failed (%s) - continuing", e)
 
-        self._cell_logger = None
-        if cell_log:
-            from flex_exp.celllog import CellLogger
-
-            self._cell_logger = CellLogger.attach(self)
+        self._cell_logger = CellLogger.attach(self) if cell_log else None
 
         self._display_id = auto_display(self)
 
@@ -176,10 +165,10 @@ class Experiment:
         refresh_display(self, self._display_id)
         return instrument
 
-    def add(self, cls: type[InstT], /, *args: Any, name: str | None = None, **kwargs: Any) -> InstT:
-        """Construct and register an instrument: ``exp.add(SR7270, "lockin", "USB0::...")``."""
+    def add(self, cls: type[InstT], /, *args: Any, **kwargs: Any) -> InstT:
+        """Construct and register an instrument: ``exp.add(SR7270, "lockin", serial="12345")``."""
         instrument = cls(*args, **kwargs)
-        self.add_instrument(instrument, name)
+        self.add_instrument(instrument)
         return instrument
 
     @overload
@@ -240,11 +229,11 @@ class Experiment:
 
     # -- measurements & notes ----------------------------------------------
 
-    def measurement(self, name: str = "", *, notes: str = "", writer: str | None = None):
+    def measurement(self, name: str = "", *, writer: str | None = None):
         """A new measurement context: ``with exp.measurement("IV") as m: ...``"""
-        from flex_exp.measurement import Measurement
+        from flex_exp.measurement import Measurement  # it imports this module
 
-        return Measurement(self, name=name, notes=notes, writer=writer)
+        return Measurement(self, name=name, writer=writer)
 
     def note(self, text: str, *, measurement_id: str | None = None) -> None:
         record = NoteRecord(
@@ -255,10 +244,7 @@ class Experiment:
         self.log.info("Note: %s", text)
 
     def _sink_log(self, level: str, logger_name: str, message: str, exc_text: str | None) -> None:
-        """Write a log record to the DB. Never itself logs -- routing failures
-        through ``self.log`` would re-enter this same handler."""
-        from flex.metadata import LogEntryRecord
-
+        """Write a log record to the DB. Never logs: that would re-enter this handler."""
         if self.db is None:
             return
         try:
@@ -303,21 +289,12 @@ class Experiment:
                 self.comms.notify_end(self, self._comms_state)
             except Exception as e:
                 self.log.warning("Comms notify_end failed (%s) - continuing", e)
-            try:
-                self.comms.close()
-            except Exception:
-                pass
-        if self.db is not None:
-            try:
-                self.db.close()
-            except Exception:
-                pass
-        close = getattr(self.storage, "close", None)
-        if callable(close):
-            try:
-                close()
-            except Exception:
-                pass
+        for service in (self.comms, self.db, self.storage):
+            if service is not None:
+                try:
+                    service.close()
+                except Exception:
+                    pass
         remove_log_handler(self._log_handler)
         refresh_display(self, self._display_id)
 
@@ -327,8 +304,8 @@ class Experiment:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None and exc_type is not KeyboardInterrupt:
             self.log.error("Experiment aborted by %s: %s", exc_type.__name__, exc_val)
+        self.close_all()  # first, while the experiment log still records it
         self.end()
-        self.close_all()
 
     def _record(self, action) -> None:
         """Run a metadata write; failures never interrupt the experiment
@@ -349,11 +326,7 @@ class Experiment:
         )
 
     def _repr_html_(self) -> str:
-        from flex.display import card, table
-
-        rows = [
-            [n, type(i).__name__, i.address or "—"] for n, i in self.instruments.items()
-        ]
+        rows = [[escape(n), type(i).__name__, escape(i.address or "—")] for n, i in self.instruments.items()]
         sections = [("Instruments", table(["Name", "Driver", "Address"], rows))] if rows else []
         meta = {
             "ID": self.id,

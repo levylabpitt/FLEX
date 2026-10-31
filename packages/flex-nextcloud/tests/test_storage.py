@@ -2,7 +2,7 @@ from pathlib import PurePosixPath
 
 import pytest
 
-from flex_nextcloud import NextcloudStorage
+from flex_nextcloud.storage import NextcloudStorage
 
 
 class FakeResponse:

@@ -16,8 +16,7 @@ Usage::
         exp.DAQ.set_ao_dc(1, 0.5)      # instruments attach by their CE "Type"
         ...
 
-Requires the ``flex-drivers`` package,
-configured in your flex.toml.
+Requires flex-drivers.
 """
 
 from __future__ import annotations
@@ -45,7 +44,7 @@ _CE_CONFIG = (
 class CEInfo:
     """Parsed contents of the Configure Experiments file."""
 
-    user: str = "Unknown"
+    user: str = ""  # empty: Experiment falls back to the login name
     device: str = "Unknown"
     device_path: str = ""
     description: str = ""
@@ -56,7 +55,7 @@ class CEInfo:
 
 
 def parse_ce_config(raw: dict) -> CEInfo:
-    """Parse the Configure Experiments JSON (same rules as FLEX v1)."""
+    """Parse the Configure Experiments JSON."""
     exp = raw.get("Experiment", {})
     meta: dict = {}
     if "json" in raw:
@@ -99,7 +98,7 @@ def parse_ce_config(raw: dict) -> CEInfo:
         timestamp = None
 
     return CEInfo(
-        user=exp.get("User", device_meta.get("User", "Unknown")),
+        user=exp.get("User", device_meta.get("User", "")),
         device=exp.get("Device", device_meta.get("Device", "Unknown")),
         device_path=exp.get("Device Path", ""),
         description=exp.get("Device Description", ""),
@@ -116,17 +115,10 @@ class CESession(Experiment):
     Args:
         user: Override the user recorded in the CE file.
         ce_path: Override the CE JSON location.
-        timeout: Seconds before a slow initialization prints a warning.
-        transport_server: Also connect the (implicit) Transport server app.
-        driver_registry: Override the LabVIEW-class -> driver mapping
-            (defaults to the flex_drivers.levylab registry).
-        verbose: Print a line as each instrument connects. In a terminal this
-            is on top of the usual logging; in Jupyter/VS Code Interactive
-            (where routine logging is quieted to avoid cluttering the cell,
-            see flex.log.enable_console) it's the only per-instrument
-            progress you'll see, alongside the live-updating summary card
-            (from Experiment's flex.display.auto_display) every instrument
-            connect refreshes.
+        timeout: Seconds before a slow initialization logs a warning.
+        transport_server: Also connect the Transport Server app.
+        driver_registry: LabVIEW class -> driver (default: the flex_drivers.levylab registry).
+        verbose: Print each instrument as it connects (notebooks hide INFO logs).
     """
 
     def __init__(
@@ -160,7 +152,7 @@ class CESession(Experiment):
         finally:
             watchdog.cancel()
 
-    # -- public API (v1-compatible) ------------------------------------------
+    # -- public API ---------------------------------------------------------
 
     @property
     def wiring(self) -> dict[int, tuple[str, str]]:
@@ -205,11 +197,7 @@ class CESession(Experiment):
                 print(f"  -> Connecting to {name} @ {address or 'no address'}...")
             ref = self._registry.get(lv_class)
             if ref is None:
-                raise RuntimeError(
-                    f"No driver for '{lv_class}' ({name}). Enable it with "
-                    f"`flex list --drivers` / `flex enable <driver>`, or add it to "
-                    "flex_drivers.levylab."
-                )
+                raise RuntimeError(f"No driver for '{lv_class}' ({name}); add one to flex_drivers.levylab.CATALOG")
             cls = load_ref(ref) if isinstance(ref, str) else ref
             driver = cls(name, address) if address else cls(name)
             inst["FlexClass"] = type(driver).__name__
@@ -218,11 +206,8 @@ class CESession(Experiment):
                 print(f"     OK ({inst['FlexClass']})")
 
     def _connect_transport_server(self) -> None:
-        ref = self._registry.get("__transport_server__")
-        if ref is None:
-            return
         try:
-            cls = load_ref(ref) if isinstance(ref, str) else ref
+            cls = load_ref("flex_drivers.levylab.transport_server:TransportServer")
             self.add_instrument(cls("Transport"), "Transport")
         except Exception as e:
             self.log.warning("Transport server not connected: %s", e)
@@ -290,6 +275,4 @@ def _levylab_registry() -> dict[str, str]:
             "CESession needs the LevyLab drivers. Install them with: "
             "pip install flex-drivers"
         ) from e
-    registry = lvclass_registry()
-    registry.setdefault("__transport_server__", "flex_drivers.levylab.transport_server:TransportServer")
-    return registry
+    return lvclass_registry()

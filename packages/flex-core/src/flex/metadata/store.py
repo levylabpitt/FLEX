@@ -86,23 +86,18 @@ class InstrumentRecord:
 
 
 class MetadataStore(ABC):
-    """Records the experiment lifecycle and answers queries about it.
-
-    ``**extra`` on the record methods lets lab backends persist additional
-    data (e.g. wiring tables) without changing this interface. Implementations
-    must ignore extras they do not understand.
-    """
+    """Records the experiment lifecycle and answers queries about it."""
 
     # -- writing ----------------------------------------------------------
 
     @abstractmethod
-    def record_experiment_start(self, record: ExperimentRecord, **extra: Any) -> None: ...
+    def record_experiment_start(self, record: ExperimentRecord) -> None: ...
 
     @abstractmethod
-    def record_experiment_end(self, experiment_id: str, end_time: datetime, **extra: Any) -> None: ...
+    def record_experiment_end(self, experiment_id: str, end_time: datetime) -> None: ...
 
     @abstractmethod
-    def record_measurement_start(self, record: MeasurementRecord, **extra: Any) -> None: ...
+    def record_measurement_start(self, record: MeasurementRecord) -> None: ...
 
     @abstractmethod
     def record_measurement_end(
@@ -114,23 +109,22 @@ class MetadataStore(ABC):
         *,
         writer: str | None = None,
         rows: int | None = None,
-        **extra: Any,
     ) -> None: ...
 
     @abstractmethod
-    def record_note(self, record: NoteRecord, **extra: Any) -> None: ...
+    def record_note(self, record: NoteRecord) -> None: ...
 
     @abstractmethod
-    def record_cell(self, record: CellRecord, **extra: Any) -> None: ...
+    def record_cell(self, record: CellRecord) -> None: ...
 
     @abstractmethod
-    def record_log(self, record: LogEntryRecord, **extra: Any) -> None: ...
+    def record_log(self, record: LogEntryRecord) -> None: ...
 
     @abstractmethod
-    def record_instrument(self, record: InstrumentRecord, **extra: Any) -> None: ...
+    def record_instrument(self, record: InstrumentRecord) -> None: ...
 
-    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
-        raise NotImplementedError(f"{type(self).__name__} does not support monitoring")
+    @abstractmethod
+    def record_monitor(self, record: MonitorRecord) -> None: ...
 
     # -- reading ----------------------------------------------------------
 
@@ -152,20 +146,14 @@ class MetadataStore(ABC):
     def list_cells(self, experiment_id: str) -> list[CellRecord]: ...
 
     @abstractmethod
-    def list_logs(self, experiment_id: str, *, level: str | None = None) -> list[LogEntryRecord]: ...
+    def list_logs(self, experiment_id: str) -> list[LogEntryRecord]: ...
 
     @abstractmethod
     def list_instruments(self, experiment_id: str) -> list[InstrumentRecord]: ...
 
-    def list_monitor(
-        self,
-        parameter: str | None = None,
-        *,
-        since: datetime | None = None,
-        limit: int = 100,
-    ) -> list[MonitorRecord]:
+    @abstractmethod
+    def list_monitor(self, parameter: str | None = None, *, limit: int = 100) -> list[MonitorRecord]:
         """Newest-first background-logged values, optionally for one parameter."""
-        raise NotImplementedError(f"{type(self).__name__} does not support monitoring")
 
     @abstractmethod
     def close(self) -> None: ...

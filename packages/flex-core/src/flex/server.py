@@ -1,31 +1,21 @@
 """Host a Station over ZMQ: JSON-RPC commands plus a PUB event stream.
 
-Speaks the same JSON-RPC 2.0 dialect as the LevyLab Instrument-Framework
-apps (ACK / IDN / HELP built-ins), so any IF-compatible client — including
-:class:`flex.protocols.ZMQInstrument` — can talk to it.
+Speaks the LevyLab Instrument-Framework dialect (ACK / IDN / HELP), so any IF
+client, :class:`flex.protocols.ZMQInstrument` included, can talk to it.
+Station methods: ``describe``, ``snapshot``, ``leaseAcquire``/``leaseRelease``.
+Instrument methods: ``get``/``set`` (parameters) and ``call`` (public driver
+methods). One worker thread per instrument: different instruments run
+concurrently, commands to one instrument queue.
 
-Station-level methods: ``describe``, ``snapshot``, ``listInstruments``.
-Instrument methods: ``get`` / ``set`` (parameters) and ``call`` (any public
-driver method). Commands for different instruments run concurrently (one
-worker thread each); commands for the same instrument are serialized.
-
-Every parameter update is published on the PUB socket as
-``[event-name, json]`` with a sequence number, so subscribers can detect
-gaps. The event stream is monitoring, not the data record — files and the
-metadata store remain authoritative.
-
-Leases: a run (see flex.runner) can lease the whole station; while leased,
-writes without the holder's token are refused and reads still pass.
-
-Background logging: an ``[instruments.*] log`` list makes the server read
-those parameters every ``log_interval`` seconds and write every update to
-the configured database (``flex_monitor`` table). The reads go through the
-instrument's normal worker queue, so they never collide with commands.
-Browse with ``flex monitor``.
+Parameter updates are published as ``[event, json]`` with a sequence number.
+A leased station (see flex.runner) refuses writes without the holder's token.
+``[instruments.*] log`` parameters are read every ``log_interval`` through the
+same worker queue and written to the ``flex_monitor`` table.
 """
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import queue
@@ -38,13 +28,11 @@ from typing import Any
 import zmq
 
 from flex import __version__ as flex_version
-from flex.events import EVENTS
 from flex.log import get_logger
 from flex.metadata import MonitorRecord
 from flex.station import Station
 
-_METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "listInstruments", "get", "set", "call",
-            "leaseAcquire", "leaseRelease")
+_METHODS = ("ACK", "IDN", "HELP", "describe", "snapshot", "get", "set", "call", "leaseAcquire", "leaseRelease")
 _READS = ("get", "read", "idn")  # driver methods with these prefixes may run while the station is leased
 
 
@@ -58,10 +46,10 @@ _POLL = object()  # worker queue marker for a scheduled monitor read
 
 
 class StationServer:
-    def __init__(self, station: Station, *, port: int | None = None, bind: str = "tcp://*",
+    def __init__(self, station: Station, *, port: int | None = None,
                  monitor: dict[str, tuple[list[str], float]] | None = None):
-        """``monitor`` maps instrument name -> (parameters, interval seconds);
-        by default it is derived from the config's ``log``/``log_interval``."""
+        """``port`` None binds random ports (tests). ``monitor``: instrument -> (parameters,
+        interval s); defaults to the config's ``log``/``log_interval``."""
         self.station = station
         self.log = get_logger(f"server.{station.name}")
         if monitor is None:
@@ -80,12 +68,12 @@ class StationServer:
         for s in (self._router, self._pub):
             s.setsockopt(zmq.LINGER, 0)
         if port is None:
-            self.port = self._router.bind_to_random_port(bind)
-            self.pub_port = self._pub.bind_to_random_port(bind)
+            self.port = self._router.bind_to_random_port("tcp://*")
+            self.pub_port = self._pub.bind_to_random_port("tcp://*")
         else:
             self.port, self.pub_port = port, port + 1
-            self._router.bind(f"{bind}:{self.port}")
-            self._pub.bind(f"{bind}:{self.pub_port}")
+            self._router.bind(f"tcp://*:{self.port}")
+            self._pub.bind(f"tcp://*:{self.pub_port}")
 
         self._replies: queue.Queue = queue.Queue()
         self._events: queue.Queue = queue.Queue()
@@ -100,30 +88,17 @@ class StationServer:
         self._waker.bind(self._wake_addr)
         self._local = threading.local()
         self._lease: dict | None = None  # {"holder", "token", "expires"}: a run owns the station
-        for event in EVENTS:
-            station.events.subscribe(event, self._forward_event, name="server")
+        station.events.subscribe("parameter.update", self._forward_event, name="server")
 
     # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> None:
-        """Serve on a background thread (tests, notebooks)."""
+        """Serve on a background thread."""
         self._running = True
         self._start_workers()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
         self.log.info("Serving '%s' on port %d (events on %d)", self.station.name, self.port, self.pub_port)
-
-    def run(self) -> None:
-        """Serve on this thread until KeyboardInterrupt."""
-        self._running = True
-        self._start_workers()
-        self.log.info("Serving '%s' on port %d (events on %d)", self.station.name, self.port, self.pub_port)
-        try:
-            self._loop()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.stop()
 
     def stop(self) -> None:
         self._running = False
@@ -254,8 +229,6 @@ class StationServer:
                     "Firmware": flex_version}
         if method == "HELP":
             return list(_METHODS)
-        if method == "listInstruments":
-            return {n: type(i).__name__ for n, i in self.station.instruments.items()}
         if method == "snapshot":
             return self.station.snapshot(read=bool(params.get("read")))
         if method == "describe":
@@ -278,10 +251,8 @@ class StationServer:
             instruments[name] = {
                 "class": f"{type(inst).__module__}.{type(inst).__qualname__}",
                 "address": inst.address,
-                "log": self.monitor.get(name, ([], 0))[0],
                 "parameters": {
-                    p.name: {"unit": p.unit, "gettable": p.gettable, "settable": p.settable,
-                             "cache": p.cache, "cache_time": p.cache_time}
+                    p.name: {"unit": p.unit, "gettable": p.gettable, "settable": p.settable, "cache": p.cache}
                     for p in inst.parameters.values()
                 },
             }
@@ -370,47 +341,50 @@ class StationServer:
                     return
 
     def _write_records(self) -> None:
-        """Single writer thread: owns the DB connection, drains the record queue.
-        Records are never lost to a DB outage: while it's unreachable they go
-        to a local SQLite outbox (survives a `flex serve` restart too), and
-        get replayed once the DB is back."""
+        """Single writer thread; owns the DB connection. A failed write reconnects and retries the
+        record. While the DB is down, records go to the local outbox (remote DBs only) and are
+        replayed once it is back."""
         outbox = self._open_outbox()
-        store = None
-        down = False
-        while self._running or not self._records.empty():
+        store, pending, retried, down = None, None, False, False
+        while self._running or pending is not None or not self._records.empty():
             if store is None:
                 try:
                     store = self.station.config.build_db()
-                    if down:
-                        self.log.info("Monitor DB reconnected")
-                        down = False
-                    if outbox is not None:
-                        self._drain_outbox(outbox, store)
                 except Exception as e:
                     if not down:
-                        self.log.warning("Monitor DB unavailable (%s) - buffering locally", e)
+                        self.log.warning("Monitor DB unavailable (%s); buffering locally", e)
                         down = True
+                    if pending is not None and outbox is not None:
+                        outbox.record_monitor(pending)
+                    pending = None
                     self._park_queue(outbox)
+                    if not self._running:
+                        break
                     time.sleep(5)
                     continue
-            try:
-                record = self._records.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            for attempt, delay in enumerate((0, 0.2, 0.5, 1, 2, 5)):
-                time.sleep(delay)
-                try:
-                    store.record_monitor(record)
-                    break
-                except Exception as e:
-                    if attempt == 0:
-                        self.log.warning("Monitor write failed (%s) - retrying", e)
-            else:
+                if down:
+                    self.log.info("Monitor DB reconnected")
+                    down = False
                 if outbox is not None:
-                    outbox.record_monitor(record)
-                    self.log.warning("Monitor write for %s buffered locally", record.parameter)
-                else:
-                    self.log.error("Monitor write for %s dropped after repeated failures", record.parameter)
+                    self._drain_outbox(outbox, store)
+            if pending is None:
+                try:
+                    pending = self._records.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+            try:
+                store.record_monitor(pending)
+                pending, retried = None, False
+            except Exception as e:
+                if retried:  # failed on a fresh connection too: the record itself is the problem
+                    self.log.error("Monitor write for %s dropped: %s", pending.parameter, e)
+                    pending, retried = None, False
+                    continue
+                self.log.warning("Monitor write failed (%s); reconnecting", e)
+                retried = True
+                with contextlib.suppress(Exception):
+                    store.close()
+                store = None
         if store is not None:
             store.close()
         if outbox is not None:
@@ -430,15 +404,12 @@ class StationServer:
     # -- events ------------------------------------------------------------
 
     def _forward_event(self, *, event: str, **payload) -> None:
-        if event == "parameter.update" and payload.get("parameter") in self._logged:
+        if payload["parameter"] in self._logged:
             self._records.put(MonitorRecord(
                 parameter=payload["parameter"], value=payload["value"],
                 time=datetime.fromtimestamp(payload["ts"]), station=self.station.name,
                 unit=payload.get("unit", ""),
             ))
-        payload = {k: v.tolist() if hasattr(v, "tolist") else v for k, v in payload.items()}
-        payload = {k: v for k, v in payload.items()
-                   if isinstance(v, (str, int, float, bool, list, tuple, dict, type(None)))}
         payload.update(seq=next(self._seq), event=event, station=self.station.name)
         self._events.put((event, json.dumps(payload, default=_jsonable).encode()))
         if self._running and threading.current_thread() is not self._thread:
@@ -455,8 +426,4 @@ class StationServer:
         return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}).encode()
 
 
-class _Unknown:
-    pass
-
-
-_UNKNOWN = _Unknown()
+_UNKNOWN = object()

@@ -1,12 +1,8 @@
-"""The FLEX dashboard API — a thin HTTP layer over flex-core services.
+"""The dashboard's HTTP API, served by the tray app.
 
-All logic lives in flex-core (config, components, metadata); the dashboard
-only exposes it to the bundled single-page frontend.
-
-The Station tab is the UI shell for a station server: the dashboard connects
-to this PC's own server or to any other PC's (host and port typed in the
-tab), auto-generates an instrument panel from its ``describe``, and bridges
-the ZMQ event stream to the browser over a WebSocket.
+The Station tab connects to this PC's station server or any other PC's,
+builds instrument panels from its ``describe``, and bridges its event stream
+to the browser over a WebSocket.
 """
 
 from __future__ import annotations
@@ -14,9 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
-import signal
 import threading
-import time
 import tomllib
 from importlib.resources import files
 from typing import Any
@@ -105,9 +99,7 @@ class _StationHub:
             self.drop(address)
 
 
-def create_app(managed: bool = False) -> FastAPI:
-    """``managed``: run by the tray app, which owns this server's lifetime."""
-    cfg = load_config()
+def create_app() -> FastAPI:
     hub = _StationHub()
 
     @contextlib.asynccontextmanager
@@ -136,13 +128,14 @@ def create_app(managed: bool = False) -> FastAPI:
     @app.get("/api/stations")
     def station(host: str = "", port: int = 0):
         """Describe a station server: the one at ``host:port``, or this PC's own."""
-        host, port = host or "localhost", port or cfg.server.port
-        view = {"host": host, "port": port,
-                "local": host in ("localhost", "127.0.0.1") and port == cfg.server.port}
+        local_port = load_config().server.port
+        host, port = host or "localhost", port or local_port
+        view = {"host": host, "port": port, "local": host in _LOCAL_HOSTS and port == local_port}
         address = f"tcp://{host}:{port}"
         try:
             if not _HOST.match(host) or not 0 < port < 65536:
                 raise ValueError("Not a valid address")
+            hub.drop(address)  # reconnect: the station may have restarted with other instruments
             conn, lock = hub.connection(address)
             with lock:
                 info = conn.describe()
@@ -207,12 +200,6 @@ def create_app(managed: bool = False) -> FastAPI:
 
     # -- config --------------------------------------------------------------
 
-    @app.get("/api/config")
-    def config():
-        source = find_config()
-        cfg = load_config()
-        return {"source": str(source) if source else None, "config": cfg.model_dump(mode="json")}
-
     @app.get("/api/config/raw")
     def config_raw():
         source = find_config()
@@ -221,14 +208,22 @@ def create_app(managed: bool = False) -> FastAPI:
 
     @app.put("/api/config/raw")
     def save_config(body: ConfigText):
+        """Save flex.toml and restart an idle station so the edit takes effect. It is stopped
+        before the write, while its old ports and data root still apply."""
         try:
             FlexConfig.model_validate(tomllib.loads(body.text))
         except Exception as e:
             raise HTTPException(422, f"Invalid configuration: {e}") from e
+        state = daemon.status()
+        restart = state["station"] and not state["run"]
+        if restart:
+            daemon.stop()
         target = find_config() or USER_CONFIG
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body.text, encoding="utf-8")
-        return {"ok": True, "path": str(target)}
+        if restart:
+            daemon.start()
+        return {"ok": True, "path": str(target), "restarted": restart, "run": state["run"]}
 
     # -- experiments -----------------------------------------------------
 
@@ -265,7 +260,7 @@ def create_app(managed: bool = False) -> FastAPI:
 
     @app.get("/api/app")
     def app_status():
-        return {**daemon.status(), "managed": managed}
+        return daemon.status()
 
     @app.post("/api/app/{action}")
     def app_control(action: str):
@@ -277,6 +272,7 @@ def create_app(managed: bool = False) -> FastAPI:
     # -- runs (this PC's runner) ------------------------------------------------
 
     def _runner(call):
+        cfg = load_config()
         try:
             with RunClient(f"tcp://127.0.0.1:{cfg.runner.port}", timeout=2.0, token=cfg.runner.token) as client:
                 return call(client)
@@ -296,17 +292,6 @@ def create_app(managed: bool = False) -> FastAPI:
     @app.post("/api/runs/abort")
     def abort_run():
         return _runner(lambda c: c.abort())
-
-    # -- server control -------------------------------------------------------
-
-    @app.post("/api/shutdown")
-    def shutdown():
-        def _stop():
-            time.sleep(0.3)  # let the response reach the browser first
-            signal.raise_signal(signal.SIGINT)
-
-        threading.Thread(target=_stop, daemon=True).start()
-        return {"ok": True}
 
     # -- frontend -----------------------------------------------------------
 

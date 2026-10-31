@@ -8,7 +8,7 @@ files, experiment records, and lab-specific integrations, with one-command
 setup for new users.
 
 ```powershell
-irm flex.levylab.org/install.ps1 | iex
+irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 | iex
 ```
 
 ```python
@@ -52,4 +52,5 @@ a real one to run it on hardware.
 | run a sweep safely | `Scan` + `sweep`: Ctrl-C finalizes the file, marks the measurement aborted, runs your cleanup |
 | keep records | every experiment and measurement is recorded (SQLite by default, PostgreSQL for labs) |
 | share a lab setup | one [flex.toml](concepts/configuration.md) per PC: services + instruments in a single file |
-| manage it all visually | `python -m flex dashboard` — config, drivers, and experiment browsing in the browser |
+| run scripts unattended | `flex run script.py` hands a script to the PC's runner; it outlives your session |
+| manage it all visually | `flex app` — a tray icon that runs the station and serves the [dashboard](concepts/dashboard.md): live instruments, runs, config, drivers, experiments |

@@ -44,8 +44,8 @@ def _(mo):
         group = StationGroup(_servers, timeout=5.0)
     except Exception as _e:
         mo.stop(True, mo.callout(
-            mo.md(f"**Station not reachable:** {_e}<br>Start it with `Start FLEX Station.bat` "
-                  "(`flex serve` must be running)."), kind="danger"))
+            mo.md(f"**Station not reachable:** {_e}<br>Start it from the FLEX tray icon "
+                  "(`Start FLEX Station.bat` does that)."), kind="danger"))
     mo.md(f"Connected: station **{group.name}**, instruments **{', '.join(group.instruments) or 'none'}**")
     return client, group
 

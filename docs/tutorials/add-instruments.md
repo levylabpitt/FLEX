@@ -37,8 +37,9 @@ Two consequences, and they decide most of what follows:
 - **Write the driver once, against the instrument.** Scripts on any PC, the
   dashboard and the runner reach it through the server. Nothing is
   duplicated per client, and a fix lands in one place.
-- **A driver describes itself by being Python.** Its parameters and public
-  methods are what the dashboard shows and what remote scripts can call.
+- **A driver describes itself by being Python.** Its parameters are what the
+  dashboard shows; its parameters and public methods are what remote scripts
+  can call.
   There is no separate interface file to keep in sync.
 
 ## Pick the base from how you reach the instrument
@@ -197,9 +198,10 @@ address  = "COM4"
 baudrate = 9600
 ```
 
-- `driver` is a `module:Class` reference, so nothing needs registering. To
-  give it a short name like `levylab.lockin`, add one line to a `CATALOG`
-  dict (see [Write a driver](write-a-driver.md#5-optional-register-it-for-name-based-resolution)).
+- `driver` is a `module:Class` reference, so nothing needs registering.
+  Short names like `levylab.lockin` exist only for drivers inside
+  `flex-drivers` (its `CATALOG`; see
+  [Write a driver](write-a-driver.md#5-optional-use-it-from-flextoml)).
 - `address` is the first argument after the name: a ZMQ address, a VISA
   resource string, or a COM port. Any other key (`baudrate`) is passed to the
   driver as a keyword.
@@ -239,8 +241,8 @@ while it runs, so nobody else's writes interleave with it.
 
 - **Public methods are the remote API.** Names starting with `_` stay
   private and cannot be called remotely.
-- **Return plain values.** Numbers, strings, lists and dicts cross the wire
-  as JSON. Convert numpy arrays with `.tolist()`.
+- **Return plain values.** Numbers, strings, lists, dicts and numpy arrays
+  cross the wire as JSON (the server converts numpy values).
 - **Connect in `__init__`, release in `close()`.** The server calls
   `close()` on shutdown; make it safe to call twice.
 - **Raise, don't print.** An exception becomes an error reply the caller
@@ -253,4 +255,5 @@ Each base has an easy stand-in; see [Write a driver](write-a-driver.md#7-test-wi
 - **IF drivers:** `FakeIFServer` answers JSON-RPC verbs and records what the
   driver sent, so you can assert on the exact verb and key spelling.
 - **VISA and serial:** a small fake resource that records the commands
-  written and returns canned replies (see `tests/test_sr7270.py`).
+  written and returns canned replies (see
+  `packages/flex-drivers/tests/test_sr7270.py`).

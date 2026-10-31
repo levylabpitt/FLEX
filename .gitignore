@@ -1,13 +1,9 @@
 /.venv
 /.vscode
-**/__pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
 dist/
 /site/
-
-*.aliases
-*.lvlps
-__marimo__/
 __*/
+packages/flex-asana/src/flex_asana/_generated_users.py

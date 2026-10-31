@@ -116,27 +116,12 @@
   .path { color: var(--text-faint); font-size: 12px; margin: -4px 0 12px; }
   .actions-row { display: flex; gap: 8px; margin-top: 12px; }
   .connect { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; }
-  .eco-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;
-  }
-  .eco-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
-    display: flex; flex-direction: column; gap: 10px;
-  }
-  .eco-card.active { border-color: var(--accent); }
-  .eco-card-head { display: flex; align-items: center; justify-content: space-between; }
-  .eco-name { font-weight: 600; font-size: 14px; }
-  .eco-packages { margin: 0; color: var(--text-faint); font-size: 12px; flex: 1; }
   .toast {
     position: fixed; bottom: 22px; right: 24px; padding: 10px 16px; border-radius: var(--radius);
     background: var(--panel); border: 1px solid var(--success); display: none; max-width: 420px;
     font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
   }
   .toast.error { border-color: var(--danger); }
-  .stopped {
-    display: flex; align-items: center; justify-content: center; height: 100vh;
-    flex-direction: column; gap: 10px;
-  }
 </style>
 </head>
 <body>
@@ -145,7 +130,6 @@
   <nav id="nav"></nav>
   <div class="spacer"></div>
   <div class="status" id="status"></div>
-  <button class="action danger" id="exit" onclick="exitServer()">Exit</button>
 </header>
 <main id="main"></main>
 <div class="toast" id="toast"></div>
@@ -195,25 +179,9 @@ async function show(tab) {
   }
 }
 
-async function act(button, path, method, refresh) {
-  button.disabled = true;
-  try { await api(path, { method }); toast("Done"); await refresh(); }
-  catch (e) { toast(e.message, true); button.disabled = false; }
-}
-
 function table(headers, rows) {
   if (!rows.length) return '<div class="card"><p class="empty">Nothing here yet.</p></div>';
   return `<div class="card"><table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>${rows.join("")}</table></div>`;
-}
-
-async function exitServer() {
-  if (!confirm("Stop the FLEX dashboard server?")) return;
-  try { await api("/api/shutdown", { method: "POST" }); } catch (e) { /* the server going away is expected */ }
-  document.body.innerHTML = `
-    <div class="stopped">
-      <div class="brand"><span class="dot" style="background:var(--text-faint)"></span>FLEX</div>
-      <p class="empty">Dashboard stopped. You can close this tab.</p>
-    </div>`;
 }
 
 // -- Station (home) -----------------------------------------------------------
@@ -376,8 +344,11 @@ async function configTab() {
 
 async function saveConfig() {
   try {
-    await api("/api/config/raw", { method: "PUT", body: JSON.stringify({ text: $("#cfg").value }) });
-    toast("Configuration saved");
+    const r = await api("/api/config/raw", { method: "PUT", body: JSON.stringify({ text: $("#cfg").value }) });
+    toast(r.restarted ? "Saved; the station restarted with it"
+      : r.run ? `Saved. Restart the station after run ${r.run.id} to apply it`
+      : "Saved. Restart the station to apply it");
+    refreshStatus();
   } catch (e) { toast(e.message, true); }
 }
 
@@ -538,7 +509,6 @@ async function appControl(action, button) {
 async function refreshStatus() {
   let s;
   try { s = await api("/api/app"); } catch (e) { $("#status").innerHTML = ""; return; }
-  if (s.managed) $("#exit")?.remove();  // the tray app owns this server
   const dot = (cls) => `<span class="pdot ${cls}"></span>`;
   const station = `<span>${dot(s.station ? (Object.keys(s.failed).length ? "warn" : "ok") : "")}Station ${s.station ? "running" : "stopped"}</span>`;
   const runner = !s.runner_enabled ? "" :

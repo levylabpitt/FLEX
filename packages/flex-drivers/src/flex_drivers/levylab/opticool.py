@@ -1,8 +1,4 @@
-"""Quantum Design OptiCool driver (LevyLab Instrument Framework app).
-
-Port of FLEX v1 ``flex.inst.levylab.Opticool``. Conforms to
-``flex_drivers.levylab.capabilities.Temperature`` and ``Magnet``.
-"""
+"""Quantum Design OptiCool (LevyLab IF app); conforms to the Temperature and Magnet capabilities."""
 
 from __future__ import annotations
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 
@@ -17,7 +18,6 @@ import uvicorn
 from PIL import Image, ImageDraw
 
 from flex import daemon
-from flex.config import load_config
 
 _COLORS = {"down": "#8a8f98", "up": "#2ea043", "attention": "#d29922", "busy": "#388bfd"}
 
@@ -67,26 +67,25 @@ def run(port: int = 8756) -> None:
     if sys.stdout is None:  # started by pythonw: no console to write to
         sys.stdout = sys.stderr = open(os.devnull, "w")
     url = f"http://127.0.0.1:{port}"
-    if daemon._listening(port):  # already running: just show it
+    if daemon.listening(port):  # already running: just show it
         webbrowser.open(url)
         return
 
     from flex.dashboard.app import create_app
 
-    cfg = load_config()
-    server = uvicorn.Server(uvicorn.Config(create_app(managed=True), host="127.0.0.1", port=port,
+    # every daemon call re-reads flex.toml, so edits made in the dashboard apply on restart
+    server = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port,
                                            log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
-    threading.Thread(target=daemon.start, args=(cfg,), daemon=True).start()
+    threading.Thread(target=daemon.start, daemon=True).start()
 
-    latest = {"station": False, "runner": False, "runner_enabled": cfg.runner.enabled,
-              "failed": {}, "run": None}
+    latest = {"station": False, "runner": False, "runner_enabled": True, "failed": {}, "run": None}
 
     def in_background(fn):
-        return lambda: threading.Thread(target=fn, args=(cfg,), daemon=True).start()
+        return lambda: threading.Thread(target=fn, daemon=True).start()
 
     def quit_app(icon):
-        daemon.stop(cfg)
+        daemon.stop()
         server.should_exit = True
         icon.stop()
 
@@ -106,12 +105,12 @@ def run(port: int = 8756) -> None:
         icon.visible = True
         shown = None
         while icon.visible:
-            latest.update(daemon.status(cfg))
+            latest.update(daemon.status())
             state = _state(latest)
             if state != shown:
                 icon.icon, shown = _image(_COLORS[state]), state
             icon.title = f"FLEX: {_summary(latest)}"
             icon.update_menu()
-            threading.Event().wait(3)
+            time.sleep(3)
 
     icon.run(watch)

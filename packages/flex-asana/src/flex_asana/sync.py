@@ -29,14 +29,7 @@ def handle_from_user(user: dict) -> str | None:
 
 
 class ExperimentSync:
-    """Args:
-        client: Pre-built client; created from the environment if omitted.
-        workspace_gid, project_gid: Override ``ASANA_WORKSPACE_GID`` /
-            ``ASANA_EXPERIMENTS_PROJECT_GID``.
-        start_field, end_field: Names of the date custom fields for the
-            start/end timestamps.
-        assign_user: Assign the created task to the experiment's user.
-    """
+    """Arguments override the ASANA_* environment variables (see flex_asana)."""
 
     def __init__(
         self,
@@ -112,7 +105,7 @@ class ExperimentSync:
 
     # -- public API -----------------------------------------------------------
 
-    def start_experiment(self, user_handle: str, name: str, start_time: datetime, notes: str = "") -> str | None:
+    def start_experiment(self, user_handle: str, name: str, start_time: datetime) -> str | None:
         """Create the experiment task and return its gid."""
         custom_fields = {}
         gid, value = self._custom_field_value(self.start_field, start_time)
@@ -122,8 +115,7 @@ class ExperimentSync:
         assignee = self.resolve_user_gid(user_handle) if self.assign_user else None
 
         task = self.client.create_task(
-            self.project_gid, name, notes=notes or None, assignee=assignee,
-            custom_fields=custom_fields or None,
+            self.project_gid, name, assignee=assignee, custom_fields=custom_fields or None,
         )
         return task.get("gid")
 

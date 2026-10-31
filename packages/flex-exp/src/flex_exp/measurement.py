@@ -42,7 +42,6 @@ class Measurement:
         experiment: Experiment,
         name: str = "",
         *,
-        notes: str = "",
         writer: str | None = None,
     ):
         from flex_exp.experiment import new_id
@@ -54,7 +53,6 @@ class Measurement:
         self.file: FilePointer | None = None
         self.start_time: datetime | None = None
         self.end_time: datetime | None = None
-        self._notes_pending = notes
         self._writer_name = writer or experiment.config.data.writer
         self._writer = experiment.config.build_writer(writer)
         self._specs: list[tuple[str, Callable[[], Any] | None, str]] = []
@@ -141,8 +139,6 @@ class Measurement:
         )
         exp.events.emit("measurement.start", experiment=exp, measurement=self)
         exp.log.info("Measurement %s started%s", self.id, f" ({self.name})" if self.name else "")
-        if self._notes_pending:
-            self.add_note(self._notes_pending)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -169,7 +165,6 @@ class Measurement:
         )
         status = "ABORTED" if aborted else "done"
         exp.log.info("Measurement %s %s: %d rows -> %s", self.id, status, self.rows, self.file.uri)
-        return False
 
     def _declare_columns(self, first_row_keys) -> None:
         columns = [ColumnSpec(name, unit) for name, _, unit in self._specs]

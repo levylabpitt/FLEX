@@ -24,7 +24,7 @@ def test_experiment_lifecycle(tmp_path):
     store.record_experiment_start(
         ExperimentRecord(
             id="e1", user="pubudu", name="gate sweep", start_time=T0,
-            station="cryo1", host="bench-pc", flex_version="3.0.0a1",
+            station="cryo1", host="bench-pc", flex_version="2.0.0a1",
             config={"db": "sqlite"},
         )
     )
@@ -37,7 +37,7 @@ def test_experiment_lifecycle(tmp_path):
     assert exp.end_time == T1
     assert exp.station == "cryo1"
     assert exp.host == "bench-pc"
-    assert exp.flex_version == "3.0.0a1"
+    assert exp.flex_version == "2.0.0a1"
     assert exp.config == {"db": "sqlite"}
     store.close()
 
@@ -93,9 +93,7 @@ def test_cells_logs_and_instruments(tmp_path):
     store.record_log(
         LogEntryRecord(experiment_id="e1", level="ERROR", logger_name="flex.exp", message="boom", time=T1)
     )
-    assert len(store.list_logs("e1")) == 2
-    (error,) = store.list_logs("e1", level="ERROR")
-    assert error.message == "boom"
+    assert [log.message for log in store.list_logs("e1")] == ["timeout", "boom"]
 
     store.record_instrument(
         InstrumentRecord(

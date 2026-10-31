@@ -1,8 +1,5 @@
-"""Montana Instruments Cryostation driver (LevyLab Instrument Framework app).
-
-Port of FLEX v1 ``flex.inst.levylab.Cryostation``. Read-only temperature:
-v1 deliberately disabled ``setTemperature`` for this hardware.
-"""
+"""Montana Instruments Cryostation (LevyLab IF app). Read-only: setTemperature is disabled
+for this hardware."""
 
 from __future__ import annotations
 

@@ -10,13 +10,8 @@ from flex.log import get_logger
 
 
 class Instrument:
-    """Base class for every FLEX instrument driver.
-
-    Holds everything that does not depend on how the instrument is connected:
-    name, logging, the parameter registry, snapshots, and context-manager
-    lifecycle. Protocol base classes in ``flex-protocols`` add the connection
-    (``VISAInstrument.query``, ``ZMQInstrument.call``, ...).
-    """
+    """Base for every driver: name, log, parameters, snapshot, context manager.
+    Subclasses in ``flex.protocols`` add the connection."""
 
     def __init__(self, name: str, *, metadata: dict[str, Any] | None = None):
         self.name = name

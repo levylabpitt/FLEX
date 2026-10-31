@@ -1,8 +1,8 @@
 # Architecture
 
 A lab PC running FLEX is an **instrument server**: it connects to the
-physical instruments, logs to a database, writes data files, and (soon)
-accepts remote control from scripts on other PCs. FLEX is organized in three
+physical instruments, logs to a database, writes data files, and accepts
+remote control from scripts on other PCs. FLEX is organized in three
 layers, deliberately mirroring the
 [bluesky/ophyd](https://blueskyproject.io/) ecosystem's division of labor —
 device abstraction, experiment orchestration, and an always-on service layer
@@ -14,7 +14,8 @@ device abstraction, experiment orchestration, and an always-on service layer
 ├───────────────────────────────────────────────────────────────┤
 │  flex-core       Station services: config (flex.toml),        │  services
 │                  metadata DB, data writers, storage, events,  │
-│                  dashboard, CLI                               │
+│                  station server, runner, tray app, dashboard, │
+│                  CLI                                          │
 ├───────────────────────────────────────────────────────────────┤
 │  flex-core       Instrument · Parameter                       │  devices
 │  + flex-drivers  VISA / ZMQ / TCP / Serial bases, drivers     │
@@ -47,12 +48,16 @@ modules: `flex.protocols`, `flex.db`, `flex.datatypes`. Optional
 dependencies are extras on flex-core:
 
 ```
-pip install flex-core[visa]          # pyvisa
-pip install flex-core[zmq]           # pyzmq
-pip install flex-core[serial]        # pyserial
-pip install flex-core[postgres]      # psycopg
-pip install flex-core[tdms]          # npTDMS
+flex-core[visa]          # pyvisa
+flex-core[serial]        # pyserial
+flex-core[postgres]      # psycopg
+flex-core[tdms]          # npTDMS
+flex-core[app]           # pystray, pillow: the tray app
+flex-core[all]           # all of the above
+flex-drivers[windows]    # pythonnet, pywin32: the Newport and Ophir drivers
 ```
+
+pyzmq is a core dependency, not an extra.
 
 ## What lives in flex-core
 
@@ -129,8 +134,7 @@ Two ideas carry the design:
 
 Commands for different instruments run concurrently (a worker per
 instrument); commands for the same instrument are serialized, since
-hardware isn't reentrant. Background DB logging and the live dashboard view
-are the next subscribers to be built on the stream.
+hardware isn't reentrant.
 
 ## The runner
 
@@ -169,8 +173,9 @@ station within 30 s. To take over, abort the run.
 
 ## The tray app
 
-`flex app` (install with `flex-core[app]`) puts a FLEX icon in the system
-tray; clicking it opens the dashboard. It starts `flex serve` in the
+`flex app` (needs `flex-core[app]`; the installer includes it) puts a FLEX
+icon in the system tray and serves the [dashboard](dashboard.md) on
+`http://127.0.0.1:8756`; clicking the icon opens it. It starts `flex serve` in the
 background without a console window if it isn't already running, and shows
 the station and runner status (icon colour, and the dashboard header with
 Start / Restart / Stop). The tray app is the master: "Quit FLEX" stops the
@@ -181,13 +186,17 @@ app without a console by running it with `pythonw -m flex app`.
 
 ## Installation
 
-None of these packages are on PyPI. The installer (`install.ps1`) and the
-docs use plain pip/uv against the GitHub repo:
+None of these packages are on PyPI. Everything installs **editable** from a
+checkout:
 
-- inside a clone of this repo (a uv workspace), packages install **editable**
-  from `packages/<name>`;
-- everywhere else, from GitHub:
-  `git+https://github.com/levylabpitt/flex.git@v2#subdirectory=packages/<name>`.
+- the installer (`install.ps1`) clones the `v2` branch to
+  `%LOCALAPPDATA%\flex\src` and installs `flex-core[visa,app]`, `flex-exp`,
+  `flex-drivers` and `flex` from it; `git pull` there (or rerunning the
+  installer) updates FLEX;
+- opt-in packages come from the same checkout:
+  `pip install -e "$env:LOCALAPPDATA\flex\src\packages\flex-nextcloud"`;
+- in a development clone (a uv workspace), `uv sync` installs everything, or
+  `pip install -e packages/<name>`.
 
-Extras pass through: `flex-core[postgres]` installs the base package with
-its PostgreSQL dependencies.
+Extras pass through: `-e "packages/flex-core[postgres]"` installs the base
+package with its PostgreSQL dependencies.

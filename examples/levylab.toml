@@ -2,9 +2,10 @@
 # ZMQ, PostgreSQL metadata, TDMS data files, Nextcloud storage, an Asana task
 # per experiment.
 #
-# Install the packages this configuration needs:
+# Install the packages this configuration needs, from the installer's
+# checkout (%LOCALAPPDATA%\flex\src\packages) or packages/ in a clone:
 #
-#     uv pip install flex-core[postgres,tdms,zmq] flex-drivers flex-nextcloud flex-asana
+#     pip install -e "packages/flex-core[postgres,tdms]" -e packages/flex-nextcloud -e packages/flex-asana
 #
 # Then copy this file to ./flex.toml (or %LOCALAPPDATA%/flex/config.toml, or
 # point $FLEX_CONFIG at it) and add [instruments.*] entries for your bench.
@@ -26,9 +27,6 @@ remote_root = "Shared/Data/FLEX"
 
 [data]
 writer = "tdms"
-
-[exp]
-handler = "ce"   # CESession: bootstrapped from the Configure Experiments VI
 
 [comms]
 backend = "asana"

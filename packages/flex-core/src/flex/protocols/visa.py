@@ -11,7 +11,6 @@ class VISAInstrument(Instrument):
     """Base class for instruments controlled through VISA.
 
     Args:
-        name: Instrument name used in logs, snapshots, and experiments.
         resource: VISA resource string, e.g. ``"GPIB0::12::INSTR"``.
         timeout: Seconds to wait for responses.
         read_termination / write_termination: Message terminators.
@@ -43,14 +42,6 @@ class VISAInstrument(Instrument):
             self.log.error("Could not open VISA resource %s", resource)
             raise
         self.log.info("Connected: %s", resource)
-
-    @property
-    def timeout(self) -> float:
-        return self._resource.timeout / 1000
-
-    @timeout.setter
-    def timeout(self, seconds: float) -> None:
-        self._resource.timeout = int(seconds * 1000)
 
     def write(self, cmd: str) -> None:
         self.log.debug("write: %s", cmd)

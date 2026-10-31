@@ -1,8 +1,4 @@
-"""Shared HTML representations for Jupyter / VS Code interactive windows.
-
-One consistent look for every FLEX object (generalized from the v1 CESession
-summary card). Plain-text ``__repr__`` remains the fallback everywhere.
-"""
+"""HTML cards for FLEX objects in Jupyter / VS Code; plain ``__repr__`` stays the fallback."""
 
 from __future__ import annotations
 
@@ -108,15 +104,8 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def auto_display(obj: Any) -> str | None:
-    """Push ``obj._repr_html_()`` to a live Jupyter/VS Code Interactive
-    display, returning a display id to keep it updated with
-    :func:`refresh_display`. Outside an interactive session (plain scripts,
-    terminals) this is a no-op returning ``None``.
-
-    An object's own ``_repr_html_`` only renders automatically when it's the
-    *last expression* of a cell -- useless for ``with Experiment(...) as exp:``,
-    where the object is never that. This pushes it explicitly instead.
-    """
+    """Show ``obj._repr_html_()`` now and return a display id for :func:`refresh_display`;
+    None outside IPython. Needed because a ``with`` target is never a cell's last expression."""
     from flex.log import is_interactive
 
     if not is_interactive():
@@ -128,9 +117,7 @@ def auto_display(obj: Any) -> str | None:
 
 
 def refresh_display(obj: Any, display_id: str | None) -> None:
-    """Re-render ``obj._repr_html_()`` into a display started by
-    :func:`auto_display`. No-op if ``display_id`` is ``None`` (non-interactive,
-    or auto_display was never called)."""
+    """Re-render into a display started by :func:`auto_display`; no-op for None."""
     if display_id is None:
         return
     from IPython.display import HTML, update_display
@@ -145,7 +132,7 @@ def instrument_html(instrument: Instrument) -> str:
         rows.append([escape(name), escape(p.unit or "—"), escape(access.strip("/") or "—")])
     sections = [("Parameters", table(["Name", "Unit", "Access"], rows))] if rows else []
     return card(
-        f"{type(instrument).__name__}",
+        type(instrument).__name__,
         {"Name": instrument.name, "Address": instrument.address or "—"},
         sections,
     )

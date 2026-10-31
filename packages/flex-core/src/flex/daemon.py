@@ -21,7 +21,7 @@ def log_file(cfg: FlexConfig) -> Path:
     return Path(cfg.data.root) / "serve.log"
 
 
-def _listening(port: int) -> bool:
+def listening(port: int) -> bool:
     try:
         socket.create_connection(("127.0.0.1", port), timeout=0.3).close()
         return True
@@ -36,15 +36,15 @@ def status(cfg: FlexConfig | None = None) -> dict:
 
     cfg = cfg or load_config()
     out = {"station": False, "runner": False, "runner_enabled": cfg.runner.enabled,
-           "instruments": [], "failed": {}, "run": None, "log": str(log_file(cfg))}
-    if _listening(cfg.server.port):
+           "instruments": [], "failed": {}, "run": None}
+    if listening(cfg.server.port):
         try:
             with ZMQInstrument("link", f"tcp://127.0.0.1:{cfg.server.port}", timeout=1.0) as link:
                 info = link.call("describe")
             out.update(station=True, instruments=list(info["instruments"]), failed=info.get("failed", {}))
         except Exception:
             pass
-    if _listening(cfg.runner.port):
+    if listening(cfg.runner.port):
         try:
             with RunClient(f"tcp://127.0.0.1:{cfg.runner.port}", timeout=1.0,
                            token=cfg.runner.token) as client:
@@ -60,9 +60,8 @@ def status(cfg: FlexConfig | None = None) -> dict:
 def start(cfg: FlexConfig | None = None) -> None:
     """Launch ``flex serve`` in the background, without a console window."""
     cfg = cfg or load_config()
-    if _listening(cfg.server.port):
+    if listening(cfg.server.port):
         return
-    stop_file(cfg).unlink(missing_ok=True)
     if os.name == "nt":
         # via PowerShell, so the daemon is not our child and survives this
         # process's tree being killed
@@ -83,7 +82,7 @@ def stop(cfg: FlexConfig | None = None, wait: float = 20.0) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch()
     deadline = time.monotonic() + wait
-    while _listening(cfg.server.port):
+    while listening(cfg.server.port):
         if time.monotonic() > deadline:
             return False
         time.sleep(0.2)

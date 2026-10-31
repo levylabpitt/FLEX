@@ -18,18 +18,19 @@ data directory.
 ```toml
 [instruments.lockin]
 driver = "srs.sr7270"
-address = "USB0::0x0A2D::0x001B::12345::RAW"
+address = "12345"   # for the SR7270, its USB serial number
 ```
 
-Extra keys in an instrument entry pass straight through to the driver's
-constructor as keyword arguments. Two special keys don't:
+`address` is passed as the constructor's first argument after the
+instrument name. Extra keys pass straight through as keyword arguments,
+except FLEX's own (`simulate`, and `log`/`log_interval` below):
 
 - `simulate = true` swaps the entry for a `SimulatedInstrument` stand-in,
   so a whole config (or any one instrument of it) can dry-run scripts with
   zero hardware; `driver` may even be omitted.
-- `driver` accepts either a catalog name (`"srs.sr7270"`) or a direct
-  `"module:Class"` reference — private driver packages need no
-  registration.
+- `driver` accepts either a short name from `flex_drivers.CATALOG`
+  (`"srs.sr7270"`) or a direct `"module:Class"` reference — the form for
+  your own drivers, which need no registration.
 
 A physical *station* (say a PPMS with one DAQ PC and one interface PC) can
 span several machines; each machine's flex.toml lists just the instruments
@@ -53,10 +54,12 @@ machine-wide one.
 Every section is optional; short component names ("postgres", "tdms",
 "nextcloud") resolve to classes through fixed registries — see
 [Architecture](architecture.md#name-resolution). A component provided by an
-optional package just needs that package installed:
+optional package just needs that package installed (editable, from the
+installer's checkout or a clone):
 
 ```
-uv pip install flex-core[postgres,tdms] flex-nextcloud flex-asana
+$src = "$env:LOCALAPPDATA\flex\src\packages"
+pip install -e "$src\flex-core[postgres,tdms]" -e "$src\flex-nextcloud" -e "$src\flex-asana"
 ```
 
 `flex config show` prints the resolved configuration and its source;
@@ -105,5 +108,6 @@ lost: with a non-SQLite backend, points buffer in a local SQLite file
 comes back — even across a `flex serve` restart, since the outbox is a file,
 not memory. Instrument control is unaffected either way; only logging pauses.
 
-The LevyLab setup replaces instrument config with the Configure Experiments
-VI: see [CESession](experiments.md#cesession).
+In the LevyLab setup, `CESession` can take an experiment's instruments from
+the Configure Experiments VI instead of `[instruments.*]`: see
+[CESession](experiments.md#cesession).

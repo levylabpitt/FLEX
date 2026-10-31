@@ -66,8 +66,7 @@ class DataConfig(_Section):
 
 
 class ExpConfig(_Section):
-    handler: str = "default"
-    strict_metadata: bool = False
+    strict_metadata: bool = False  # a metadata-store failure aborts the experiment
 
 
 class CommsConfig(_Section):
@@ -136,29 +135,26 @@ class FlexConfig(BaseModel):
     # -- component builders -------------------------------------------------
 
     def build_db(self):
-        """Instantiate the configured metadata store."""
         cls = components.resolve("db", self.db.backend)
         return cls(data_root=self.data.root, **self.db.options())
 
     def build_writer(self, name: str | None = None):
-        """Instantiate a data writer (the configured default unless overridden)."""
+        """The configured writer, or ``name``."""
         cls = components.resolve("writer", name or self.data.writer)
         return cls(**self.data.options())
 
     def build_storage(self):
-        """Instantiate the configured storage backend."""
         cls = components.resolve("storage", self.storage.backend)
         opts = self.storage.options()
         root = opts.pop("root", self.data.root)  # explicit [storage] root wins
         return cls(root=root, **opts)
 
     def build_comms(self):
-        """Instantiate the configured comms backend (none by default)."""
         cls = components.resolve("comms", self.comms.backend)
         return cls(**self.comms.options())
 
     def build_bus(self) -> EventBus:
-        """Create an EventBus with all configured hooks subscribed."""
+        """An EventBus with the configured hooks subscribed."""
         from flex.events import EventBus
 
         bus = EventBus()

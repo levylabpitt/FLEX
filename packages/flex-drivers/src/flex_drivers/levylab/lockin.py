@@ -143,20 +143,20 @@ class Lockin(ZMQInstrument):
         self, channel: int, params: tuple[str, ...] = ("X", "Y", "R", "Theta"), ref: int = 1
     ) -> dict[str, float | None]:
         """Several values from a single ``getResults`` call, so they share one acquisition."""
-        results = self.call("getResults")["Results (Dictionary)"]
+        results = self.get_results()["Results (Dictionary)"]
         by_key = {item["key"]: item["value"] for item in results}
         return {p: by_key.get(self._result_key(channel, p, ref)) for p in params}
 
     def lockin_sweep(self, sweep_config: dict, timeout: float = 10) -> None:
         """Run a sweep and block until it finishes."""
-        if self.get_state() == "sweeping":
+        state = self.get_state()
+        if state == "sweeping":
             raise RuntimeError("Request Denied! Already sweeping")
-        elif self.get_state() == "idle":
+        if state == "idle":
             self.set_state("start")
         self.set_sweep(sweep_config)
         time.sleep(0.5)
         self.set_state("start sweep")
-        # wait for the sweep time since it'll anyway take that long (saves processor resources)
         wait_time = sweep_config["sweepTime"] + sweep_config["initialWaitTime"]
         time.sleep(wait_time)
         start_time = time.time()

@@ -41,7 +41,7 @@ def test_collect_materializes_generator(client):
 
 
 def test_data_drops_none_values():
-    body = AsanaClient._data("name", "task", notes=None, assignee="u1")
+    body = AsanaClient._data(name="task", notes=None, assignee="u1")
     assert body == {"data": {"name": "task", "assignee": "u1"}}
 
 
@@ -73,9 +73,7 @@ def test_create_task_builds_expected_body(client, monkeypatch):
         return {"gid": "task1"}
 
     monkeypatch.setattr(client.tasks, "create_task", fake_create_task)
-    result = client.create_task(
-        "proj1", "Experiment X", notes=None, assignee="u1", custom_fields={"f1": "v1"}
-    )
+    result = client.create_task("proj1", "Experiment X", assignee="u1", custom_fields={"f1": "v1"})
     assert result == {"gid": "task1"}
     assert captured["body"] == {
         "data": {

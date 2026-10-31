@@ -8,7 +8,7 @@ home.
 
 | v1 | v2 |
 |---|---|
-| clone repo + `pip install -e .` (one big package) | `irm flex.levylab.org/install.ps1 \| iex`, then copy `examples/levylab.toml` into place for the lab stack |
+| clone repo + `pip install -e .` (one big package) | `irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 \| iex`, then copy `examples/levylab.toml` into place for the lab stack |
 | hardcoded DB / Nextcloud / n8n endpoints in code | one config file (`flex.toml`); `flex config show` prints the resolved result |
 | secrets in source | environment variables (`NEXTCLOUD_PASSWORD`, `ASANA_ACCESS_TOKEN`) |
 
@@ -61,7 +61,7 @@ Driver methods are now snake_case; the wire protocol is unchanged:
 
 `PostgresStore` creates the v2 core schema as `flex_`-prefixed tables
 (`flex_experiments`, `flex_measurements`, `flex_notes`, `flex_cells`,
-`flex_logs`, `flex_instruments`) and does not touch the v1 `exp` / `meas` /
+`flex_logs`, `flex_instruments`, `flex_monitor`) and does not touch the v1 `exp` / `meas` /
 `cell_log` tables. Migrating that historical data (or pointing v2 at the same
 tables) is a coordinated one-off step — plan it with the lab before switching
 production.

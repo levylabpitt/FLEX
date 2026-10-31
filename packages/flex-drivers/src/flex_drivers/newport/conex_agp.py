@@ -1,6 +1,6 @@
 """Newport CONEX-AGP piezo mirror mount, through Newport's .NET command library.
 
-Needs ``pythonnet`` and the Newport CONEX-AGP applet installed (it supplies
+Needs ``pythonnet`` (``flex-drivers[windows]``) and the Newport CONEX-AGP applet installed (it supplies
 ``ConexAGPCmdLib.DLL``). The library is loaded when the driver is created, not
 at import.
 """

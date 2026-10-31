@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_flex_instruments_exp ON flex_instruments(experime
 
 
 def _iso(t: datetime | None) -> str | None:
-    return t.isoformat(sep=" ", timespec="seconds") if t else None
+    return t.isoformat(sep=" ") if t else None
 
 
 def _dt(s: str | None) -> datetime | None:
@@ -143,7 +143,7 @@ class SQLiteStore(MetadataStore):
 
     # -- writing ----------------------------------------------------------
 
-    def record_experiment_start(self, record: ExperimentRecord, **extra: Any) -> None:
+    def record_experiment_start(self, record: ExperimentRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_experiments"
             " (id, user, name, start_time, end_time, station, host, flex_version, config)"
@@ -163,13 +163,13 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
-    def record_experiment_end(self, experiment_id: str, end_time: datetime, **extra: Any) -> None:
+    def record_experiment_end(self, experiment_id: str, end_time: datetime) -> None:
         self._conn.execute(
             "UPDATE flex_experiments SET end_time = ? WHERE id = ?", (_iso(end_time), experiment_id)
         )
         self._conn.commit()
 
-    def record_measurement_start(self, record: MeasurementRecord, **extra: Any) -> None:
+    def record_measurement_start(self, record: MeasurementRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_measurements (id, experiment_id, name, start_time, end_time, aborted)"
             " VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
@@ -193,7 +193,6 @@ class SQLiteStore(MetadataStore):
         *,
         writer: str | None = None,
         rows: int | None = None,
-        **extra: Any,
     ) -> None:
         self._conn.execute(
             "UPDATE flex_measurements"
@@ -213,14 +212,14 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
-    def record_note(self, record: NoteRecord, **extra: Any) -> None:
+    def record_note(self, record: NoteRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_notes (experiment_id, measurement_id, time, text) VALUES (?, ?, ?, ?)",
             (record.experiment_id, record.measurement_id, _iso(record.time), record.text),
         )
         self._conn.commit()
 
-    def record_cell(self, record: CellRecord, **extra: Any) -> None:
+    def record_cell(self, record: CellRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_cells (experiment_id, time, execution_count, source, success, error)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -235,7 +234,7 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
-    def record_log(self, record: LogEntryRecord, **extra: Any) -> None:
+    def record_log(self, record: LogEntryRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_logs (experiment_id, time, level, logger_name, message, exc_text)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -250,7 +249,7 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
-    def record_instrument(self, record: InstrumentRecord, **extra: Any) -> None:
+    def record_instrument(self, record: InstrumentRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_instruments (experiment_id, name, driver, address, options, connected_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -265,7 +264,7 @@ class SQLiteStore(MetadataStore):
         )
         self._conn.commit()
 
-    def record_monitor(self, record: MonitorRecord, **extra: Any) -> None:
+    def record_monitor(self, record: MonitorRecord) -> None:
         self._conn.execute(
             "INSERT INTO flex_monitor (time, station, parameter, value, unit) VALUES (?, ?, ?, ?, ?)",
             (_iso(record.time), record.station, record.parameter, _dump_value(record.value), record.unit),
@@ -345,15 +344,12 @@ class SQLiteStore(MetadataStore):
             for r in rows
         ]
 
-    def list_logs(self, experiment_id: str, *, level: str | None = None) -> list[LogEntryRecord]:
+    def list_logs(self, experiment_id: str) -> list[LogEntryRecord]:
         sql = (
             "SELECT experiment_id, time, level, logger_name, message, exc_text FROM flex_logs"
             " WHERE experiment_id = ?"
         )
         params: tuple = (experiment_id,)
-        if level:
-            sql += " AND level = ?"
-            params = (*params, level)
         sql += " ORDER BY id"
         rows = self._conn.execute(sql, params).fetchall()
         return [
@@ -381,21 +377,12 @@ class SQLiteStore(MetadataStore):
             for r in rows
         ]
 
-    def list_monitor(
-        self,
-        parameter: str | None = None,
-        *,
-        since: datetime | None = None,
-        limit: int = 100,
-    ) -> list[MonitorRecord]:
+    def list_monitor(self, parameter: str | None = None, *, limit: int = 100) -> list[MonitorRecord]:
         sql = "SELECT time, station, parameter, value, unit FROM flex_monitor"
         clauses, params = [], []
         if parameter:
             clauses.append("parameter = ?")
             params.append(parameter)
-        if since:
-            clauses.append("time >= ?")
-            params.append(_iso(since))
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY id DESC LIMIT ?"
@@ -407,12 +394,8 @@ class SQLiteStore(MetadataStore):
         ]
 
     def pop_monitor(self, limit: int = 1000) -> list[MonitorRecord]:
-        """Return and delete the oldest ``limit`` rows, atomically.
-
-        Used to drain a local outbox: a row is only removed once handed to
-        the caller, so a replay that fails partway through never re-sends
-        (or loses) rows it hasn't returned yet.
-        """
+        """Remove and return the oldest ``limit`` rows (outbox drain; the caller re-records any
+        it fails to replay)."""
         rows = self._conn.execute(
             "SELECT id, time, station, parameter, value, unit FROM flex_monitor ORDER BY id LIMIT ?",
             (limit,),

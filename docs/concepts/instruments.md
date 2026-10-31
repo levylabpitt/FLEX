@@ -78,8 +78,11 @@ to verify the endpoint (disable with `connect_check=False`).
 
 ## Driver packages and the catalog
 
-Drivers live in vendor folders inside `flex_drivers` (`srs/`, `colby/`,
-`rotrics/`, `levylab/`). The package exports one plain dict:
+Drivers live in vendor folders inside `flex_drivers` (`aseq/`, `colby/`,
+`levylab/`, `newport/`, `ophir/`, `rotrics/`, `sphere/`, `srs/`). The
+Newport and Ophir drivers need `flex-drivers[windows]` (pythonnet, pywin32)
+plus the vendor's runtime; those load only when the driver is constructed.
+The package exports one plain dict:
 
 ```python
 CATALOG: dict[str, str] = {
@@ -99,9 +102,10 @@ Two ways to get a driver class:
   enablement, nothing gates imports.
 - **By name**, through the catalog: `[instruments.*]` config entries
   (`driver = "srs.sr7270"`), `flex instruments --probe`, and the dashboard resolve
-  driver names via `CATALOG` (`flex.components.resolve_driver`). Installing
-  the driver package is all it takes — `flex drivers` lists every name
-  available in this environment.
+  driver names via `flex_drivers.CATALOG` (`flex.components.resolve_driver`)
+  — `flex drivers` lists every name available. That is the only catalog
+  read: drivers from your own package are named by reference,
+  `driver = "my_drivers.acme:Acme4000"`.
 
 ## LevyLab drivers and lv_class
 

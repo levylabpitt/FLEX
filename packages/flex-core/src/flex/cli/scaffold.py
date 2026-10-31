@@ -20,15 +20,10 @@ class {name}({base}):
     def __init__(self, name: str = "{lower}", {init_args}, **kwargs):
         super().__init__(name, {forward}, **kwargs)
 
-        # Declare parameters: name, commands (or getter/setter), unit.
         # self.voltage = self.add_parameter(
         #     "voltage", get_cmd="SOUR:VOLT?", set_cmd="SOUR:VOLT {{}}",
         #     get_parser=float, unit="V",
         # )
-
-    # Add instrument methods here. If your driver package defines capability
-    # protocols (see flex_drivers.levylab.capabilities for an example),
-    # conform to one where it fits, e.g. get_temperature().
 '''
 
 _PYPROJECT = """[build-system]
@@ -46,13 +41,7 @@ dependencies = ["flex-core"]
 packages = ["src/{module}"]
 """
 
-_PKG_INIT = '''"""FLEX drivers for {label}."""
-
-# Driver catalog: {{driver name: "module:Class"}}, resolved with
-# flex.components.load_ref when a config names one of these drivers.
-CATALOG: dict[str, str] = {{
-    # "{prefix}.mydevice": "{module}.mydevice:MyDevice",
-}}
+_PKG_INIT = '''"""FLEX drivers for {label}. Name them in flex.toml as driver = "{module}.<file>:<Class>"."""
 '''
 
 
@@ -76,7 +65,7 @@ def create_package(name: str, out: Path) -> Path:
         _PYPROJECT.format(name=name, module=module, label=label), encoding="utf-8"
     )
     (src / "__init__.py").write_text(
-        _PKG_INIT.format(name=name, label=label, module=module, prefix=label), encoding="utf-8"
+        _PKG_INIT.format(label=label, module=module), encoding="utf-8"
     )
     (src / "py.typed").touch()
     return root

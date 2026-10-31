@@ -1,12 +1,5 @@
-"""Shared Instrument-Framework command mixins.
-
-Port of FLEX v1 ``flex.inst.levylab.insttypes.Temperature`` and
-``insttypes.Magnet``: the standard temperature / magnet JSON-RPC commands
-that several LevyLab IF apps (PPMS, Opticool, Cryostation, Oxford magnet
-controllers, Leiden TCs) share. The v2 mixins also provide the canonical
-FLEX capability methods (``flex_drivers.levylab.capabilities.Temperature`` /
-``Magnet``) as thin aliases so drivers conform structurally.
-"""
+"""The standard IF temperature and magnet commands shared by several apps, plus the
+capability aliases (``get_field``/``set_field``)."""
 
 from __future__ import annotations
 
@@ -31,11 +24,7 @@ class IFTemperatureCommands:
     def set_temperature(
         self, setpoint: float, rate: float | None = None, *, channel: int = 0
     ) -> None:
-        """Ramp ``channel`` to ``setpoint`` at ``rate`` (IF ``setTemperature``).
-
-        ``rate`` may be passed positionally (v1 style) or as a keyword
-        (capability style); the Instrument Framework requires it.
-        """
+        """Ramp ``channel`` to ``setpoint`` at ``rate`` (required by the app)."""
         if rate is None:
             raise ValueError(f"{type(self).__name__}.set_temperature requires a ramp rate")
         self.call(

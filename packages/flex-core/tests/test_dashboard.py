@@ -7,12 +7,26 @@ from flex.server import StationServer
 from flex.station import Station
 
 
+def _free_ports(n):
+    """Ports nothing listens on, so a station running on this PC is never touched."""
+    import socket
+
+    ports = []
+    for _ in range(n):
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            ports.append(s.getsockname()[1])
+    return ports
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     """A dashboard over an isolated config + fresh SQLite in tmp_path."""
+    server, runner = _free_ports(2)
     config = tmp_path / "flex.toml"
     config.write_text(
         f'[data]\nroot = "{tmp_path.as_posix()}"\n'
+        f'[server]\nport = {server}\n[runner]\nport = {runner}\n'
         '[instruments.sim]\ndriver = "test.sim"\naddress = ""\n',
         encoding="utf-8",
     )
@@ -103,32 +117,15 @@ def test_drivers_listed(client):
     assert any(d["name"] == "levylab.lockin" for d in drivers)
 
 
-def test_shutdown_signals_process(client, monkeypatch):
-    import signal
-    import time as time_module
-
-    calls = []
-    monkeypatch.setattr("flex.dashboard.app.signal.raise_signal", lambda sig: calls.append(sig))
-    monkeypatch.setattr("flex.dashboard.app.time.sleep", lambda seconds: None)
-
-    response = client.post("/api/shutdown", json={})
-    assert response.status_code == 200
-
-    for _ in range(50):
-        if calls:
-            break
-        time_module.sleep(0.02)
-    assert calls == [signal.SIGINT]
-
-
 def test_config_roundtrip(client, tmp_path):
     raw = client.get("/api/config/raw").json()
     assert raw["path"].endswith("flex.toml")
     assert "[instruments.sim" in raw["text"]
 
-    response = client.put("/api/config/raw", json={"text": raw["text"] + '\n[lab]\nname = "x"\n'})
-    assert response.status_code == 200
-    assert client.get("/api/config").json()["config"]["lab"]["name"] == "x"
+    text = raw["text"] + '\n[lab]\nstation = "x"\n'
+    response = client.put("/api/config/raw", json={"text": text})
+    assert response.status_code == 200 and not response.json()["restarted"]  # no station running
+    assert client.get("/api/config/raw").json()["text"] == text
 
 
 def test_invalid_config_rejected(client):
@@ -178,24 +175,9 @@ def test_writes_need_a_json_content_type(client):
     assert client.post("/api/app/stop", content=b"", headers={"content-type": "text/plain"}).status_code == 403
 
 
-def test_app_status_when_the_station_is_down(tmp_path, monkeypatch):
-    import socket
-
-    ports = []
-    for _ in range(2):  # ports nothing is listening on, whatever else runs on this PC
-        with socket.socket() as s:
-            s.bind(("127.0.0.1", 0))
-            ports.append(s.getsockname()[1])
-    config = tmp_path / "flex.toml"
-    config.write_text(
-        f'[data]\nroot = "{tmp_path.as_posix()}"\n[server]\nport = {ports[0]}\n[runner]\nport = {ports[1]}\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("FLEX_CONFIG", str(config))
-    client = TestClient(create_app(), base_url="http://127.0.0.1")
+def test_app_status_when_the_station_is_down(client):
     status = client.get("/api/app").json()
     assert status["station"] is False and status["runner"] is False
-    assert status["managed"] is False
     assert client.post("/api/app/explode", json={}).status_code == 404
 
 
@@ -238,3 +220,23 @@ def test_station_tab_shows_failed_instruments_and_the_lease(served_station):
         with TestClient(create_app(), base_url="http://127.0.0.1") as client:
             info = client.get("/api/stations").json()
     assert info["failed"] == {"lockin": "no device"} and info["lease"] == "run-7"
+
+
+@pytest.mark.parametrize("run", [None, {"id": "r1", "name": "sweep"}])
+def test_saving_the_config_restarts_an_idle_station(client, monkeypatch, tmp_path, run):
+    import flex.dashboard.app as app_module
+
+    path = tmp_path / "flex.toml"
+    old = path.read_text(encoding="utf-8")
+    seen = []
+    monkeypatch.setattr(app_module.daemon, "status", lambda: {"station": True, "run": run})
+    monkeypatch.setattr(app_module.daemon, "stop", lambda: seen.append(("stop", path.read_text(encoding="utf-8"))))
+    monkeypatch.setattr(app_module.daemon, "start", lambda: seen.append(("start", path.read_text(encoding="utf-8"))))
+    app = TestClient(create_app(), base_url="http://127.0.0.1")
+
+    new = old + '\n[lab]\nname = "x"\n'
+    r = app.put("/api/config/raw", json={"text": new}).json()
+    if run:  # never abort a run to apply a config edit
+        assert not r["restarted"] and r["run"] == run and seen == []
+    else:  # stopped under the old file, started under the new one
+        assert r["restarted"] and seen == [("stop", old), ("start", new)]

@@ -28,12 +28,11 @@ box before switching production work over.
       on end (check the configured project directly)
 
 ## UX
-- [ ] `python -m flex dashboard`: Drivers tab lists and probes drivers;
+- [ ] `flex app`: Drivers tab lists and probes drivers;
       Experiments tab shows the runs from today
-- [ ] Jupyter: `CESession()` renders the summary card; cells are logged as notes
+- [ ] Jupyter: `CESession()` renders the summary card; cells land in `flex_cells`
 
 ## Cleanup decisions to confirm with the lab
 - [ ] Revoke the Asana token committed in v1 (`src/flex/asana/Asana.py` on main)
 - [ ] Plan the v1 `exp`/`meas`/`cell_log` PostgreSQL migration
 - [ ] Confirm `flex.lv` (LabVIEW call helpers) can stay retired
-- [ ] Decide priority for the deferred .NET/COM drivers (Newport, Ophir, Sphere)

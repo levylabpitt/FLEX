@@ -11,7 +11,6 @@ class SerialInstrument(Instrument):
     """Base class for instruments on a serial port.
 
     Args:
-        name: Instrument name used in logs, snapshots, and experiments.
         port: Serial port, e.g. ``"COM3"`` or ``"/dev/ttyUSB0"``.
         baudrate: Line speed.
         timeout: Seconds to wait for responses.

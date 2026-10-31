@@ -3,12 +3,13 @@
 ## Install
 
 ```powershell
-irm flex.levylab.org/install.ps1 | iex
+irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 | iex
 ```
 
-This brings in the default packages (`flex-core`, `flex-exp`,
-`flex-drivers`). No configuration is needed — data goes to HDF5 files and a
-SQLite database under your user data directory.
+This clones FLEX to `%LOCALAPPDATA%\flex\src` and installs the default
+packages (`flex-core`, `flex-exp`, `flex-drivers`) editable from there. No
+configuration is needed — data goes to HDF5 files and a SQLite database
+under your user data directory. Start the tray app with `pythonw -m flex app`.
 (Developing FLEX itself, or on another OS? Install editable from a clone —
 see the README's Development section.)
 
@@ -34,7 +35,8 @@ What happened:
 - an **experiment record** was created (id, user, start/end time, instruments),
 - the scan swept `gate`, read `x` at every point, and wrote both columns —
   with units — to an **HDF5 file**,
-- a **log file** captured everything, and Jupyter cells are recorded as notes,
+- a **log file** captured everything, and Jupyter cells are recorded
+  (`flex_cells`),
 - if you had pressed **Ctrl-C**, the file would have been finalized, the
   measurement marked *aborted*, and the `on_abort` cleanup would have run.
 
@@ -63,7 +65,7 @@ class Keithley2400(VISAInstrument):
 with Experiment("jane") as exp:
     k = exp.add(Keithley2400, resource="GPIB0::24::INSTR")
     Scan(sweep(k.voltage, np.linspace(0, 1, 51), delay=0.1)) \
-        .measure(current=lambda: k.query("MEAS:CURR?")) \
+        .measure(current=lambda: float(k.query("MEAS:CURR?"))) \
         .run(exp, name="IV")
 ```
 
@@ -87,5 +89,5 @@ with exp.measurement("noise vs time") as m:
 - [Configuration & instruments](concepts/configuration.md) — configure your
   lab's database, storage, data format, and hooks in one flex.toml.
 - [LevyLab guide](levylab.md) — `CESession` and the Instrument Framework.
-- [Dashboard](concepts/dashboard.md) — edit the config and browse experiments
-  in the browser (`python -m flex dashboard`).
+- [Dashboard](concepts/dashboard.md) — live instruments, runs, config and
+  experiments in the browser (`flex app`).

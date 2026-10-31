@@ -3,7 +3,7 @@
 A FLEX driver is one class: a protocol base supplies the connection, you
 declare parameters and methods. This tutorial writes a driver for a
 fictitious `Acme4000` source-meter and ends with the optional steps —
-registration, LevyLab integration, hardware-free tests.
+config, LevyLab integration, hardware-free tests.
 
 Background on the pieces: [Instruments & drivers](../concepts/instruments.md).
 For how drivers fit into the station, with an IF, a VISA and a serial example,
@@ -43,8 +43,10 @@ class Acme4000(VISAInstrument):
     def __init__(self, name: str = "acme4000", resource: str = "GPIB0::1::INSTR", **kwargs):
         super().__init__(name, resource, **kwargs)
 
-        # Declare parameters: name, commands (or getter/setter), unit.
-        ...
+        # self.voltage = self.add_parameter(
+        #     "voltage", get_cmd="SOUR:VOLT?", set_cmd="SOUR:VOLT {}",
+        #     get_parser=float, unit="V",
+        # )
 ```
 
 ## 3. Fill in parameters and methods
@@ -99,13 +101,11 @@ with Experiment("jane") as exp:
 
 For many drivers this is the end of the tutorial.
 
-## 5. Optional: register it for name-based resolution
+## 5. Optional: use it from flex.toml
 
-Registration only matters if you want the driver addressable *by name* — in
-`[instruments.*]` config blocks, `flex instruments --probe`, and the dashboard.
-
-**No registration at all.** An instrument entry accepts a direct
-`"module:Class"` reference, so any importable driver works immediately:
+To have the station load the driver (`[instruments.*]`, `flex serve`,
+`flex instruments --probe`), name it by a `"module:Class"` reference; any
+importable driver works, nothing to register:
 
 ```toml
 [instruments.acme]
@@ -119,22 +119,17 @@ address = "GPIB0::4::INSTR"
 flex new package flex-drivers-mylab
 ```
 
-This creates an installable package (`pyproject.toml`, `src/flex_drivers_mylab/`,
-`tests/`) whose `__init__.py` holds a registry dict:
+This creates an installable package (`pyproject.toml`,
+`src/flex_drivers_mylab/`, `tests/`). Install it
+(`pip install -e flex-drivers-mylab`) and use the `"module:Class"` form
+above.
 
-```python
-CATALOG: dict[str, str] = {
-    "mylab.acme4000": "flex_drivers_mylab.acme4000:Acme4000",
-}
-```
-
-Install it (`pip install -e flex-drivers-mylab`) and use the `"module:Class"`
-form above, or short names via your own dict at script level.
-
-**Or contribute to `flex-drivers`.** Add a vendor folder
-(`src/flex_drivers/acme/`), put the module there, and add one line to the
-package's `CATALOG` in `src/flex_drivers/__init__.py`. The existing vendor
-folders (`srs/`, `colby/`, `rotrics/`) are the pattern to copy.
+**Or contribute to `flex-drivers`** to get a short name like
+`"acme.acme4000"`: add a vendor folder (`src/flex_drivers/acme/`), put the
+module there, and add one line to `CATALOG` in
+`src/flex_drivers/__init__.py`. That catalog is the only one short names
+come from. The existing vendor folders (`srs/`, `colby/`, `rotrics/`) are
+the pattern to copy.
 
 ## 6. LevyLab Instrument-Framework drivers
 

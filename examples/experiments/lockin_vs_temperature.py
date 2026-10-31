@@ -38,7 +38,7 @@ def run(station, ai_channel=1, ao_channel=1, amplitude=0.01, frequency=13.0,
             time.sleep(poll)
 
     result = {"T": [], "X": [], "Y": []}
-    with Experiment(user, name="lock-in vs temperature", notify=notify, cell_log=False) as exp:
+    with Experiment(user, name="lock-in vs temperature", notify=notify) as exp:
         exp.add_instrument(lockin)
         exp.add_instrument(ppms)
         lockin.set_ao_function(ao_channel, "Sine")

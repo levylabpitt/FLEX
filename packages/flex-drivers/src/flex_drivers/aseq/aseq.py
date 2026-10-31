@@ -1,9 +1,7 @@
 """ASEQ Instruments CCD spectrometer, via the vendor's ``libspectr`` DLL.
 
-Ported from <https://github.com/PVSensors/ASQESpectrometer> (MIT). Unlike
-every other driver here, this isn't a wire protocol (VISA/TCP/serial/ZMQ) --
-it's a local C library reached through ``ctypes``, so it subclasses
-:class:`~flex.instrument.Instrument` directly instead of a protocol base.
+Ported from <https://github.com/PVSensors/ASQESpectrometer> (MIT). A local C library
+reached through ``ctypes``, so it subclasses :class:`~flex.instrument.Instrument` directly.
 """
 
 from __future__ import annotations

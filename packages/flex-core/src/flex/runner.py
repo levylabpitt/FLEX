@@ -1,17 +1,12 @@
-"""Run submitted experiment scripts in subprocesses, so a run outlives
-whoever started it (a notebook tab, a terminal, a dashboard window).
+"""Run submitted scripts in subprocesses, one at a time, so a run outlives whoever started it.
 
-A script defines ``run(station, **params)``; ``station`` connects to one or
-more station servers (``[runner] servers``) and exposes their instruments
-by name. The runner keeps the script source, params, log and result of every
-run under ``<data root>/runs/``, publishes ``run.status`` / ``run.log`` events,
-and runs one script at a time.
+A script defines ``run(station, **params)``; ``station`` joins the servers in
+``[runner] servers``. Source, params, log and result of every run are kept
+under ``<data root>/runs/``; ``run.status``/``run.log`` events go out on port+1.
 
-Aborting drops an ``abort`` file in the run directory; the child sees it and
-raises ``KeyboardInterrupt`` so ``finally`` blocks can leave the hardware
-safe. After a grace period the process is killed. (A flag file, not a
-signal: Windows console signals need a shared console, which a background
-runner doesn't have.)
+Abort drops an ``abort`` file that the child turns into KeyboardInterrupt, so
+``finally`` blocks can leave the hardware safe; after a grace period the child
+is killed. A file, not a signal: a background process has no console to signal.
 """
 
 from __future__ import annotations
@@ -30,10 +25,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import zmq
 
 from flex.log import get_logger
+from flex.protocols.zmq import ZMQInstrument
 
 TERMINAL = ("done", "failed", "aborted", "interrupted")
 _LEASE_TTL = 30.0  # seconds a station stays leased without a renewal
@@ -53,16 +50,14 @@ def _new_id() -> str:
 
 class RunServer:
     def __init__(self, servers: list[str], *, root: Path | str, port: int | None = None,
-                 bind: str | None = None, abort_grace: float = 10.0, call_timeout: float = 120.0,
-                 token: str = ""):
+                 abort_grace: float = 10.0, call_timeout: float = 120.0, token: str = ""):
         self.servers = servers
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.abort_grace = abort_grace
         self.call_timeout = call_timeout
         self.token = token
-        if bind is None:  # without a token only this PC may talk to the runner
-            bind = "tcp://*" if token else "tcp://127.0.0.1"
+        bind = "tcp://*" if token else "tcp://127.0.0.1"  # no token: this PC only
         self.log = get_logger("runner")
         self._db = sqlite3.connect(self.root / "runs.db", check_same_thread=False)
         self._db.execute(_SCHEMA)
@@ -95,16 +90,6 @@ class RunServer:
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
         self.log.info("Runner on port %d (events on %d)", self.port, self.pub_port)
-
-    def run(self) -> None:
-        self._running = True
-        self.log.info("Runner on port %d (events on %d)", self.port, self.pub_port)
-        try:
-            self._loop()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.stop()
 
     def stop(self) -> None:
         self._running = False
@@ -199,8 +184,6 @@ class RunServer:
     # refuse writes from anyone else. The lease expires on its own if we die.
 
     def _take_leases(self, run_id: str, token: str) -> list:
-        from flex.protocols.zmq import ZMQInstrument
-
         links = []
         try:
             for address in self.servers:
@@ -221,7 +204,7 @@ class RunServer:
 
     def _abort(self, run_id: str | None) -> dict:
         if not self._active or (run_id and run_id != self._active["id"]):
-            raise RuntimeError(f"Run {run_id or ''} is not running".replace("  ", " "))
+            raise RuntimeError(f"Run {run_id} is not running" if run_id else "No run is running")
         self._abort_active()
         return {"id": self._active["id"], "status": "aborting"}
 
@@ -317,10 +300,6 @@ class RunClient:
     """Submit and watch runs on a :class:`RunServer`."""
 
     def __init__(self, address: str, *, timeout: float = 5.0, token: str = ""):
-        from urllib.parse import urlsplit
-
-        from flex.protocols.zmq import ZMQInstrument
-
         self._link = ZMQInstrument("runner", address, timeout=timeout)
         self._token = token
         parts = urlsplit(address)

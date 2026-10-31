@@ -1,10 +1,3 @@
-"""FLEX storage backend for Nextcloud (WebDAV)."""
+"""Nextcloud storage backend (WebDAV)."""
 
-from flex_nextcloud.storage import NextcloudStorage
-
-__version__ = "3.0.0a1"
-
-#: Storage backend name -> "module:Class" reference.
 STORAGE: dict[str, str] = {"nextcloud": "flex_nextcloud.storage:NextcloudStorage"}
-
-__all__ = ["STORAGE", "NextcloudStorage"]

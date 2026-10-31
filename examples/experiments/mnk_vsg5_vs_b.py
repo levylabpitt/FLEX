@@ -62,7 +62,7 @@ def run(station, folder="48-SweepVsg5_B_0T_to_18T",
             time.sleep(poll)
 
     measured = []
-    with Experiment(user, name="MNK Vsg5 vs B", notify=notify, cell_log=False) as exp:
+    with Experiment(user, name="MNK Vsg5 vs B", notify=notify) as exp:
         exp.add_instrument(magnet)
         exp.add_instrument(transport)
         exp.note(f"{folder}{comment}")

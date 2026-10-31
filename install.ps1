@@ -1,16 +1,14 @@
 # ==============================================================================
 # FLEX Installer  -  Levy Lab
 #
-#   Usage:   irm flex.levylab.org/install.ps1 | iex
+#   Usage:   irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 | iex
 #
-#   FLEX is a monorepo of interdependent packages (not published anywhere
-#   else), so unlike v1 this needs Git: it keeps a persistent local checkout
-#   under %LOCALAPPDATA%\flex\src and installs the default packages from it
-#   *editable* -- which also means the optional packages are a
-#   `pip install -e` away from the same checkout, no network needed.
+#   Keeps a git checkout in %LOCALAPPDATA%\flex\src and installs the default
+#   packages from it editable: `git pull` there updates FLEX, and optional
+#   packages are a `pip install -e` away.
 #
-#   Optional environment overrides (set before piping):
-#     $env:FLEX_SOURCE_REF = 'develop'   # install from a specific branch/tag (default: v2)
+#   Optional override (set before piping):
+#     $env:FLEX_SOURCE_REF = 'v2'   # branch or tag to install (default: v2)
 # ==============================================================================
 
 & {
@@ -20,7 +18,7 @@
     $ErrorActionPreference = 'Continue'
 
     $RepoOwner = 'levylabpitt'
-    $RepoName  = 'flex'
+    $RepoName  = 'FLEX'
 
     # --- logging ---------------------------------------------------------------
     function Log  ([string]$m, [string]$c = 'Gray') { Write-Host "  $m" -ForegroundColor $c }
@@ -211,10 +209,7 @@
     else { Write-Host "    FLEX     : not installed" -ForegroundColor DarkGray }
     if ($env:VIRTUAL_ENV) { Write-Host ("    Target   : venv -> {0}" -f $env:VIRTUAL_ENV) -ForegroundColor Cyan }
 
-    # --- 4. Ensure git is available ---------------------------------------------
-    # v2 is a monorepo of packages that reference each other locally, not a
-    # single pip-installable package -- unlike v1's zip-only install, this
-    # needs a real checkout, which means git.
+    # --- 4. Ensure git is available (the packages install from a checkout) -----
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Fail "Git is required to install FLEX v2 (it's a multi-package repo)."
         Write-Host ""
@@ -245,10 +240,6 @@
     }
 
     # --- 6. Install the default packages, editable -----------------------------
-    # Editable, from the persistent checkout above: installing the optional
-    # packages later is a `pip install -e` away from the same checkout, and
-    # `git pull`-ing $srcRoot picks up updates immediately (no reinstall step,
-    # unlike v1's force-reinstall pass).
     Write-Host ""
     Log "Installing FLEX packages (editable)..." 'Yellow'
     Write-Host "  ----------------------------- pip ----------------------------" -ForegroundColor DarkGray
@@ -270,14 +261,9 @@
     }
 
     # --- 8. `flex` command without the self-lock --------------------------------
-    # pip's own console-script launcher (Scripts\flex.exe) stays open for the
-    # life of any long-running command like `dashboard`, and Windows locks a
-    # running exe against being rewritten -- so installing anything *through*
-    # the dashboard fails the moment uv/pip tries to touch its own launcher.
-    # A flex.cmd shim isn't managed by pip, so nothing ever needs to lock or
-    # rewrite it; it just hands off to `python -m flex`, which never self-locks.
-    # (A later manual pip install may regenerate flex.exe -- delete it again
-    # if `flex` starts resolving to the exe instead of this shim.)
+    # pip's flex.exe stays open, and Windows-locked, for the life of a long-running
+    # command like `flex app`, so pip could not update the environment meanwhile.
+    # A flex.cmd shim pip never touches hands off to `python -m flex` instead.
     $scriptsDir = Split-Path $py -Parent
     $flexCmd = Join-Path $scriptsDir 'flex.cmd'
     @"
@@ -291,6 +277,6 @@
     Ok "FLEX $($verify.Output) installed successfully."
     Write-Host "  ===============================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Try it:  flex dashboard" -ForegroundColor Gray
+    Write-Host "  Start it:  pythonw -m flex app   (tray icon; tick 'Start with Windows')" -ForegroundColor Gray
     Write-Host ""
 }

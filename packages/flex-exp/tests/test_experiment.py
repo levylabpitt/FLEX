@@ -124,16 +124,17 @@ def test_instrument_registry_and_capabilities(config):
         with pytest.raises(KeyError, match="No instrument 'magnet'"):
             exp.get("magnet")
         with pytest.raises(ValueError, match="already registered"):
-            exp.add(SimulatedInstrument, "cryo", name="cryo")
+            exp.add(SimulatedInstrument, "cryo")
         with pytest.raises(AttributeError):
             _ = exp.nonexistent
 
 
 def test_notes_and_events(config, tmp_path):
     events = []
-    exp = Experiment("u", config=config, notes="cooldown 12")
+    exp = Experiment("u", config=config)
     exp.events.subscribe("measurement.end", lambda event, **kw: events.append(event))
     with exp:
+        exp.note("cooldown 12")
         with exp.measurement() as m:
             m.add_row(x=1.0)
             m.add_note("first point")

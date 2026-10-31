@@ -9,8 +9,9 @@ task per experiment via `flex-asana` — the Asana API directly, no n8n.
 ## Setup (once per machine)
 
 ```powershell
-irm flex.levylab.org/install.ps1 | iex
-uv pip install flex-nextcloud flex-asana     # the LevyLab integrations
+irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 | iex
+$src = "$env:LOCALAPPDATA\flex\src\packages"   # the installer's checkout
+pip install -e "$src\flex-core[postgres,tdms]" -e "$src\flex-nextcloud" -e "$src\flex-asana"
 Copy-Item examples\levylab.toml "$env:LOCALAPPDATA\flex\config.toml"
 $env:NEXTCLOUD_PASSWORD = '...'              # or add to the machine environment
 $env:ASANA_ACCESS_TOKEN = '...'
@@ -18,14 +19,16 @@ $env:ASANA_EXPERIMENTS_PROJECT_GID = '...'
 ```
 
 (`examples/levylab.toml` in the repo is the lab's shared configuration —
-PostgreSQL, TDMS, Nextcloud, Asana, `exp.handler = "ce"`. Copy it, then add
-your bench's `[instruments.*]` entries locally.)
+PostgreSQL, TDMS, Nextcloud, Asana. Copy it, then add your bench's
+`[instruments.*]` entries locally if you don't use `CESession`.)
 
 ## CESession
 
 `CESession` is an `Experiment` bootstrapped from the Configure Experiments VI:
 it reads `Control Experiment.json`, connects a driver to every configured IF
-app (matched by LabVIEW class), and attaches them by their CE type.
+app (matched by LabVIEW class), and attaches them by their CE type. It is an
+alternative to `[instruments.*]` + `exp.load_instruments()`, not a
+replacement: both fill `exp.instruments`.
 
 ```python
 from flex import CESession, Scan, sweep
@@ -35,9 +38,11 @@ with CESession() as exp:                       # user/device/wiring from the VI
     exp.DAQ.set_ao_dc(1, 0.0)
     print(exp.wiring)                          # {lockin ch: (electrode, label)}
 
-    gate = exp.DAQ.parameters.get("ao1_dc") or (lambda v: exp.DAQ.set_ao_dc(1, v))
-    Scan(sweep(gate, np.linspace(0, 1, 101), delay=0.1)) \
-        .measure(results=exp.DAQ.get_results) \
+    def gate(v):
+        exp.DAQ.set_ao_dc(1, v)
+
+    Scan(sweep(gate, np.linspace(0, 1, 101), delay=0.1, unit="V")) \
+        .measure(x=lambda: exp.DAQ.get_lockin_result(1, "X")) \
         .on_abort(lambda: exp.DAQ.set_ao_dc(1, 0.0)) \
         .run(exp, name="gate sweep")
 ```
@@ -73,6 +78,8 @@ Nothing requires the Instrument Framework: a plain VISA/serial instrument
 drivers:
 
 ```python
+from flex_drivers.srs import SR7270
+
 with CESession() as exp:
     exp.add(SR7270, "lockin2", serial="12345")
 ```
@@ -91,6 +98,6 @@ with FakeIFServer({"getResults": {"X": [1.0]}}) as server:
 
 ## The historical database
 
-v2 writes to its own PostgreSQL tables (`experiments`, `measurements`,
-`notes`). The v1 tables (`exp`, `meas`, `cell_log`) are untouched; migrating
+v2 writes to its own `flex_`-prefixed PostgreSQL tables (`flex_experiments`,
+`flex_measurements`, `flex_notes`, ...). The v1 tables (`exp`, `meas`, `cell_log`) are untouched; migrating
 them is a planned one-off — see the [migration notes](migration-v1-to-v2.md).

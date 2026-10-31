@@ -35,7 +35,7 @@ class _LeidenTC(ZMQInstrument, IFTemperatureCommands):
         return self.call("getHeater", [channel])
 
 
-class TC_CF(_LeidenTC):  # noqa: N801 (lab-known name)
+class TC_CF(_LeidenTC):
     """Leiden TC (Z Bridge) on the CF900 fridge."""
 
     lv_class = "Inst.TC.CF.lvclass"
@@ -44,7 +44,7 @@ class TC_CF(_LeidenTC):  # noqa: N801 (lab-known name)
         super().__init__(name, address, **kwargs)
 
 
-class TC_MNK(_LeidenTC):  # noqa: N801 (lab-known name)
+class TC_MNK(_LeidenTC):
     """Leiden TC (AVS47B) on the MNK fridge."""
 
     lv_class = "Inst.TC.MNK.lvclass"

@@ -27,6 +27,19 @@ def test_hdf5_roundtrip(tmp_path):
         assert f["arrays/spectrum"].attrs["channel"] == 1
 
 
+def test_hdf5_closes_when_rows_fill_whole_blocks(tmp_path):
+    writer = HDF5Writer(block_size=3)
+    writer.open(tmp_path / "m.h5")
+    writer.add_columns([ColumnSpec("x")])
+    for i in range(6):
+        writer.append({"x": i})
+    writer.close()  # used to fail flushing an empty block
+
+    with h5py.File(tmp_path / "m.h5") as f:
+        assert f.attrs["rows"] == 6
+        np.testing.assert_allclose(f["data/x"][:], np.arange(6))
+
+
 def test_hdf5_missing_column_is_nan_unknown_rejected(tmp_path):
     writer = HDF5Writer()
     writer.open(tmp_path / "m.h5")

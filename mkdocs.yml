@@ -1,6 +1,5 @@
 site_name: FLEX
 site_description: Framework for Laboratory EXperiments
-site_url: https://flex.levylab.org
 repo_url: https://github.com/levylabpitt/flex
 repo_name: levylabpitt/flex
 edit_uri: edit/v2/docs/
@@ -53,13 +52,10 @@ extra_css:
 markdown_extensions:
   - attr_list
   - admonition
-  - tables
   - toc:
       permalink: true
   - pymdownx.superfences
   - pymdownx.highlight
-  - pymdownx.tabbed:
-      alternate_style: true
 
 nav:
   - Home: index.md

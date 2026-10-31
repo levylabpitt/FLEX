@@ -38,7 +38,6 @@ class SweepAxis:
     delay: float = 0.0
     name: str = ""
     unit: str = ""
-    before: Callable[[], None] | None = None  # called when this axis starts a pass
     after: Callable[[], None] | None = None  # called when a pass ends (also on abort)
 
     def __post_init__(self):
@@ -63,12 +62,11 @@ def sweep(
     delay: float = 0.0,
     name: str = "",
     unit: str = "",
-    before: Callable[[], None] | None = None,
     after: Callable[[], None] | None = None,
 ) -> SweepAxis:
     """Describe a sweep of ``target`` (a Parameter or one-argument callable)
     over ``values``, waiting ``delay`` seconds after each set."""
-    return SweepAxis(target, values, delay=delay, name=name, unit=unit, before=before, after=after)
+    return SweepAxis(target, values, delay=delay, name=name, unit=unit, after=after)
 
 
 class Scan:
@@ -104,13 +102,12 @@ class Scan:
         experiment: Experiment,
         *,
         name: str = "",
-        notes: str = "",
         writer: str | None = None,
         progress: bool = True,
     ) -> Measurement:
         """Execute the scan inside a new measurement; returns it (finished)."""
         total = prod(len(axis.values) for axis in self.axes)
-        with experiment.measurement(name or "scan", notes=notes, writer=writer) as m:
+        with experiment.measurement(name or "scan", writer=writer) as m:
             for axis in self.axes:
                 m.declare(axis.name, axis.unit)
             m.register(*self._params, **self._named)
@@ -136,8 +133,6 @@ class Scan:
 
     def _run_axes(self, m: Measurement, axes: list[SweepAxis], setpoints: dict, bar) -> None:
         axis = axes[0]
-        if axis.before is not None:
-            axis.before()
         try:
             for value in axis.values:
                 axis.set(value)

@@ -7,11 +7,13 @@ control, autonomous sweeps, data files, experiment records, and lab-specific
 integrations — with one-command setup for new users.
 
 ```powershell
-irm flex.levylab.org/install.ps1 | iex
+irm https://raw.githubusercontent.com/levylabpitt/FLEX/v2/install.ps1 | iex
 ```
 
-(Windows; see [`install.ps1`](install.ps1). Already have Python + a venv you
-manage yourself? `pip install -e packages/flex-core[visa] -e packages/flex-exp
+(Windows; see [`install.ps1`](install.ps1). It clones the repo to
+`%LOCALAPPDATA%\flex\src` and installs the packages editable from there;
+`git pull` in that folder updates FLEX. Managing your own venv?
+`pip install -e packages/flex-core[visa,app] -e packages/flex-exp
 -e packages/flex-drivers -e packages/flex` from a clone works too — see
 [Development](#development).)
 
@@ -48,8 +50,11 @@ the installer gives you the three default ones (via the `flex` metapackage).
 | `flex-nextcloud` | Nextcloud file storage | opt-in |
 | `flex-asana` | Asana comms backend: a task per experiment | opt-in |
 
-Optional dependencies are extras on flex-core: `flex-core[visa]`,
-`[zmq]`, `[serial]`, `[postgres]`, `[tdms]`, or `[all]`.
+Opt-in packages install from the installer's checkout:
+`pip install -e "$env:LOCALAPPDATA\flex\src\packages\flex-nextcloud"`.
+Optional dependencies are extras on flex-core: `[visa]`, `[serial]`,
+`[postgres]`, `[tdms]`, `[app]` (the tray app), or `[all]`. flex-drivers has
+`[windows]` (pythonnet, pywin32) for the Newport and Ophir drivers.
 
 ## Configuration
 
@@ -68,8 +73,11 @@ flex config show             # the active configuration
 flex experiments             # browse recorded experiments
 flex instruments --probe     # test-connect every configured instrument
 flex new driver Keithley2400 # scaffold a driver
-python -m flex dashboard     # all of the above, in the browser
+flex run sweep.py -p points=50  # submit a script to this PC's runner
+flex app                     # tray app: runs the station, serves the dashboard
 ```
+
+`pythonw -m flex app` starts the tray app without a console window.
 
 ## Writing a driver
 

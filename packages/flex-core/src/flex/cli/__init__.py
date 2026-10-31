@@ -1,4 +1,4 @@
-"""The ``flex`` command line interface — a thin UI over flex-core services."""
+"""The ``flex`` command line."""
 
 from __future__ import annotations
 
@@ -49,13 +49,11 @@ def show():
     cfg = load_config()
     console.print(f"[bold]Source:[/] {source or '(built-in defaults)'}")
     table = Table("Setting", "Value")
-    table.add_row("lab.name", cfg.lab.name or "-")
     table.add_row("lab.station", cfg.lab.station or "-")
     table.add_row("db.backend", cfg.db.backend)
     table.add_row("data.writer", cfg.data.writer)
     table.add_row("data.root", str(cfg.data.root))
     table.add_row("storage.backend", cfg.storage.backend)
-    table.add_row("exp.handler", cfg.exp.handler)
     table.add_row("instruments", ", ".join(cfg.instruments) or "-")
     console.print(table)
 
@@ -71,13 +69,11 @@ def validate(path: str = typer.Argument(help="Configuration file (flex.toml)")):
     checks = [("db", cfg.db.backend), ("writer", cfg.data.writer), ("storage", cfg.storage.backend)]
     if cfg.comms.backend != "none":
         checks.append(("comms", cfg.comms.backend))
-    checks += [
-        ("drivers", inst.driver) for inst in cfg.instruments.values() if not inst.simulate
-    ]
+    checks += [("drivers", inst.driver) for inst in cfg.instruments.values() if not inst.simulate]
     failures = 0
     for group, name in checks:
         try:
-            components.resolve(group, name)
+            components.resolve_driver(name) if group == "drivers" else components.resolve(group, name)
             console.print(f"  [green]ok[/]  {group}: {name}")
         except components.ComponentError as e:
             failures += 1
@@ -164,7 +160,7 @@ def instruments(probe: bool = typer.Option(False, "--probe", help="Connect and q
     console.print(table)
 
 
-# -- scaffolding / apps / version -------------------------------------------
+# -- scaffolding ----------------------------------------------------------------
 
 
 @new_app.command("driver")
@@ -188,7 +184,7 @@ def new_package(
     name: str = typer.Argument(help="Package name, e.g. flex-drivers-mylab"),
     out: Path = typer.Option(Path("."), help="Output directory"),
 ):
-    """Generate a FLEX package skeleton (installable, with a driver registry)."""
+    """Generate an installable driver package skeleton."""
     from flex.cli.scaffold import create_package
 
     if (out / name).exists():
@@ -197,10 +193,12 @@ def new_package(
     console.print(f"[green]Created[/] {root} (install with: pip install -e {root})")
 
 
+# -- station and runs -----------------------------------------------------------
+
+
 @app.command()
 def serve(
     config: str = typer.Option(None, help="Config file (default: the active flex.toml)"),
-    port: int = typer.Option(None, help="Command port (events on port+1); default [server] port"),
     quiet: bool = typer.Option(False, "--quiet", help="No console output (background use); see serve.log"),
 ):
     """Host this PC's instruments as a station server, and run experiment scripts for it."""
@@ -215,11 +213,11 @@ def serve(
     from flex.station import Station
 
     cfg = load_config(config)
-    add_file_log(daemon.log_file(cfg), logging.INFO, max_bytes=2_000_000)  # no console when run by the app
+    add_file_log(daemon.log_file(cfg), logging.INFO, max_bytes=2_000_000)  # the app runs serve without a console
     sys.excepthook = lambda *exc: get_logger("serve").critical("flex serve crashed", exc_info=exc)
     say = (lambda *args: None) if quiet else console.print
     station = Station.load(cfg)
-    server = StationServer(station, port=port if port is not None else cfg.server.port)
+    server = StationServer(station, port=cfg.server.port)
     runner = None
     if cfg.runner.enabled:
         runner = RunServer(
@@ -389,21 +387,10 @@ def _short(value, width: int = 60) -> str:
 
 @app.command("app")
 def tray(port: int = typer.Option(8756, help="Dashboard port")):
-    """Run the FLEX tray app: keeps the station up and opens the dashboard from the tray icon."""
+    """The FLEX tray app: runs the station and serves the dashboard."""
     from flex.tray import run
 
     run(port)
-
-
-@app.command()
-def dashboard(
-    host: str = typer.Option("127.0.0.1"),
-    port: int = typer.Option(8756),
-):
-    """Launch the FLEX dashboard."""
-    from flex.dashboard import run
-
-    run(host=host, port=port)
 
 
 @app.command()
@@ -419,7 +406,3 @@ def version():
         except metadata.PackageNotFoundError:
             pass
     console.print(table)
-
-
-if __name__ == "__main__":
-    app()

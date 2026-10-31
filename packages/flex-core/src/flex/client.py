@@ -56,9 +56,6 @@ class RemoteInstrument(Instrument):
     def idn(self) -> dict:
         return self.call("idn")
 
-    def close(self) -> None:
-        """The server owns the hardware; nothing to release here."""
-
     def __getattr__(self, attr: str):
         if attr.startswith("_"):
             raise AttributeError(attr)
@@ -115,12 +112,6 @@ class RemoteStation:
             for name, entry in info["instruments"].items()
         }
 
-    def get(self, name: str) -> RemoteInstrument:
-        if name not in self.instruments:
-            have = ", ".join(self.instruments) or "none"
-            raise KeyError(f"No instrument '{name}' (served: {have})")
-        return self.instruments[name]
-
     def describe(self) -> dict:
         """The server's live describe: instruments, parameters, cached values."""
         return self._link.call("describe")
@@ -165,7 +156,6 @@ class StationGroup(RemoteStation):
     def __init__(self, addresses: list[str], *, timeout: float = 5.0, lease: str = ""):
         self.stations: list[RemoteStation] = []
         self.instruments: dict[str, RemoteInstrument] = {}
-        self._subscriptions = []
         try:
             for address in addresses:
                 station = RemoteStation(address, timeout=timeout, lease=lease)

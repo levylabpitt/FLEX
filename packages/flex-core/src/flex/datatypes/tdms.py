@@ -1,10 +1,6 @@
-"""FLEX data writer for the NI TDMS format (LabVIEW-compatible).
-
-Layout matches FLEX v1 conventions so existing LabVIEW/DataViewer tooling can
-read the files: tabular columns are channels in the ``Data.000000`` group
-(with a ``unit`` property); free-form arrays are channels in ``Arrays``;
-measurement metadata is stored as root properties.
-"""
+"""TDMS writer, laid out for the lab's LabVIEW/DataViewer tools: columns are channels in
+``Data.000000`` (with a ``unit`` property), arrays are channels in ``Arrays``, metadata
+is root properties."""
 
 from __future__ import annotations
 
@@ -22,7 +18,6 @@ _ARRAY_GROUP = "Arrays"
 
 
 class TDMSWriter(DataWriter):
-    format_name = "tdms"
     suffix = ".tdms"
 
     def __init__(self, block_size: int = 1000):
@@ -73,7 +68,7 @@ class TDMSWriter(DataWriter):
                 ChannelObject(
                     _DATA_GROUP,
                     name,
-                    np.asarray(values, dtype=float),
+                    values,
                     properties={"unit": self._units.get(name, "")},
                 )
                 for name, values in block.items()

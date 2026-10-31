@@ -20,7 +20,6 @@ from flex.data.writer import ColumnSpec, DataWriter, RowBuffer
 
 
 class HDF5Writer(DataWriter):
-    format_name = "hdf5"
     suffix = ".h5"
 
     def __init__(self, block_size: int = 1000):
@@ -40,7 +39,7 @@ class HDF5Writer(DataWriter):
         group = self._file.require_group("data")
         for col in columns:
             dataset = group.create_dataset(
-                col.name, shape=(0,), maxshape=(None,), dtype=col.dtype, chunks=True
+                col.name, shape=(0,), maxshape=(None,), dtype=float, chunks=True
             )
             dataset.attrs["unit"] = col.unit
         self._buffer = RowBuffer(columns, block_size=self._block_size)

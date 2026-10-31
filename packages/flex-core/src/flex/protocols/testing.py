@@ -20,6 +20,10 @@ from typing import Any
 import zmq
 
 
+class _UnknownMethod(Exception):
+    pass
+
+
 class FakeIFServer:
     """A fake Instrument-Framework app.
 
@@ -56,7 +60,7 @@ class FakeIFServer:
                 reply["result"] = self._dispatch(request["method"], request.get("params"))
             except json.JSONDecodeError as e:
                 reply["error"] = {"code": -32700, "message": f"Parse error: {e}"}
-            except KeyError as e:
+            except _UnknownMethod as e:
                 reply["error"] = {"code": -32601, "message": f"Unknown method: {e.args[0]}"}
             except Exception as e:
                 reply["error"] = {"code": -32000, "message": str(e)}
@@ -72,7 +76,7 @@ class FakeIFServer:
             return {"Model": "FakeIF", "Serial Number": "0000"}
         if method == "HELP":
             return sorted({"ACK", "IDN", "HELP", *self.handlers})
-        raise KeyError(method)
+        raise _UnknownMethod(method)
 
     def stop(self) -> None:
         self._stop.set()

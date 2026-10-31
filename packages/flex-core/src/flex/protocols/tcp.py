@@ -11,7 +11,6 @@ class TCPInstrument(Instrument):
     """Base class for instruments speaking a line-based protocol over TCP.
 
     Args:
-        name: Instrument name used in logs, snapshots, and experiments.
         host / port: Network address of the instrument.
         timeout: Seconds to wait for responses.
         terminator: Line terminator appended to writes and stripped from reads.

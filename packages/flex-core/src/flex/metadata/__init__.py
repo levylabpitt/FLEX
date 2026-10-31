@@ -1,9 +1,5 @@
-"""FLEX experiment metadata: what happened, when, by whom, and where the data is.
-
-The store interface is backend-agnostic; ``flex-db`` provides SQLite (default)
-and PostgreSQL implementations. Actual measurement data lives in files (see
-``flex.data``) — the metadata store only indexes it.
-"""
+"""Experiment metadata: what happened, when, by whom, and where the data files are.
+Backends are in ``flex.db``; the data itself lives in files (``flex.data``)."""
 
 from flex.metadata.store import (
     CellRecord,

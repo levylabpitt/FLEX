@@ -45,6 +45,12 @@ def test_config_validate(tmp_path, monkeypatch):
     assert "db: sqlite" in result.output
 
 
+def test_config_validate_accepts_module_class_drivers(tmp_path):
+    config = tmp_path / "lab.toml"
+    config.write_text('[instruments.sim]\ndriver = "flex.instrument:SimulatedInstrument"\n', encoding="utf-8")
+    assert runner.invoke(app, ["config", "validate", str(config)]).exit_code == 0
+
+
 def test_config_validate_unresolvable_component_fails(tmp_path):
     config = tmp_path / "lab.toml"
     config.write_text('[db]\nbackend = "not-a-backend"\n', encoding="utf-8")
@@ -96,15 +102,7 @@ def test_new_package(tmp_path):
     root = tmp_path / "flex-drivers-mylab"
     assert (root / "pyproject.toml").exists()
     init = (root / "src" / "flex_drivers_mylab" / "__init__.py").read_text(encoding="utf-8")
-    assert "CATALOG" in init
-
-
-def test_dashboard_launches(monkeypatch):
-    calls = []
-    monkeypatch.setattr("flex.dashboard.run", lambda **kw: calls.append(kw))
-    result = runner.invoke(app, ["dashboard"])
-    assert result.exit_code == 0
-    assert calls == [{"host": "127.0.0.1", "port": 8756}]
+    assert 'driver = "flex_drivers_mylab.' in init
 
 
 def test_instruments_without_config(monkeypatch, tmp_path):

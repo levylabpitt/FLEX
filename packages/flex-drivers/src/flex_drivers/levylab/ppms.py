@@ -1,11 +1,9 @@
 """Quantum Design PPMS driver (LevyLab Instrument Framework app).
 
-FLEX v1's five behaviorally identical variants are consolidated into this
-single :class:`PPMS` class; pass the address of the instance you want to
-talk to:
+One class for every PPMS instance; pass the address of the one you want:
 
 ===========  =========================  ================================
-v1 class     default address            LabVIEW class
+Instance     default address            LabVIEW class
 ===========  =========================  ================================
 ``PPMS``     ``tcp://localhost:29270``  ``instrument.PPMS.lvclass``
 ``PPMS1``    ``tcp://localhost:29171``  ``instrument.PPMS1.lvclass``
@@ -14,8 +12,7 @@ v1 class     default address            LabVIEW class
 ``PPMSW1``   ``tcp://localhost:29175``  ``instrument.PPMS-W-1.lvclass``
 ===========  =========================  ================================
 
-The variant LabVIEW class names are kept in :attr:`PPMS.lv_class_aliases` so
-CESession auto-discovery still resolves them to this driver.
+``lv_class_aliases`` maps the other LabVIEW class names here for CESession.
 
 Conforms to ``flex_drivers.levylab.capabilities.Temperature`` and ``Magnet``.
 """

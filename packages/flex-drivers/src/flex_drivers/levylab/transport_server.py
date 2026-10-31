@@ -1,4 +1,4 @@
-"""LevyLab Transport Server driver (registry name ``levylab.transport_server``).
+"""LevyLab Transport Server driver.
 
 <https://github.com/levylabpitt/Transport>
 """

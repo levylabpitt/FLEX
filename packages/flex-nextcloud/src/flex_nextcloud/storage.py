@@ -18,13 +18,13 @@ from pathlib import Path, PurePosixPath
 
 import requests
 
-from flex.data.storage import FilePointer, StorageBackend
+from flex.data.storage import FilePointer, LocalStorage
 from flex.log import get_logger
 
 log = get_logger("nextcloud")
 
 
-class NextcloudStorage(StorageBackend):
+class NextcloudStorage(LocalStorage):
     def __init__(
         self,
         root: str | Path | None = None,
@@ -36,11 +36,7 @@ class NextcloudStorage(StorageBackend):
         session: requests.Session | None = None,
         **_options,
     ):
-        if root is None:
-            from flex.config import default_data_root
-
-            root = default_data_root()
-        self.root = Path(root)
+        super().__init__(root)
         self.url = url.rstrip("/")
         self.user = user
         self.remote_root = PurePosixPath(remote_root.strip("/"))
@@ -52,13 +48,9 @@ class NextcloudStorage(StorageBackend):
             )
         self._session = session or requests.Session()
         self._session.auth = (user, password)
+        self._made: set[PurePosixPath] = set()  # remote folders known to exist
 
     # -- StorageBackend ------------------------------------------------------
-
-    def new_measurement_path(self, experiment_id: str, measurement_id: str, suffix: str) -> Path:
-        path = self.root / experiment_id[:4] / experiment_id / f"{measurement_id}{suffix}"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
 
     def finalize(self, local_path: Path) -> FilePointer:
         remote = self.remote_root / local_path.relative_to(self.root).as_posix()
@@ -67,15 +59,11 @@ class NextcloudStorage(StorageBackend):
             response = self._session.put(self._dav_url(remote), data=f, timeout=60)
         response.raise_for_status()
         log.info("Uploaded %s -> %s", local_path.name, remote)
-        return FilePointer(
-            uri=f"{self.url}/remote.php/dav/files/{self.user}/{remote}",
-            backend="nextcloud",
-            size=local_path.stat().st_size,
-        )
+        return FilePointer(uri=self._dav_url(remote), backend="nextcloud", size=local_path.stat().st_size)
 
     def open_local(self, pointer: FilePointer) -> Path:
         """Prefer the local cache; download from Nextcloud if it is gone."""
-        prefix = f"{self.url}/remote.php/dav/files/{self.user}/{self.remote_root}/"
+        prefix = self._dav_url(self.remote_root) + "/"
         if not pointer.uri.startswith(prefix):
             raise ValueError(f"Not a file under this Nextcloud storage ({prefix}): {pointer.uri}")
         relative = pointer.uri.removeprefix(prefix)
@@ -100,7 +88,10 @@ class NextcloudStorage(StorageBackend):
     def _mkdirs(self, remote_dir: PurePosixPath) -> None:
         parts = remote_dir.parts
         for i in range(1, len(parts) + 1):
-            url = self._dav_url(PurePosixPath(*parts[:i]))
-            response = self._session.request("MKCOL", url, timeout=10)
+            folder = PurePosixPath(*parts[:i])
+            if folder in self._made:
+                continue
+            response = self._session.request("MKCOL", self._dav_url(folder), timeout=10)
             if response.status_code not in (201, 405):  # 405 = already exists
                 response.raise_for_status()
+            self._made.add(folder)

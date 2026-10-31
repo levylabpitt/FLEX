@@ -17,9 +17,7 @@ class FilePointer:
 
 
 class StorageBackend(ABC):
-    """Decides where measurement files are written and what happens when they
-    are finished. Writers always write locally; remote backends upload in
-    :meth:`finalize` so network failures never touch a live measurement."""
+    """Where measurement files are written, and what happens to them when finished."""
 
     @abstractmethod
     def new_measurement_path(self, experiment_id: str, measurement_id: str, suffix: str) -> Path:
@@ -32,6 +30,9 @@ class StorageBackend(ABC):
     def open_local(self, pointer: FilePointer) -> Path:
         """A local path for reading the file back (downloading if remote)."""
         return Path(pointer.uri)
+
+    def close(self) -> None:  # noqa: B027 - optional hook
+        """Release held resources (e.g. an HTTP session)."""
 
 
 class LocalStorage(StorageBackend):

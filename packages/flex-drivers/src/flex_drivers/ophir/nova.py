@@ -1,6 +1,6 @@
 """Ophir Nova / Nova II power meter, through the StarLab COM component.
 
-Needs ``pywin32`` and Ophir StarLab (it registers ``OphirLMMeasurement``). The
+Needs ``pywin32`` (``flex-drivers[windows]``) and Ophir StarLab (it registers ``OphirLMMeasurement``). The
 component is created when the driver is created, not at import.
 """
 

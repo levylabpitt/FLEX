@@ -2,7 +2,8 @@
 
 Speaks the LevyLab Instrument-Framework dialect (ACK / IDN / HELP), so any IF
 client, :class:`flex.protocols.ZMQInstrument` included, can talk to it.
-Station methods: ``describe``, ``snapshot``, ``leaseAcquire``/``leaseRelease``.
+Station methods: ``describe`` (``methods: true`` adds each driver's public methods, for
+client-side autocomplete), ``snapshot``, ``leaseAcquire``/``leaseRelease``.
 Instrument methods: ``get``/``set`` (parameters) and ``call`` (public driver
 methods). One worker thread per instrument: different instruments run
 concurrently, commands to one instrument queue.
@@ -16,6 +17,7 @@ same worker queue and written to the ``flex_monitor`` table.
 from __future__ import annotations
 
 import contextlib
+import inspect
 import itertools
 import json
 import queue
@@ -28,6 +30,7 @@ from typing import Any
 import zmq
 
 from flex import __version__ as flex_version
+from flex.instrument import Instrument
 from flex.log import get_logger
 from flex.metadata import MonitorRecord
 from flex.station import Station
@@ -232,7 +235,7 @@ class StationServer:
         if method == "snapshot":
             return self.station.snapshot(read=bool(params.get("read")))
         if method == "describe":
-            return self._describe()
+            return self._describe(bool(params.get("methods")))
         if method == "leaseAcquire":  # also renews, for the same token
             if self._lease_now() and self._lease["token"] != params["token"]:
                 raise RuntimeError(f"Station '{self.station.name}' is in use by {self._lease['holder']}")
@@ -245,7 +248,21 @@ class StationServer:
             return True
         return _UNKNOWN
 
-    def _describe(self) -> dict:
+    @staticmethod
+    def _methods(inst: Instrument) -> dict[str, str]:
+        """{public driver method: "name(signature)\n\ndoc"}; the Instrument base's own are left out."""
+        out = {}
+        for name, fn in inspect.getmembers(type(inst), inspect.isfunction):
+            if name.startswith("_") or name in vars(Instrument):
+                continue
+            try:
+                head = f"{name}{inspect.signature(getattr(inst, name))}"
+            except (TypeError, ValueError):
+                head = name
+            out[name] = f"{head}\n\n{inspect.getdoc(fn) or ''}".rstrip()
+        return out
+
+    def _describe(self, methods: bool = False) -> dict:
         instruments = {}
         for name, inst in self.station.instruments.items():
             instruments[name] = {
@@ -255,6 +272,7 @@ class StationServer:
                     p.name: {"unit": p.unit, "gettable": p.gettable, "settable": p.settable, "cache": p.cache}
                     for p in inst.parameters.values()
                 },
+                **({"methods": self._methods(inst)} if methods else {}),
             }
         return {"station": self.station.name, "pub_port": self.pub_port, "instruments": instruments,
                 "failed": self.station.failed,

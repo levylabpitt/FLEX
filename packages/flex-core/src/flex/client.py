@@ -35,6 +35,9 @@ class RemoteInstrument(Instrument):
         self._lease = lease
         self._remote_class = info["class"]
         self._address = f"{link.address}/{name}"
+        for method, doc in info.get("methods", {}).items():
+            if not hasattr(type(self), method):  # keep the proxy's own call/idn/close
+                setattr(self, method, self._remote_method(method, doc))
         for pname, meta in info["parameters"].items():
             getter = (lambda pn=pname: self._rpc("get", {"instrument": name, "parameter": pn})) \
                 if meta["gettable"] else None
@@ -43,6 +46,15 @@ class RemoteInstrument(Instrument):
             param = self.add_parameter(pname, getter=getter, setter=setter, unit=meta.get("unit", ""))
             if pname not in self.__dict__ and not hasattr(type(self), pname):
                 setattr(self, pname, param)
+
+    def _remote_method(self, method: str, doc: str):
+        """A real method (so completion and ``?`` see it) that forwards to the driver."""
+
+        def remote(*args: Any, **kwargs: Any) -> Any:
+            return self.call(method, *args, **kwargs)
+
+        remote.__name__, remote.__doc__ = method, doc
+        return remote
 
     def _rpc(self, method: str, params: dict) -> Any:
         return self._link.call(method, {**params, "lease": self._lease})
@@ -102,7 +114,7 @@ class RemoteStation:
 
     def __init__(self, address: str, *, timeout: float = 5.0, lease: str = ""):
         self._link = ZMQInstrument("link", address, timeout=timeout)
-        info = self._link.call("describe")
+        info = self._link.call("describe", {"methods": True})
         self.name = info["station"]
         host = urlsplit(address).hostname or "localhost"
         self._pub_address = f"tcp://{host}:{info['pub_port']}"

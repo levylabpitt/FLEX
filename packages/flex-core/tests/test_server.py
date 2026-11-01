@@ -412,3 +412,12 @@ def test_a_lease_expires_without_renewal(served):
     remote._link.call("leaseAcquire", {"holder": "run-1", "token": "t1", "ttl": 0.2})
     time.sleep(0.4)
     remote.bench.gate(1.0)  # the holder went quiet, so the station is free again
+
+
+def test_proxy_offers_the_drivers_methods_for_completion(served):
+    _, _, remote = served
+    bench = remote.bench
+    assert {"add_sim_parameter", "query"} <= set(dir(bench))
+    assert "query(" in bench.query.__doc__  # signature in the hover text
+    assert bench.query("ping") == "ping"  # and it still forwards
+    assert "methods" not in remote.describe()["instruments"]["bench"]  # status polls stay small

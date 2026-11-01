@@ -417,6 +417,8 @@ def test_a_lease_expires_without_renewal(served):
 def test_proxy_offers_the_drivers_methods_for_completion(served):
     _, _, remote = served
     bench = remote.bench
+    assert vars(remote)["bench"] is bench  # real attributes: marimo's jedi won't run __getattr__
+    assert {"add_sim_parameter", "query"} <= set(vars(bench))
     assert {"add_sim_parameter", "query"} <= set(dir(bench))
     assert "query(" in bench.query.__doc__  # signature in the hover text
     assert bench.query("ping") == "ping"  # and it still forwards

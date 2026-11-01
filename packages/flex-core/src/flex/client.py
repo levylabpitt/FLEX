@@ -123,6 +123,7 @@ class RemoteStation:
             name: RemoteInstrument(self._link, name, entry, lease)
             for name, entry in info["instruments"].items()
         }
+        self._expose()
 
     def describe(self) -> dict:
         """The server's live describe: instruments, parameters, cached values."""
@@ -142,14 +143,11 @@ class RemoteStation:
             sub.stop()
         self._link.close()
 
-    def __getattr__(self, name: str) -> RemoteInstrument:
-        instruments = self.__dict__.get("instruments", {})
-        if name in instruments:
-            return instruments[name]
-        raise AttributeError(f"RemoteStation has no attribute or instrument '{name}'")
-
-    def __dir__(self) -> list[str]:
-        return [*super().__dir__(), *self.__dict__.get("instruments", {})]
+    def _expose(self) -> None:
+        """Instruments as real attributes: marimo's completion refuses to run ``__getattr__``."""
+        for name, inst in self.instruments.items():
+            if name not in self.__dict__ and not hasattr(type(self), name):
+                setattr(self, name, inst)
 
     def __enter__(self):
         return self
@@ -180,6 +178,7 @@ class StationGroup(RemoteStation):
             self.close()
             raise
         self.name = "+".join(s.name for s in self.stations)
+        self._expose()
 
     def describe(self) -> dict:
         return {s.name: s.describe() for s in self.stations}

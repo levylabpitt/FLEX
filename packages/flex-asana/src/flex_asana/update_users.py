@@ -1,11 +1,13 @@
 """``python -m flex_asana.update_users``: regenerate ``User`` (see flex_asana.users) from the
-workspace member list. Run when people join or leave."""
+workspace member list. Run when people join or leave. Reads the same settings as the
+comms backend: ``[comms]`` in flex.toml, else the ASANA_* environment variables."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
+from flex.config import load_config
 from flex_asana.client import AsanaClient
 from flex_asana.sync import handle_from_user
 
@@ -13,8 +15,9 @@ _OUT = Path(__file__).parent / "_generated_users.py"
 
 
 def main() -> None:
-    client = AsanaClient()
-    workspace_gid = os.environ.get("ASANA_WORKSPACE_GID") or client.default_workspace_gid()
+    opts = load_config().comms.options()
+    client = AsanaClient(opts.get("access_token"))
+    workspace_gid = opts.get("workspace_gid") or os.environ.get("ASANA_WORKSPACE_GID") or client.default_workspace_gid()
     handles = sorted({h for u in client.list_users(workspace_gid) if (h := handle_from_user(u))})
     if not handles:
         raise RuntimeError("No Asana users found; nothing written.")

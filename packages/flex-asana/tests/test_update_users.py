@@ -1,10 +1,12 @@
 import flex_asana.update_users as update_users
+from flex.config import FlexConfig
 from flex_asana.client import AsanaClient
 
 
 def test_main_writes_generated_literal(monkeypatch, tmp_path):
+    monkeypatch.setattr(update_users, "load_config", FlexConfig)
     client = AsanaClient(access_token="fake-token")
-    monkeypatch.setattr(update_users, "AsanaClient", lambda: client)
+    monkeypatch.setattr(update_users, "AsanaClient", lambda *a: client)
     monkeypatch.setattr(client, "default_workspace_gid", lambda: "ws1")
     monkeypatch.setattr(
         client, "list_users",
@@ -31,8 +33,9 @@ def test_main_writes_generated_literal(monkeypatch, tmp_path):
 def test_main_raises_on_empty_workspace(monkeypatch, tmp_path):
     import pytest
 
+    monkeypatch.setattr(update_users, "load_config", FlexConfig)
     client = AsanaClient(access_token="fake-token")
-    monkeypatch.setattr(update_users, "AsanaClient", lambda: client)
+    monkeypatch.setattr(update_users, "AsanaClient", lambda *a: client)
     monkeypatch.setattr(client, "default_workspace_gid", lambda: "ws1")
     monkeypatch.setattr(client, "list_users", lambda ws: [])
     monkeypatch.setattr(update_users, "_OUT", tmp_path / "_generated_users.py")

@@ -147,8 +147,9 @@ class StationServer:
                     except zmq.Again:
                         break
             if ready.get(self._router):
-                identity, _, payload = self._router.recv_multipart()
-                self._dispatch(identity, payload)
+                frames = self._router.recv_multipart()
+                if len(frames) == 3:  # [identity, delimiter, payload]; anything else is no REQ client
+                    self._dispatch(frames[0], frames[2])
             self._flush()
         self._flush()
 

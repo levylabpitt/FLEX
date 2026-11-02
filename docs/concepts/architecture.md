@@ -165,6 +165,37 @@ this PC only. Set `[runner] token` to open it to the LAN (e.g. for a marimo
 hub on another machine); every call except the connect check must then carry
 the token (`RunClient(address, token=...)`).
 
+### From a marimo hub
+
+A notebook served by a hub runs on the hub's server, not on a lab PC, so it
+drives instruments through the station and runner like any other client.
+`flex.marimo` keeps the addresses and tokens out of the notebook: list each PC
+in the flex.toml that `$FLEX_CONFIG` points to on the hub,
+
+```toml
+[hosts.ppms]
+host = "ppms-pc.lab"
+token = "…"              # that PC's [runner] token
+```
+
+and in the notebook:
+
+```python
+station, runs = flex.marimo.connect("ppms")   # live station (completion works) + runner
+rec = runs.submit(run, params={"points": 3})  # run(station, **params) defined in a cell
+runs.view(rec["id"])                          # status, log, result; add a mo.ui.refresh
+```
+
+The submitted function runs in its own process, so it imports what it needs
+itself. Anyone who can run code in a kernel can read the token: restrict who may
+edit notebooks on the hub.
+
+Every run records where it came from: the hub notebook (read from the hub's
+session context, with its title when the hub's API answers) and the user. The
+hub does not tell a kernel who is using it, so the user is what the notebook
+passes (`connect("ppms", user="alice")`) or `$FLEX_USER`; nothing verifies it.
+The dashboard's Runs tab and header, `flex runs` and `runs.view()` show both.
+
 While a run lasts it holds a lease on every station server it controls: those
 servers refuse writes (parameter sets and driver methods not named `get*`,
 `read*`, `idn*`) from anyone but the run, and say which run holds them. Reads

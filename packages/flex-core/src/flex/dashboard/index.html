@@ -106,7 +106,8 @@
     background: none; border: none; color: var(--accent); font: inherit; font-size: 13px;
     cursor: pointer; padding: 0; text-decoration: none;
   }
-  button.link:hover { text-decoration: underline; }
+  button.link:hover, a.link:hover { text-decoration: underline; }
+  a.link { color: var(--accent); text-decoration: none; }
   textarea {
     width: 100%; min-height: 300px; background: var(--panel); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 14px;
@@ -397,6 +398,10 @@ async function probeDriver(button, name) {
 
 let runsTimer = null, selectedRun = null, runLog = [], runShown = "";
 const RUN_BADGE = { running: "busy", done: "ok", failed: "bad", aborted: "dim", interrupted: "dim" };
+// the submitting client names its notebook and user: show them as text, and only link a plain web URL
+const runFrom = (o = {}) => /^https?:\/\//.test(o.url || "")
+  ? `<a class="link" href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.notebook || o.url)}</a>` : esc(o.notebook || "—");
+const runBy = (o = {}) => [o.user, o.notebook].filter(Boolean).join(" · ");
 
 async function runsTab() {
   selectedRun = null;
@@ -411,9 +416,10 @@ async function updateRuns() {
   const runs = await api("/api/runs");
   if (current !== "Runs") return;
   if (!selectedRun && runs.length) selectedRun = (runs.find(r => r.status === "running") || runs[0]).id;
-  $("#runs-list").innerHTML = table(["Run", "Name", "Status", "Started", "Took"], runs.map(r => `
+  $("#runs-list").innerHTML = table(["Run", "Name", "Notebook", "User", "Status", "Started", "Took"], runs.map(r => `
     <tr><td><button class="link" onclick="selectRun('${esc(r.id)}')">${esc(r.id)}</button></td>
-    <td>${esc(r.name || r.entry)}</td><td><span class="badge ${RUN_BADGE[r.status]}">${r.status}</span></td>
+    <td>${esc(r.name || r.entry)}</td><td>${runFrom(r.origin)}</td><td>${esc(r.origin?.user || "—")}</td>
+    <td><span class="badge ${RUN_BADGE[r.status]}">${r.status}</span></td>
     <td>${new Date(r.started * 1000).toLocaleTimeString()}</td>
     <td>${Math.round((r.finished || Date.now() / 1000) - r.started)} s</td></tr>`));
   if (selectedRun) await updateRunDetail();
@@ -438,6 +444,7 @@ async function updateRunDetail() {
     .filter(([, v]) => Array.isArray(v) && v.length > 1 && v.every(Number.isFinite));
   $("#run-detail").innerHTML = `
     <section><div class="section-head"><h2>${esc(r.name || r.entry)} — ${esc(r.id)}</h2>
+      ${runBy(r.origin) ? `<span class="hint">${esc(runBy(r.origin))}</span>` : ""}
       ${r.status === "running" ? '<button class="action danger" onclick="abortRun(this)">Abort</button>' : ""}</div>
     <div class="card"><pre class="log" id="run-log">${esc(runLog.join("\n"))}</pre>
       ${r.error ? `<p class="empty">${esc(r.error)}</p>` : ""}</div></section>
@@ -511,8 +518,9 @@ async function refreshStatus() {
   try { s = await api("/api/app"); } catch (e) { $("#status").innerHTML = ""; return; }
   const dot = (cls) => `<span class="pdot ${cls}"></span>`;
   const station = `<span>${dot(s.station ? (Object.keys(s.failed).length ? "warn" : "ok") : "")}Station ${s.station ? "running" : "stopped"}</span>`;
+  const last = s.last && runBy(s.last.origin) ? ` <span class="hint">· last: ${esc(runBy(s.last.origin))}</span>` : "";
   const runner = !s.runner_enabled ? "" :
-    `<span>${dot(s.run ? "busy" : s.runner ? "ok" : "")}Runner ${s.run ? "running " + esc(s.run.name) : s.runner ? "idle" : "stopped"}</span>`;
+    `<span>${dot(s.run ? "busy" : s.runner ? "ok" : "")}Runner ${s.run ? "running " + esc(s.run.name) : s.runner ? "idle" : "stopped"}${last}</span>`;
   const buttons = s.station
     ? `<button class="action" onclick="appControl('restart', this)">Restart</button>
        <button class="action danger" onclick="appControl('stop', this)">Stop</button>`

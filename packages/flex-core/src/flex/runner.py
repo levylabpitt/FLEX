@@ -38,10 +38,12 @@ _LEASE_TTL = 30.0  # seconds a station stays leased without a renewal
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY, name TEXT, status TEXT, entry TEXT, params TEXT,
-    source_hash TEXT, started REAL, finished REAL, error TEXT, result TEXT, dir TEXT
+    source_hash TEXT, started REAL, finished REAL, error TEXT, result TEXT, dir TEXT, origin TEXT
 )
 """
-_COLUMNS = ("id", "name", "status", "entry", "params", "source_hash", "started", "finished", "error", "result", "dir")
+_COLUMNS = ("id", "name", "status", "entry", "params", "source_hash", "started", "finished", "error", "result", "dir",
+            "origin")
+_ORIGIN_KEYS = ("user", "notebook", "url")  # who/what submitted a run; the client says so, nothing verifies it
 
 
 def _new_id() -> str:
@@ -61,6 +63,8 @@ class RunServer:
         self.log = get_logger("runner")
         self._db = sqlite3.connect(self.root / "runs.db", check_same_thread=False)
         self._db.execute(_SCHEMA)
+        if "origin" not in {r[1] for r in self._db.execute("PRAGMA table_info(runs)")}:
+            self._db.execute("ALTER TABLE runs ADD COLUMN origin TEXT")  # a runs.db from before origins
         # a previous server died mid-run: the child may be gone, the record is not trustworthy
         self._db.execute("UPDATE runs SET status = 'interrupted', finished = ? WHERE status = 'running'", (time.time(),))
         self._db.commit()
@@ -108,8 +112,9 @@ class RunServer:
     def _loop(self) -> None:
         while self._running:
             if self._router.poll(100):
-                identity, _, payload = self._router.recv_multipart()
-                self._router.send_multipart([identity, b"", self._handle(payload)])
+                frames = self._router.recv_multipart()
+                if len(frames) == 3:  # [identity, delimiter, payload]; anything else is no REQ client
+                    self._router.send_multipart([frames[0], b"", self._handle(frames[2])])
             self._tick()
 
     # -- requests ----------------------------------------------------------
@@ -166,10 +171,13 @@ class RunServer:
         except Exception:
             self._drop_leases(leases, token)
             raise
+        origin = p.get("origin")
+        origin = {k: str(origin[k])[:300] for k in _ORIGIN_KEYS if origin.get(k)} if isinstance(origin, dict) else {}
         self._db.execute(
-            "INSERT INTO runs VALUES (?, ?, 'running', ?, ?, ?, ?, NULL, NULL, NULL, ?)",
+            "INSERT INTO runs VALUES (?, ?, 'running', ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)",
             (run_id, p.get("name") or "", entry, json.dumps(p.get("params") or {}),
-             hashlib.sha256(source.encode()).hexdigest()[:16], time.time(), str(run_dir)),
+             hashlib.sha256(source.encode()).hexdigest()[:16], time.time(), str(run_dir),
+             json.dumps(origin) if origin else None),
         )
         self._db.commit()
         self._active = {"id": run_id, "proc": proc, "dir": run_dir, "offset": 0, "partial": b"",
@@ -226,6 +234,7 @@ class RunServer:
         rec = dict(zip(_COLUMNS, row, strict=True))
         rec["params"] = json.loads(rec["params"] or "{}")
         rec["result"] = json.loads(rec["result"]) if rec["result"] else None
+        rec["origin"] = json.loads(rec["origin"]) if rec["origin"] else {}
         return rec
 
     def _list(self, limit: int) -> list[dict]:
@@ -308,9 +317,11 @@ class RunClient:
     def _call(self, method: str, **params):
         return self._link.call(method, {**params, "token": self._token})
 
-    def submit(self, source: str, *, entry: str = "run", params: dict | None = None, name: str = "") -> dict:
-        """Run ``entry(station, **params)`` from the script text ``source``."""
-        return self._call("submit", source=source, entry=entry, params=params or {}, name=name)
+    def submit(self, source: str, *, entry: str = "run", params: dict | None = None, name: str = "",
+               origin: dict | None = None) -> dict:
+        """Run ``entry(station, **params)`` from the script text ``source``. ``origin``
+        (``user``, ``notebook``, ``url``) is recorded with the run and shown in the dashboard."""
+        return self._call("submit", source=source, entry=entry, params=params or {}, name=name, origin=origin)
 
     def runs(self, limit: int = 20) -> list[dict]:
         return self._call("runs", limit=limit)

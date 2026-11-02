@@ -356,10 +356,11 @@ def runs(
     """List recent runs."""
     client = _runner_client(address)
     try:
-        table = Table("Run", "Name", "Status", "Started", "Took")
+        table = Table("Run", "Name", "From", "Status", "Started", "Took")
         for r in client.runs(last):
             took = f"{(r['finished'] - r['started']):.0f}s" if r["finished"] else "-"
-            table.add_row(r["id"], r["name"] or r["entry"], r["status"],
+            by = " · ".join(filter(None, (r["origin"].get("user"), r["origin"].get("notebook")))) or "-"
+            table.add_row(r["id"], r["name"] or r["entry"], by, r["status"],
                           datetime.fromtimestamp(r["started"]).strftime("%m-%d %H:%M:%S"), took)
         console.print(table)
     finally:

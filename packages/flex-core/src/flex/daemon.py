@@ -36,7 +36,7 @@ def status(cfg: FlexConfig | None = None) -> dict:
 
     cfg = cfg or load_config()
     out = {"station": False, "runner": False, "runner_enabled": cfg.runner.enabled,
-           "instruments": [], "failed": {}, "run": None}
+           "instruments": [], "failed": {}, "run": None, "last": None}
     if listening(cfg.server.port):
         try:
             with ZMQInstrument("link", f"tcp://127.0.0.1:{cfg.server.port}", timeout=1.0) as link:
@@ -50,8 +50,10 @@ def status(cfg: FlexConfig | None = None) -> dict:
                            token=cfg.runner.token) as client:
                 latest = client.runs(1)
             out["runner"] = True
-            if latest and latest[0]["status"] == "running":
-                out["run"] = {"id": latest[0]["id"], "name": latest[0]["name"]}
+            if latest:
+                out["last"] = {k: latest[0][k] for k in ("id", "name", "origin")}
+                if latest[0]["status"] == "running":
+                    out["run"] = {"id": latest[0]["id"], "name": latest[0]["name"]}
         except Exception:
             pass
     return out

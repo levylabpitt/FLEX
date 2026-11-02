@@ -93,6 +93,15 @@ class RunnerConfig(_Section):
     call_timeout: float = 120.0
 
 
+class HostConfig(_Section):
+    """A lab PC's station server and runner, as seen from a notebook (see flex.marimo)."""
+
+    host: str
+    station_port: int = 29500  # the [server] / [runner] defaults
+    runner_port: int = 29510
+    token: str = ""  # the PC's [runner] token
+
+
 class InstrumentConfig(_Section):
     driver: str = ""
     address: str = ""
@@ -129,6 +138,7 @@ class FlexConfig(BaseModel):
     runner: RunnerConfig = Field(default_factory=RunnerConfig)
     hooks: dict[str, list[str]] = Field(default_factory=dict)
     instruments: dict[str, InstrumentConfig] = Field(default_factory=dict)
+    hosts: dict[str, HostConfig] = Field(default_factory=dict)
 
     source: Path | None = Field(default=None, exclude=True)
 

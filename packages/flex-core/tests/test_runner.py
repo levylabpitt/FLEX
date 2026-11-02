@@ -1,9 +1,11 @@
 """Experiment runner tests: real subprocesses against a real station server."""
 
+import sqlite3
 import time
 from pathlib import Path
 
 import pytest
+import zmq
 
 from flex.client import StationGroup
 from flex.instrument import Numbers, SimulatedInstrument
@@ -182,6 +184,45 @@ def test_station_group_merges_servers_and_rejects_duplicates():
     finally:
         ta.stop()
         tb.stop()
+
+
+def test_a_stray_message_does_not_stop_the_runner(stack):
+    _, runner, client, _ = stack
+    stray = zmq.Context.instance().socket(zmq.DEALER)  # a REQ client sends [delimiter, payload]; this sends one frame
+    stray.connect(f"tcp://127.0.0.1:{runner.port}")
+    stray.send(b"hello")
+    time.sleep(0.5)
+    stray.close(linger=0)
+    assert client.runs() == []
+
+
+def test_a_run_records_where_it_came_from(stack):
+    _, _, client, _ = stack
+    rec = client.submit("def run(station): pass\n", name="a", origin={
+        "user": "alice", "notebook": "flex_demo", "url": "http://hub/nb", "evil": "dropped", "empty": ""})
+    done = client.wait(rec["id"])
+    assert done["origin"] == {"user": "alice", "notebook": "flex_demo", "url": "http://hub/nb"}
+    assert client.runs()[0]["origin"] == done["origin"]
+    plain = client.wait(client.submit("def run(station): pass\n")["id"])
+    assert plain["origin"] == {}
+
+
+def test_a_runs_db_from_before_origins_still_opens(tmp_path):
+    root = tmp_path / "runs"
+    root.mkdir()
+    old = sqlite3.connect(root / "runs.db")
+    old.execute("CREATE TABLE runs (id TEXT PRIMARY KEY, name TEXT, status TEXT, entry TEXT, params TEXT, "
+                "source_hash TEXT, started REAL, finished REAL, error TEXT, result TEXT, dir TEXT)")
+    old.execute("INSERT INTO runs VALUES ('old', 'x', 'done', 'run', '{}', 'h', 1.0, 2.0, NULL, NULL, 'd')")
+    old.commit()
+    old.close()
+    runner = RunServer([], root=root)
+    runner.start()
+    try:
+        with RunClient(f"tcp://127.0.0.1:{runner.port}", timeout=3.0) as client:
+            assert [(r["id"], r["origin"]) for r in client.runs()] == [("old", {})]
+    finally:
+        runner.stop()
 
 
 def test_token_guards_every_call_but_ack(tmp_path):

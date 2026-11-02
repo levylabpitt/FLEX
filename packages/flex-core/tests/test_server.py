@@ -4,6 +4,7 @@ import queue
 import time
 
 import pytest
+import zmq
 
 from flex.client import connect
 from flex.config import FlexConfig
@@ -25,6 +26,17 @@ def served():
     remote.close()
     server.stop()
     station.close()
+
+
+def test_a_stray_message_does_not_stop_the_server(served):
+    _, server, remote = served
+    stray = zmq.Context.instance().socket(zmq.DEALER)  # a REQ client sends [delimiter, payload]; this sends one frame
+    stray.connect(f"tcp://127.0.0.1:{server.port}")
+    stray.send(b"hello")
+    time.sleep(0.5)
+    stray.close(linger=0)
+    assert remote.name == "teststation"
+    assert remote.describe()["station"] == "teststation"
 
 
 def test_describe_and_proxies(served):

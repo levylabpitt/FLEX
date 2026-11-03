@@ -62,21 +62,20 @@ class Xeryon(Instrument, Rotator):
 
 # -------------- Custom functions ---------------->
 
-    def setAngleAndWait(self, angle, rate):
+    def setAngleAndWait(self, angle, rate, tolerance=0.001):
+        if self.getAngle()['finished'] and abs(self.getAngle()['angle'] - angle) < tolerance:
+            return
+
         self.setAngle(angle, rate)
 
-        # Wait until movement starts
         while self.getAngle()['finished']:
             time.sleep(0.1)
 
-        # Display real-time angle while moving
-        while not self.getAngle()['finished']:
-            current_angle = self.getAngle()['angle']
-            print(f'Moving... Current angle: {current_angle:.2f} deg', end='\r', flush=True)
+        while not (status := self.getAngle())['finished']:
+            print(f"Moving... Current angle: {status['angle']:.2f} deg", end='\r', flush=True)
             time.sleep(0.1)
 
-        # Overwrite the same line when finished
-        print(f'Angle set to {angle} deg.{" " * 20}')
+        print(f"Angle set to {angle} deg.{' ' * 20}")
 
 if __name__ == "__main__":
     rot = Xeryon()

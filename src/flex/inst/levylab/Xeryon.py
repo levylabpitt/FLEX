@@ -10,6 +10,7 @@ import os
 from flex.inst.base import Instrument
 from flex.inst.levylab.insttypes.Rotator import Rotator
 from typing import Literal
+import time
 
 _DEFAULT_ADDRESS = "tcp://localhost:20001"
 _LABVIEW_CLASS_NAME = "Inst.Xeryon-Rotator.lvclass"
@@ -45,7 +46,7 @@ class Xeryon(Instrument, Rotator):
         cmd = "setAngle"
         params = {'angle': angle_deg, 'rate': rate, 'channel': 0}
 
-        return self._send_command(cmd, params)
+        self._send_command(cmd, params)
 
     def setState(self, state: Literal["Scan Left", "Scan Right", "Stop"]):
         """Set the state configuration."""
@@ -57,8 +58,25 @@ class Xeryon(Instrument, Rotator):
         cmd = "setState"
         params = [state]
 
-        return self._send_command(cmd, params)
+        self._send_command(cmd, params)
 
+# -------------- Custom functions ---------------->
+
+    def setAngleAndWait(self, angle, rate):
+        self.setAngle(angle, rate)
+
+        # Wait until movement starts
+        while self.getAngle()['finished']:
+            time.sleep(0.1)
+
+        # Display real-time angle while moving
+        while not self.getAngle()['finished']:
+            current_angle = self.getAngle()['angle']
+            print(f'Moving... Current angle: {current_angle:.2f} deg', end='\r', flush=True)
+            time.sleep(0.1)
+
+        # Overwrite the same line when finished
+        print(f'Angle set to {angle} deg.{" " * 20}')
 
 if __name__ == "__main__":
     rot = Xeryon()

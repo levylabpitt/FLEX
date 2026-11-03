@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from flex.components import load_ref
+from flex.instrument import Instrument
 from flex_exp.experiment import Experiment, User
 
 _CE_CONFIG = (
@@ -265,6 +266,21 @@ class CESession(Experiment):
             },
             sections,
         )
+
+
+class CEWiring(Instrument):
+    """The wiring from the Configure Experiments file, as a station instrument, so notebooks on other
+    PCs can read it: ``[instruments.ce] driver = "flex_exp.sessions.ce:CEWiring"``."""
+
+    def __init__(self, name: str = "ce", ce_path: str | Path | None = None):
+        super().__init__(name)
+        self._ce_path = Path(ce_path) if ce_path else _CE_CONFIG
+
+    def get_wiring(self) -> list[dict]:
+        """The wired lock-in channels: [{"channel": 1, "electrode": "S", "label": "source"}, ...]"""
+        with open(self._ce_path, encoding="utf-8") as f:
+            wiring = parse_ce_config(json.load(f)).wiring
+        return [{"channel": ch, "electrode": electrode, "label": label} for ch, (electrode, label) in wiring.items()]
 
 
 def _levylab_registry() -> dict[str, str]:

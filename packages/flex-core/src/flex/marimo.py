@@ -88,6 +88,16 @@ class Runs(RunClient):
         return mo.vstack(parts)
 
 
+def hosts(config: str | Path | None = None) -> list[str]:
+    """The names under ``[hosts.*]`` in the config."""
+    return list(load_config(config).hosts)
+
+
+def data_rows(lines: list[str]) -> list[dict]:
+    """The readings in a run's log: every ``DATA {json}`` line a script printed."""
+    return [json.loads(line[5:]) for line in lines if line.startswith("DATA ")]
+
+
 def connect(host: str, *, user: str = "", config: str | Path | None = None) -> tuple[RemoteStation, Runs]:
     """The live station and the runner of the PC named ``[hosts.<host>]`` in the config.
     ``user`` is recorded with every run you submit."""

@@ -52,6 +52,28 @@ def test_parse_ce_config():
     assert info.timestamp.year == 2026
 
 
+def test_wiring_is_served_by_a_station(tmp_path):
+    from flex.client import connect
+    from flex.server import StationServer
+    from flex.station import Station
+    from flex_exp.sessions.ce import CEWiring
+
+    station = Station({"ce": CEWiring(ce_path=FIXTURE)}, name="pc")
+    server = StationServer(station)
+    server.start()
+    remote = connect(f"tcp://127.0.0.1:{server.port}", timeout=3.0)
+    try:
+        assert remote.ce.get_wiring() == [  # unwired channel 3 is left out
+            {"channel": 1, "electrode": "S", "label": "source"},
+            {"channel": 2, "electrode": "D", "label": "drain"},
+            {"channel": 4, "electrode": "TG", "label": "top gate"},
+        ]
+    finally:
+        remote.close()
+        server.stop()
+        station.close()
+
+
 def test_session_connects_instruments(servers, config):
     ce_path, lockin_server, kh_server = servers
     with CESession(

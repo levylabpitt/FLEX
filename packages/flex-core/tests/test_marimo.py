@@ -45,6 +45,16 @@ def test_connect_gives_the_live_station_and_a_runner_with_the_token(hub):
         runs.close()
 
 
+def test_hosts_lists_the_configured_pcs(hub):
+    _, config = hub
+    assert fm.hosts(config) == ["ppms"]
+
+
+def test_data_rows_picks_the_data_lines_out_of_a_log():
+    log = ["cooldown 300 K", 'DATA {"T": 299.5, "G": 0.5}', "WARNING: x", 'DATA {"T": 299.0, "G": null}']
+    assert fm.data_rows(log) == [{"T": 299.5, "G": 0.5}, {"T": 299.0, "G": None}]
+
+
 def test_unknown_host_names_the_known_ones(hub):
     _, config = hub
     with pytest.raises(KeyError, match=r"No \[hosts.nope\].*have: ppms"):

@@ -196,6 +196,26 @@ hub does not tell a kernel who is using it, so the user is what the notebook
 passes (`connect("ppms", user="alice")`) or `$FLEX_USER`; nothing verifies it.
 The dashboard's Runs tab and header, `flex runs` and `runs.view()` show both.
 
+### The cooldown app
+
+`examples/cooldown/app.py` is a marimo app for the hub: pick a station, pick which
+lock-in channels are the numerator and denominator (I− over I+ by default, from the
+wiring), set the target and ramp rate, and watch G against T live. It only chooses
+parameters. What runs is `flex_exp.cooldown.cooldown`, installed on the PC, which checks
+the limits itself (target 1.8 to 400 K, rate up to 12 K/min, excitation up to 0.1 V; see
+the constants at the top of the file) and logs through the usual experiment files. The
+station needs the wiring instrument:
+
+```toml
+[instruments.ce]
+driver = "flex_exp.sessions.ce:CEWiring"   # serves the Configure Experiments wiring
+```
+
+The PPMS ramps by itself, so aborting or losing a run does not stop it; the app and the
+log say so. Anyone with app access can abort, and a second cooldown is refused while one
+runs. Give lab users the hub's `app-user` role (`MARIMOHUB_DEFAULT_ROLE=app-user`): they
+can use the app without seeing or editing code, and only editors can run their own.
+
 While a run lasts it holds a lease on every station server it controls: those
 servers refuse writes (parameter sets and driver methods not named `get*`,
 `read*`, `idn*`) from anyone but the run, and say which run holds them. Reads

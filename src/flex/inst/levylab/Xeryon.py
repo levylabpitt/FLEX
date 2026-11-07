@@ -28,25 +28,13 @@ class Xeryon(Instrument, Rotator):
     """FLEX driver for the Xeryon Rotator."""
 
     def __init__(self, address=_DEFAULT_ADDRESS):
-        super().__init__(
-            address,
-            log_file=os.path.join(logpath, "Xeryon.log"),
-        )
+        super().__init__(address, log_file=os.path.join(logpath, "Xeryon.log"))
 
     def getAngle(self):
-        """Return the current stage Angle."""
-        cmd = "getAngle"
-        params = {}
+        return super().getAngle()
 
-        response = self._send_command(cmd, params)
-        return response["result"]
-
-    def setAngle(self, angle_deg, rate):
-        """Set the stage angle"""
-        cmd = "setAngle"
-        params = {'angle': angle_deg, 'rate': rate, 'channel': 0}
-
-        self._send_command(cmd, params)
+    def setAngle(self, angle, rate, channel=0):
+        return super().setAngle(angle, rate, channel)
 
     def setState(self, state: Literal["Scan Left", "Scan Right", "Stop"]):
         """Set the state configuration."""

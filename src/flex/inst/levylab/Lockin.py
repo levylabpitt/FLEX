@@ -12,8 +12,7 @@ from flex.inst.base import Instrument
 from flex.inst.levylab.insttypes.DAQ import DAQ
 import time
 import os
-from datetime import datetime, timedelta
-from flex.db import db_dataviewer as dv
+from typing import Literal
 
 _DEFAULT_ADDRESS = 'tcp://localhost:29170'
 _LABVIEW_CLASS_NAME = "Instrument.Lockin.lvclass"
@@ -25,8 +24,25 @@ class Lockin(Instrument, DAQ):
     def __init__(self, address=_DEFAULT_ADDRESS):
         super().__init__(address, log_file=os.path.join(logpath, "Lockin.log"))
     
-    def setAO(self):
-        pass
+    def setAO(self, ao_config:list):
+        '''
+        ao_config format:
+        ao_config = [{'Enable?': False,
+                    'Channel': 1,
+                    'Amplitude': 0,
+                    'Offset': 0,
+                    'Frequency': 13,
+                    'Phase': 0,
+                    'Function': 'sine',
+                    'Sweeping?': False,
+                    'Limit AC': False,
+                    'Limit DC?': False,
+                    'Duty Cycle': False}]
+        Add more channels to the list if needed
+        '''
+        cmd = 'setAO'
+        param = ao_config
+        self._send_command(cmd, param)
 
     def setAO_Amplitude(self, channel: int, value: float) -> None:
         cmd = 'setAO_Amplitude'
@@ -66,8 +82,21 @@ class Lockin(Instrument, DAQ):
         param = {'Channel': channel, 'Function': value}
         self._send_command(cmd, param)      
 
-    def setREF(self):
-        pass
+    def setREF(self, ref_config):
+        '''
+        ref_config format:
+        ref_config = [{'Enable?': True,
+                        'Channel': 1,
+                        'Frequency': 13,
+                        'Phase': 0,
+                        'TC': 1e-3,
+                        'Roll-Off': 2},
+                        ]
+        Add more channels to the list if needed
+        '''
+        cmd = 'setREF'
+        param = ref_config
+        self._send_command(cmd, param)
 
     def setREF_Frequency(self, channel: int, value: float) -> None:
         cmd = 'setREF_Frequency'
@@ -93,7 +122,7 @@ class Lockin(Instrument, DAQ):
         pass
 
     def setSampling(self, freq: int, samples: float) -> None:
-        cmd = 'setREF_TC'
+        cmd = 'setSampling'
         param = {'Fs': freq, '#s': samples}
         self._send_command(cmd, param)
 
@@ -123,13 +152,16 @@ class Lockin(Instrument, DAQ):
         return self._send_command(cmd)['result']
 
     def getSampling(self):
-        pass
+        cmd = 'getSampling'
+        return self._send_command(cmd)['result']
 
     def getAOconfig(self):
-        pass
+        cmd = 'getAOconfig'
+        return self._send_command(cmd)['result']
 
     def getREFconfig(self):
-        pass
+        cmd = 'getREFconfig'
+        return self._send_command(cmd)['result']
 
     def setInputGain(self, gains: list) -> None:
         """Set the input gain on every AI channel.
@@ -158,13 +190,6 @@ class Lockin(Instrument, DAQ):
         response = self._send_command('getOutputGain')
         return response['result']
 
-    def setSamplingFsMode(self):
-        pass
-
-    def getSamplingFsMode(self):
-        response = self._send_command('getSamplingFsMode')
-        return response['result']
-
     def setSweep(self, sweep_config) -> None:
         '''
         sweep_config format:
@@ -182,19 +207,64 @@ class Lockin(Instrument, DAQ):
         '''
         self._send_command('setSweep', sweep_config)
 
-    def setSweep_Time(self, value: float) -> None:
-        cmd = 'setSweep_Time'
+    def setSweepTime(self, value: float) -> None:
+        cmd = 'setSweepTime'
         param = {'SweepTime': value}
-        self._send_command(cmd, param)
-    
-    def setSamplingMode(self, value: str) -> None:
-        cmd = 'setSamplingFsMode'
-        param = value
         self._send_command(cmd, param)
     
     def getSweepWaveforms(self) -> dict:
         cmd = 'getSweepWaveforms'
         return self._send_command(cmd)['result']
+
+    def setInputOffset(self, offset_list: list) -> None:
+        cmd = 'setInputOffset'
+        param = offset_list
+        self._send_command(cmd, param)
+
+    def getInputOffset(self) -> list:
+        cmd = 'getInputOffset'
+        return self._send_command(cmd)['result']
+
+    def setOutputOffset(self, offset_list: list) -> None:
+        cmd = 'setOutputOffset'
+        param = offset_list
+        self._send_command(cmd, param)
+
+    def getOutputOffset(self) -> list:
+        cmd = 'getOutputOffset'
+        return self._send_command(cmd)['result']
+
+    def getInputDAQ(self) -> list:
+        cmd = 'getInputDAQ'
+        return self._send_command(cmd)['result']
+
+    def getOutputDAQ(self) -> list:
+        cmd = 'getOutputDAQ'
+        return self._send_command(cmd)['result']
+
+    def getLinkFrequency(self) -> dict:
+        cmd = 'getLinkFrequency'
+        return self._send_command(cmd)['result']
+
+    def setLinkFrequency(self, freq:int, link:bool = True) -> None:
+        cmd = 'setLinkFrequency'
+        param = {'Link': link, 'Frequency': freq}
+        self._send_command(cmd, param)
+
+    def measureInputOffset(self,
+                           zero: Literal['both', 'ac', 'dc', 'none'],
+                           channels:list = [],
+                           buffers: int = 0,
+                           settle: int = 2,
+                           timeout: int = 5) -> None:
+        cmd = 'measureInputOffset'
+        param = {'buffers': buffers,
+                 'settle': settle,
+                 'timeout': timeout,
+                 'channels': channels,
+                 'zero': zero
+        }
+        self._send_command(cmd, param)
 
 
 # -------------- Custom functions ---------------->
@@ -271,6 +341,24 @@ class Lockin(Instrument, DAQ):
                                     ]}
 
         self.lockin_sweep(sweep_config)
+
+    def set_ao(self, channel: int, **kwargs) -> None:
+        """Update selected parameters of a single AO channel.
+        allowed kwargs:
+        'Enable?': True, 'Channel': 4, 'Amplitude': 0, 'Offset': 0,
+        'Frequency': 13, 'Phase': 0, 'Function': 'sine', 'Sweeping?': False, 
+        'Limit AC': False, 'Limit DC?': False, 'Duty Cycle': False}"""
+        config = self.getAOconfig()
+        ao = next((x for x in config if x['Channel'] == channel), None)
+        if ao is None:
+            raise ValueError(f"AO channel {channel} not found")
+        ao.update(kwargs)
+        self.setAO(config)
+
+    def get_ao(self, channel: int) -> dict:
+        """Return the configuration of a single AO channel."""
+        config = self.getAOconfig()
+        return next((x.copy() for x in config if x['Channel'] == channel), None)
 
 if __name__ == "__main__":
     # Test the MCLockin class
